@@ -14,6 +14,7 @@ const eventSocialLinkSchema = z.object({
   url: z.string(),
 });
 
+
 const eventRoundRubricCriterionSchema = z.object({
   // Existing GCODE_EVENT_ROUND_RUBRICS.ID, null for a criterion added in
   // this edit session — lets the backend UPDATE in place instead of
@@ -100,6 +101,17 @@ export const eventDetailDataSchema = z.object({
   timeline: z.array(eventTimelineItemSchema).default([]), // EVENT_TIMELINE rows
   rounds: z.array(eventRoundItemSchema).default([]), // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25
   certificate: z.boolean().default(false), // no backend column yet
+  // EVENTS.AUDIO_RECORDING_ENABLED / .AGE_CATEGORY_REQUIREMENT — gate the
+  // audio/age sections on the public additional-info page. Defaults match
+  // today's always-on behavior for events created before this setting existed.
+  audioRecordingEnabled: z.boolean().default(true),
+  ageCategoryRequirement: z.enum(["OFF", "OPTIONAL", "REQUIRED"]).default("OPTIONAL"),
+  // EVENTS.TRACK_SUBMISSION_ENABLED / .MEMBER_NAMES_ENABLED — gate 2 more
+  // participant-submitted sections on the additional-info page (the
+  // participant adds their own track/member rows there, same as audio).
+  // Brand-new opt-in features, default off.
+  trackSubmissionEnabled: z.boolean().default(false),
+  memberNamesEnabled: z.boolean().default(false),
 });
 
 export type EventDetailData = z.infer<typeof eventDetailDataSchema>;

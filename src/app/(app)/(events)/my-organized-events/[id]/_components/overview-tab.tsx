@@ -323,6 +323,42 @@ export function OverviewTab({
         </p>
       </div>
 
+      <div>
+        <p className="text-small text-text-secondary mb-3 flex items-center gap-2 font-bold tracking-widest uppercase">
+          Additional Information <span className="bg-border-light h-px flex-1" />
+        </p>
+        <div className="border-border-light bg-surface-light space-y-2 rounded-md border p-4">
+          <p className="text-body text-text-primary">
+            Audio recording:{" "}
+            <span className="font-medium">
+              {event.audioRecordingEnabled ? "Enabled" : "Disabled"}
+            </span>
+          </p>
+          <p className="text-body text-text-primary">
+            Track submission:{" "}
+            <span className="font-medium">
+              {event.trackSubmissionEnabled ? "Enabled" : "Disabled"}
+            </span>
+          </p>
+          <p className="text-body text-text-primary">
+            Team member names:{" "}
+            <span className="font-medium">
+              {event.memberNamesEnabled ? "Enabled" : "Disabled"}
+            </span>
+          </p>
+          <p className="text-body text-text-primary">
+            Age category:{" "}
+            <span className="font-medium">
+              {
+                { OFF: "Off", OPTIONAL: "Optional", REQUIRED: "Required" }[
+                  event.ageCategoryRequirement
+                ]
+              }
+            </span>
+          </p>
+        </div>
+      </div>
+
       <RegistrationTrendChart attendees={attendees} />
     </div>
   );

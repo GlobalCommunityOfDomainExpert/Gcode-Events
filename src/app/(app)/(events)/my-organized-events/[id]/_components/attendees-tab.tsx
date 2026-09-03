@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Blurred, RemoveIconButton } from "@/components/atoms";
 import {
   Banner,
@@ -22,7 +22,13 @@ import {
 } from "@/lib/attendees";
 import { downloadCsv } from "@/lib/csv";
 import { Event } from "@/lib/event";
-import { removeParticipant } from "@/lib/api/participants";
+import {
+  listParticipantTeamMembers,
+  listParticipantYoutubeTracks,
+  ParticipantTeamMemberApi,
+  ParticipantYoutubeTrackApi,
+  removeParticipant,
+} from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
 import {
   attendanceStatusLabel,
@@ -31,6 +37,12 @@ import {
   submissionStatusTone,
   ticketTypeTone,
 } from "./status-maps";
+
+const AGE_CATEGORY_LABELS: Record<"YOUNGSTER" | "ADULT" | "SENIOR", string> = {
+  YOUNGSTER: "Youngster (below 18)",
+  ADULT: "Adult (18–60)",
+  SENIOR: "Senior Citizen (60 and above)",
+};
 
 export type AttendeesFilterValue =
   "all" | "paid" | "free" | "attended" | "missed" | "submitted" | "pending";
@@ -67,10 +79,47 @@ export function AttendeesTab({
     useState<AttendeesCategoryFilterValue>("all");
   const [page, setPage] = useState(1);
   const [viewingAttendee, setViewingAttendee] = useState<Attendee | null>(null);
+  const [viewingTracks, setViewingTracks] = useState<
+    ParticipantYoutubeTrackApi[]
+  >([]);
+  const [viewingMembers, setViewingMembers] = useState<
+    ParticipantTeamMemberApi[]
+  >([]);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const submissionDeadlineIso =
     event.participantRegistration.registrationDeadlineIso;
+
+  // Tracks/team members are participant-submitted child lists, not part of
+  // the Attendee row itself — fetch them only when the detail panel opens
+  // for a Participant-category row (Attendee rows never have them).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!viewingAttendee || viewingAttendee.category !== "Participant") {
+        if (!cancelled) {
+          setViewingTracks([]);
+          setViewingMembers([]);
+        }
+        return;
+      }
+      try {
+        const [tracks, members] = await Promise.all([
+          listParticipantYoutubeTracks(viewingAttendee.id),
+          listParticipantTeamMembers(viewingAttendee.id),
+        ]);
+        if (!cancelled) {
+          setViewingTracks(tracks);
+          setViewingMembers(members);
+        }
+      } catch {
+        // best-effort — panel just won't show these if the fetch fails
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewingAttendee]);
 
   async function handleRemove(ids: string[]) {
     if (ids.length === 0) return;
@@ -112,13 +161,23 @@ export function AttendeesTab({
       attended: attendees.filter((a) => a.status === "attended").length,
       missed: attendees.filter((a) => a.status === "missed").length,
       submitted: attendees.filter(
-        (a) => audioSubmissionStatus(a, submissionDeadlineIso) === "submitted",
+        (a) =>
+          audioSubmissionStatus(
+            a,
+            submissionDeadlineIso,
+            event.audioRecordingEnabled,
+          ) === "submitted",
       ).length,
       pending: attendees.filter(
-        (a) => audioSubmissionStatus(a, submissionDeadlineIso) === "pending",
+        (a) =>
+          audioSubmissionStatus(
+            a,
+            submissionDeadlineIso,
+            event.audioRecordingEnabled,
+          ) === "pending",
       ).length,
     }),
-    [attendees, submissionDeadlineIso],
+    [attendees, submissionDeadlineIso, event.audioRecordingEnabled],
   );
 
   const categoryCounts = useMemo(
@@ -138,7 +197,11 @@ export function AttendeesTab({
       if (filter === "missed" && attendee.status !== "missed") return false;
       if (
         (filter === "submitted" || filter === "pending") &&
-        audioSubmissionStatus(attendee, submissionDeadlineIso) !== filter
+        audioSubmissionStatus(
+          attendee,
+          submissionDeadlineIso,
+          event.audioRecordingEnabled,
+        ) !== filter
       )
         return false;
       if (categoryFilter !== "all" && attendee.category !== categoryFilter)
@@ -149,7 +212,14 @@ export function AttendeesTab({
       }
       return true;
     });
-  }, [attendees, filter, categoryFilter, query, submissionDeadlineIso]);
+  }, [
+    attendees,
+    filter,
+    categoryFilter,
+    query,
+    submissionDeadlineIso,
+    event.audioRecordingEnabled,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -248,25 +318,33 @@ export function AttendeesTab({
         </Badge>
       ),
     },
-    {
-      key: "submission",
-      header: "Submission",
-      render: (row) => {
-        const submission = audioSubmissionStatus(row, submissionDeadlineIso);
-        if (!submission) {
-          return <span className="text-text-secondary">—</span>;
-        }
-        return (
-          <Badge
-            variant="muted"
-            tone={submissionStatusTone[submission]}
-            size="sm"
-          >
-            {submissionStatusLabel[submission]}
-          </Badge>
-        );
-      },
-    },
+    ...(event.audioRecordingEnabled
+      ? [
+          {
+            key: "submission",
+            header: "Submission",
+            render: (row: Attendee) => {
+              const submission = audioSubmissionStatus(
+                row,
+                submissionDeadlineIso,
+                event.audioRecordingEnabled,
+              );
+              if (!submission) {
+                return <span className="text-text-secondary">—</span>;
+              }
+              return (
+                <Badge
+                  variant="muted"
+                  tone={submissionStatusTone[submission]}
+                  size="sm"
+                >
+                  {submissionStatusLabel[submission]}
+                </Badge>
+              );
+            },
+          } satisfies TableColumn<Attendee>,
+        ]
+      : []),
     {
       key: "remove",
       header: "",
@@ -350,18 +428,22 @@ export function AttendeesTab({
           >
             Missed ({counts.missed})
           </Chip>
-          <Chip
-            selected={filter === "submitted"}
-            onClick={() => changeFilter("submitted")}
-          >
-            Submitted ({counts.submitted})
-          </Chip>
-          <Chip
-            selected={filter === "pending"}
-            onClick={() => changeFilter("pending")}
-          >
-            Pending Submission ({counts.pending})
-          </Chip>
+          {event.audioRecordingEnabled && (
+            <>
+              <Chip
+                selected={filter === "submitted"}
+                onClick={() => changeFilter("submitted")}
+              >
+                Submitted ({counts.submitted})
+              </Chip>
+              <Chip
+                selected={filter === "pending"}
+                onClick={() => changeFilter("pending")}
+              >
+                Pending Submission ({counts.pending})
+              </Chip>
+            </>
+          )}
         </div>
         <button
           type="button"
@@ -471,7 +553,47 @@ export function AttendeesTab({
               <span className="text-text-secondary">Status:</span>{" "}
               {attendanceStatusLabel[viewingAttendee.status]}
             </p>
-            {audioSubmissionStatus(viewingAttendee, submissionDeadlineIso) && (
+            {viewingAttendee.ageCategory && (
+              <p>
+                <span className="text-text-secondary">Age category:</span>{" "}
+                {AGE_CATEGORY_LABELS[viewingAttendee.ageCategory]}
+              </p>
+            )}
+            {viewingMembers.length > 0 && (
+              <div>
+                <span className="text-text-secondary">Team members:</span>
+                <ul className="mt-1 list-inside list-disc">
+                  {viewingMembers.map((member, index) => (
+                    <li key={index}>{member.member_name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {viewingTracks.length > 0 && (
+              <div>
+                <span className="text-text-secondary">Tracks:</span>
+                <ul className="mt-1 list-inside list-disc">
+                  {viewingTracks.map((track, index) => (
+                    <li key={index}>
+                      {track.track_name}:{" "}
+                      <a
+                        href={track.youtube_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        {track.youtube_url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {audioSubmissionStatus(
+              viewingAttendee,
+              submissionDeadlineIso,
+              event.audioRecordingEnabled,
+            ) && (
               <p>
                 <span className="text-text-secondary">Submission:</span>{" "}
                 {
@@ -479,6 +601,7 @@ export function AttendeesTab({
                     audioSubmissionStatus(
                       viewingAttendee,
                       submissionDeadlineIso,
+                      event.audioRecordingEnabled,
                     )!
                   ]
                 }
