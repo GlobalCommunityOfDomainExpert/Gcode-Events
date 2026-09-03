@@ -70,6 +70,16 @@ export interface EventDetail extends EventListItem {
   // Missing/undefined -> "COMPETITIVE", matching the degrade convention
   // above for attendee_registration_enabled etc.
   rating_mode?: "COMPETITIVE" | "CASUAL";
+  // Missing/undefined -> treated as enabled, matching today's implicit
+  // always-on behavior on a backend that hasn't added the column yet.
+  audio_recording_enabled?: number;
+  // Missing/undefined -> "OPTIONAL", same degrade convention as rating_mode.
+  age_category_requirement?: "OFF" | "OPTIONAL" | "REQUIRED";
+  // Gate participant-submitted YouTube tracks / team member names on the
+  // additional-info page. Missing/undefined -> treated as disabled — both
+  // are brand-new opt-in features with no prior always-on behavior.
+  track_submission_enabled?: number;
+  member_names_enabled?: number;
 }
 
 export interface ApiListResponse<T> {
@@ -147,6 +157,10 @@ export interface CreateEventPayload {
   participant_label?: string;
   participant_description?: string;
   rating_mode?: "COMPETITIVE" | "CASUAL";
+  audio_recording_enabled?: number;
+  age_category_requirement?: "OFF" | "OPTIONAL" | "REQUIRED";
+  track_submission_enabled?: number;
+  member_names_enabled?: number;
 }
 
 export type UpdateEventPayload = Partial<CreateEventPayload>;

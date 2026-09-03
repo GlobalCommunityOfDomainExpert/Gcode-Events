@@ -33,17 +33,22 @@ export const AUDIO_SUBMISSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type SubmissionStatus = "submitted" | "pending" | "disqualified";
 
-// undefined -> not a Participant-category row, submission concept doesn't apply.
+// undefined -> not a Participant-category row, or the event doesn't have
+// audio recording enabled — submission concept doesn't apply either way.
 // registrationDeadlineIso is the event's participantRegistration close time —
 // the submission window is 24h after that, not 24h after this attendee's own
 // registeredAt. Falls back to registeredAt if the organizer hasn't set a
-// participant registration deadline.
+// participant registration deadline. audioRecordingEnabled defaults true so
+// existing callers that haven't been updated for the per-event toggle keep
+// today's behavior.
 export function audioSubmissionStatus(
   attendee: Attendee,
   registrationDeadlineIso: string | null | undefined,
+  audioRecordingEnabled: boolean = true,
   now: Date = new Date(),
 ): SubmissionStatus | undefined {
   if (attendee.category !== "Participant") return undefined;
+  if (!audioRecordingEnabled) return undefined;
   if (attendee.audioSubmissionUrl) return "submitted";
   const closesAt = registrationDeadlineIso ?? attendee.registeredAt;
   const deadline = new Date(closesAt).getTime() + AUDIO_SUBMISSION_WINDOW_MS;

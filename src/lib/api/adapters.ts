@@ -334,6 +334,10 @@ export function toCreatePayload(
     participant_description: data.participantRegistrationEnabled
       ? data.participantDescription.trim() || undefined
       : undefined,
+    audio_recording_enabled: data.audioRecordingEnabled ? 1 : 0,
+    age_category_requirement: data.ageCategoryRequirement,
+    track_submission_enabled: data.trackSubmissionEnabled ? 1 : 0,
+    member_names_enabled: data.memberNamesEnabled ? 1 : 0,
   };
 }
 
@@ -433,6 +437,12 @@ export function toEventDraft(
       };
     }),
     certificate: Number(detail.certificate_offered) === 1,
+    audioRecordingEnabled: Number(detail.audio_recording_enabled) !== 0,
+    ageCategoryRequirement: resolveAgeCategoryRequirement(
+      detail.age_category_requirement,
+    ),
+    trackSubmissionEnabled: Number(detail.track_submission_enabled) === 1,
+    memberNamesEnabled: Number(detail.member_names_enabled) === 1,
   };
 }
 
@@ -561,6 +571,12 @@ function resolveRatingMode(
   mode: "COMPETITIVE" | "CASUAL" | undefined,
 ): Event["ratingMode"] {
   return mode === "CASUAL" ? "Casual" : "Competitive";
+}
+
+function resolveAgeCategoryRequirement(
+  value: "OFF" | "OPTIONAL" | "REQUIRED" | undefined,
+): Event["ageCategoryRequirement"] {
+  return value === "OFF" || value === "REQUIRED" ? value : "OPTIONAL";
 }
 
 function resolveRoundMode(
@@ -718,6 +734,12 @@ export function adaptApiEvent(
     attendeeRegistration,
     participantRegistration,
     ratingMode: resolveRatingMode(detail?.rating_mode),
+    audioRecordingEnabled: detail?.audio_recording_enabled !== 0,
+    ageCategoryRequirement: resolveAgeCategoryRequirement(
+      detail?.age_category_requirement,
+    ),
+    trackSubmissionEnabled: detail?.track_submission_enabled === 1,
+    memberNamesEnabled: detail?.member_names_enabled === 1,
     featured: event.is_featured === 1,
     maxTicketsPerRegistration:
       detail?.max_tickets_per_registration ?? undefined,

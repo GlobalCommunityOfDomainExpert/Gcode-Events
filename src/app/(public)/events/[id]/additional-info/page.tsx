@@ -19,6 +19,7 @@ import {
   Icon,
   Input,
   Label,
+  RemoveIconButton,
   Radio,
   SectionLabel,
 } from "@/components/atoms";
@@ -26,6 +27,7 @@ import {
   AudioRecorder,
   Banner,
   Breadcrumb,
+  Modal,
   NotFoundState,
   ToggleGroup,
 } from "@/components/molecules";
@@ -33,6 +35,10 @@ import { useEvent } from "@/hooks/use-event";
 import {
   AgeCategory,
   getParticipant,
+  listParticipantTeamMembers,
+  listParticipantYoutubeTracks,
+  replaceParticipantTeamMembers,
+  replaceParticipantYoutubeTracks,
   submitParticipantAgeCategory,
   submitParticipantAudio,
   uploadParticipantAudio,
@@ -72,6 +78,29 @@ function isValidUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+interface TrackDraft {
+  trackName: string;
+  youtubeUrl: string;
+}
+
+function withAddedItem<T>(list: T[], item: T): T[] {
+  return [...list, item];
+}
+
+function withUpdatedItem<T>(
+  list: T[],
+  index: number,
+  updater: (item: T) => T,
+): T[] {
+  return list.map((item, itemIndex) =>
+    itemIndex === index ? updater(item) : item,
+  );
+}
+
+function withRemovedItem<T>(list: T[], index: number): T[] {
+  return list.filter((_, itemIndex) => itemIndex !== index);
 }
 
 // Neutral card + small tone-colored icon badge — same pattern as the
@@ -127,6 +156,17 @@ export default function AdditionalInfoPage() {
   const [ageCategory, setAgeCategory] = useState<AgeCategory | null>(null);
   const [ageCategorySaving, setAgeCategorySaving] = useState(false);
   const [ageCategoryError, setAgeCategoryError] = useState("");
+  const [tracks, setTracks] = useState<TrackDraft[]>([]);
+  const [tracksSaving, setTracksSaving] = useState(false);
+  const [tracksError, setTracksError] = useState("");
+  const [tracksSaved, setTracksSaved] = useState(false);
+  const [tracksDirty, setTracksDirty] = useState(false);
+  const [members, setMembers] = useState<string[]>([]);
+  const [membersSaving, setMembersSaving] = useState(false);
+  const [membersError, setMembersError] = useState("");
+  const [membersSaved, setMembersSaved] = useState(false);
+  const [membersDirty, setMembersDirty] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   // Re-renders every 30s so the countdown/disqualification state stays live
   // without the participant having to refresh the page.
   const [now, setNow] = useState(() => new Date());
@@ -146,6 +186,19 @@ export default function AdditionalInfoPage() {
         setSubmittedUrl(row.audio_submission_url ?? null);
         setAgeCategory(row.age_category ?? null);
         setParticipantStatus("ready");
+
+        const [trackRows, memberRows] = await Promise.all([
+          listParticipantYoutubeTracks(row.id),
+          listParticipantTeamMembers(row.id),
+        ]);
+        if (cancelled) return;
+        setTracks(
+          trackRows.map((t) => ({
+            trackName: t.track_name,
+            youtubeUrl: t.youtube_url,
+          })),
+        );
+        setMembers(memberRows.map((m) => m.member_name));
       } catch {
         if (!cancelled) setParticipantStatus("error");
       }
@@ -255,6 +308,112 @@ export default function AdditionalInfoPage() {
     }
   }
 
+  function addTrack() {
+    setTracksSaved(false);
+    setTracksDirty(true);
+    setTracks(withAddedItem(tracks, { trackName: "", youtubeUrl: "" }));
+  }
+
+  function updateTrack(index: number, field: keyof TrackDraft, value: string) {
+    setTracksSaved(false);
+    setTracksDirty(true);
+    setTracks(
+      withUpdatedItem(tracks, index, (item) => ({ ...item, [field]: value })),
+    );
+  }
+
+  function removeTrack(index: number) {
+    setTracksSaved(false);
+    setTracksDirty(true);
+    setTracks(withRemovedItem(tracks, index));
+  }
+
+  async function saveTracks() {
+    setTracksSaving(true);
+    setTracksError("");
+    setTracksSaved(false);
+    try {
+      const items = tracks
+        .filter((t) => t.trackName.trim() !== "" && t.youtubeUrl.trim() !== "")
+        .map((t, index) => ({
+          trackName: t.trackName,
+          youtubeUrl: t.youtubeUrl,
+          sortOrder: index,
+        }));
+      await replaceParticipantYoutubeTracks(participant!.id, items);
+      setTracksSaved(true);
+      setTracksDirty(false);
+    } catch (err) {
+      setTracksError(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : "Couldn't save your tracks. Please try again.",
+      );
+    } finally {
+      setTracksSaving(false);
+    }
+  }
+
+  function addMember() {
+    setMembersSaved(false);
+    setMembersDirty(true);
+    setMembers(withAddedItem(members, ""));
+  }
+
+  function updateMember(index: number, value: string) {
+    setMembersSaved(false);
+    setMembersDirty(true);
+    setMembers(withUpdatedItem(members, index, () => value));
+  }
+
+  function removeMember(index: number) {
+    setMembersSaved(false);
+    setMembersDirty(true);
+    setMembers(withRemovedItem(members, index));
+  }
+
+  async function saveMembers() {
+    setMembersSaving(true);
+    setMembersError("");
+    setMembersSaved(false);
+    try {
+      const items = members
+        .filter((name) => name.trim() !== "")
+        .map((name, index) => ({ memberName: name, sortOrder: index }));
+      await replaceParticipantTeamMembers(participant!.id, items);
+      setMembersSaved(true);
+      setMembersDirty(false);
+    } catch (err) {
+      setMembersError(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : "Couldn't save your team members. Please try again.",
+      );
+    } finally {
+      setMembersSaving(false);
+    }
+  }
+
+  // Anything the participant typed/recorded/picked but hasn't hit Save/Submit
+  // on yet — age category auto-saves on click, so it's never "unsaved".
+  const hasUnsavedChanges =
+    tracksDirty ||
+    membersDirty ||
+    audioBlob !== null ||
+    (mode === "link" && audioUrl.trim() !== "");
+
+  function goToTicket() {
+    router.push(`/events/${event!.id}/registered?pid=${participant!.id}`);
+  }
+
+  function handleConfirmClick() {
+    if (hasUnsavedChanges) {
+      setShowLeaveConfirm(true);
+    } else {
+      goToTicket();
+    }
+  }
+
   function handleModeChange(value: SubmissionMode) {
     setMode(value);
     setAudioBlob(null);
@@ -317,53 +476,163 @@ export default function AdditionalInfoPage() {
         <h1 className="text-large text-text-primary font-bold">
           Additional Info — {event.title}
         </h1>
-        <p className="text-small text-text-secondary">
-          Participants must submit their audio submission URL within 24 hours of
-          registration closing, or the entry is disqualified.
-        </p>
+        {event.audioRecordingEnabled && (
+          <p className="text-small text-text-secondary">
+            Participants must submit their audio submission URL within 24
+            hours of registration closing, or the entry is disqualified.
+          </p>
+        )}
       </div>
 
-      {isDisqualified ? (
-        <StatusCard tone="danger" icon={AlertTriangle}>
-          The 24-hour submission window closed on {deadline.toLocaleString()}{" "}
-          and no audio was submitted. This entry is disqualified. Contact the
-          organizer if you believe this is a mistake.
-        </StatusCard>
-      ) : submittedUrl ? (
-        <StatusCard tone="success" icon={Check}>
-          {isPastDeadline
-            ? "Audio submitted. The submission window has closed, so this entry is locked in — no further changes."
-            : `Audio submitted. You can replace it — ${formatCountdown(msRemaining)} left, deadline ${deadline.toLocaleString()}.`}
-        </StatusCard>
-      ) : (
-        <StatusCard tone="warning" icon={Clock}>
-          {formatCountdown(msRemaining)} left to submit — deadline{" "}
-          {deadline.toLocaleString()}.
-        </StatusCard>
-      )}
+      {event.audioRecordingEnabled &&
+        (isDisqualified ? (
+          <StatusCard tone="danger" icon={AlertTriangle}>
+            The 24-hour submission window closed on{" "}
+            {deadline.toLocaleString()} and no audio was submitted. This
+            entry is disqualified. Contact the organizer if you believe this
+            is a mistake.
+          </StatusCard>
+        ) : submittedUrl ? (
+          <StatusCard tone="success" icon={Check}>
+            {isPastDeadline
+              ? "Audio submitted. The submission window has closed, so this entry is locked in — no further changes."
+              : `Audio submitted. You can replace it — ${formatCountdown(msRemaining)} left, deadline ${deadline.toLocaleString()}.`}
+          </StatusCard>
+        ) : (
+          <StatusCard tone="warning" icon={Clock}>
+            {formatCountdown(msRemaining)} left to submit — deadline{" "}
+            {deadline.toLocaleString()}.
+          </StatusCard>
+        ))}
 
       {error && <Banner tone="danger">{error}</Banner>}
 
-      <Card padding="md" className="space-y-3">
-        <SectionLabel>Age Category</SectionLabel>
-        {ageCategoryError && (
-          <Banner tone="danger">{ageCategoryError}</Banner>
+      {!event.audioRecordingEnabled &&
+        !event.trackSubmissionEnabled &&
+        !event.memberNamesEnabled &&
+        event.ageCategoryRequirement === "OFF" && (
+          <StatusCard tone="success" icon={Check}>
+            Nothing additional needed for this event.
+          </StatusCard>
         )}
-        <div className="flex flex-wrap gap-4">
-          {AGE_CATEGORY_OPTIONS.map((option) => (
-            <Radio
-              key={option.value}
-              name="age-category"
-              label={option.label}
-              checked={ageCategory === option.value}
-              disabled={ageCategorySaving}
-              onChange={() => handleAgeCategoryChange(option.value)}
-            />
-          ))}
-        </div>
-      </Card>
 
-      {!isPastDeadline && (
+      {event.ageCategoryRequirement !== "OFF" && (
+        <Card padding="md" className="space-y-3">
+          <SectionLabel>
+            Age Category
+            {event.ageCategoryRequirement === "REQUIRED" ? " (required)" : ""}
+          </SectionLabel>
+          {ageCategoryError && (
+            <Banner tone="danger">{ageCategoryError}</Banner>
+          )}
+          <div className="flex flex-wrap gap-4">
+            {AGE_CATEGORY_OPTIONS.map((option) => (
+              <Radio
+                key={option.value}
+                name="age-category"
+                label={option.label}
+                checked={ageCategory === option.value}
+                disabled={ageCategorySaving}
+                onChange={() => handleAgeCategoryChange(option.value)}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {event.memberNamesEnabled && (
+        <Card padding="md" className="space-y-4">
+          <SectionLabel>Team Members</SectionLabel>
+          {membersError && <Banner tone="danger">{membersError}</Banner>}
+          <div className="space-y-2">
+            {members.map((name, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Input
+                  placeholder="Member name"
+                  value={name}
+                  onChange={(e) => updateMember(index, e.target.value)}
+                  className="flex-1"
+                />
+                <RemoveIconButton
+                  onClick={() => removeMember(index)}
+                  ariaLabel="Remove member"
+                />
+              </div>
+            ))}
+          </div>
+          <Button variant="secondary" size="sm" onClick={addMember}>
+            + Add member
+          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="primary"
+              onClick={saveMembers}
+              disabled={membersSaving}
+            >
+              {membersSaving ? "Saving…" : "Save team members"}
+            </Button>
+            {membersSaved && (
+              <span className="text-small text-success">Saved.</span>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {event.trackSubmissionEnabled && (
+        <Card padding="md" className="space-y-4">
+          <SectionLabel>Track Submission</SectionLabel>
+          <p className="text-small text-text-secondary">
+            Add your YouTube track links — track name and URL, any number.
+          </p>
+          {tracksError && <Banner tone="danger">{tracksError}</Banner>}
+          <div className="space-y-3">
+            {tracks.map((track, index) => (
+              <div key={index} className="flex items-start gap-2">
+                <div className="flex flex-1 flex-col gap-2 sm:flex-row">
+                  <Input
+                    placeholder="Track name"
+                    value={track.trackName}
+                    onChange={(e) =>
+                      updateTrack(index, "trackName", e.target.value)
+                    }
+                    className="flex-1"
+                  />
+                  <Input
+                    type="url"
+                    placeholder="https://youtu.be/..."
+                    value={track.youtubeUrl}
+                    onChange={(e) =>
+                      updateTrack(index, "youtubeUrl", e.target.value)
+                    }
+                    className="flex-1"
+                  />
+                </div>
+                <RemoveIconButton
+                  onClick={() => removeTrack(index)}
+                  ariaLabel="Remove track"
+                />
+              </div>
+            ))}
+          </div>
+          <Button variant="secondary" size="sm" onClick={addTrack}>
+            + Add track
+          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="primary"
+              onClick={saveTracks}
+              disabled={tracksSaving}
+            >
+              {tracksSaving ? "Saving…" : "Save tracks"}
+            </Button>
+            {tracksSaved && (
+              <span className="text-small text-success">Saved.</span>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {!isPastDeadline && event.audioRecordingEnabled && (
         <Card padding="md" className="space-y-4">
           <SectionLabel>Submit your audio</SectionLabel>
           <ToggleGroup
@@ -493,6 +762,37 @@ export default function AdditionalInfoPage() {
           )}
         </Card>
       )}
+
+      <div className="flex justify-end">
+        <Button variant="primary" onClick={handleConfirmClick}>
+          Confirm
+        </Button>
+      </div>
+
+      <Modal
+        open={showLeaveConfirm}
+        onClose={() => setShowLeaveConfirm(false)}
+        title="Unsaved changes"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowLeaveConfirm(false)}
+            >
+              Stay and save
+            </Button>
+            <Button variant="primary" onClick={goToTicket}>
+              Leave without saving
+            </Button>
+          </>
+        }
+      >
+        <p className="text-body text-text-secondary">
+          You have unsaved changes — an in-progress audio submission, or
+          track/team member edits you haven&apos;t saved yet. Leaving now
+          will discard them.
+        </p>
+      </Modal>
     </div>
   );
 }

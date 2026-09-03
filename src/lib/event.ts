@@ -279,4 +279,17 @@ export interface Event {
   // status/mode above, so every event keeps today's 0-10 rating behavior
   // until an organizer opts into Casual (unlimited emoji taps).
   ratingMode: "Competitive" | "Casual";
+  // EventDetail.audio_recording_enabled — gates the audio section on the
+  // public additional-info page. Missing/undefined -> true, same degrade
+  // convention as ratingMode above.
+  audioRecordingEnabled: boolean;
+  // EventDetail.age_category_requirement — gates/labels the age-category
+  // section on the public additional-info page.
+  ageCategoryRequirement: "OFF" | "OPTIONAL" | "REQUIRED";
+  // EventDetail.track_submission_enabled / .member_names_enabled — gate the
+  // participant-submitted YouTube tracks / team member names sections on
+  // the additional-info page. Missing/undefined -> false (brand-new
+  // opt-in features, no prior always-on behavior to preserve).
+  trackSubmissionEnabled: boolean;
+  memberNamesEnabled: boolean;
 }
