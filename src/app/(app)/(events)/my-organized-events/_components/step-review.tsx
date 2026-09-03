@@ -162,6 +162,30 @@ export function StepReview({ data }: StepReviewProps) {
           </ul>
         </Card>
       )}
+
+      <Card className="divide-border-light space-y-1 divide-y">
+        <SectionLabel>Additional Information</SectionLabel>
+        <ReviewRow
+          label="Audio recording"
+          value={data.audioRecordingEnabled ? "Enabled" : "Disabled"}
+        />
+        <ReviewRow
+          label="Track submission"
+          value={data.trackSubmissionEnabled ? "Enabled" : "Disabled"}
+        />
+        <ReviewRow
+          label="Team member names"
+          value={data.memberNamesEnabled ? "Enabled" : "Disabled"}
+        />
+        <ReviewRow
+          label="Age category"
+          value={
+            { OFF: "Off", OPTIONAL: "Optional", REQUIRED: "Required" }[
+              data.ageCategoryRequirement
+            ]
+          }
+        />
+      </Card>
     </div>
   );
 }

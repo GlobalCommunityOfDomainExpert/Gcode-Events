@@ -14,6 +14,7 @@ import { StepRegistration } from "./step-registration";
 import { StepScheduleMode } from "./step-schedule-mode";
 import { StepTimelineLinks } from "./step-timeline-links";
 import { StepRounds } from "./step-rounds";
+import { StepAdditionalInfo } from "./step-additional-info";
 import { StepTerms } from "./step-terms";
 import { StepReview } from "@/app/(app)/(events)/my-organized-events/_components/step-review";
 import { EventDetailData, initialEventData } from "@/lib/zod/event";
@@ -43,6 +44,7 @@ const stepLabels = [
   "Schedule & Mode",
   "Timeline & Media",
   "Rounds",
+  "Additional Info",
   "Terms",
   "Review",
 ];
@@ -266,7 +268,10 @@ export function EventWizard({ mode, eventId, initialData }: EventWizardProps) {
         {stepIndex === 3 && <StepScheduleMode data={data} onChange={update} />}
         {stepIndex === 4 && <StepTimelineLinks data={data} onChange={update} />}
         {stepIndex === 5 && <StepRounds data={data} onChange={update} />}
-        {stepIndex === 6 && <StepTerms data={data} onChange={update} />}
+        {stepIndex === 6 && (
+          <StepAdditionalInfo data={data} onChange={update} />
+        )}
+        {stepIndex === 7 && <StepTerms data={data} onChange={update} />}
         {isLastStep && <StepReview data={data} />}
       </Card>
 

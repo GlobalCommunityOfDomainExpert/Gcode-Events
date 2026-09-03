@@ -86,6 +86,61 @@ export function submitParticipantAgeCategory(
   });
 }
 
+// Participant-submitted YouTube tracks / team member names — gated per-event
+// by EVENTS.TRACK_SUBMISSION_ENABLED / .MEMBER_NAMES_ENABLED (see
+// EventDetail in types.ts). Full-replace child collections, same
+// delete-then-bulk-insert pattern as replaceEventTimeline in events.ts, just
+// scoped to a participant instead of an event.
+
+export interface ParticipantYoutubeTrackApi {
+  track_name: string;
+  youtube_url: string;
+  sort_order: number;
+}
+
+export async function listParticipantYoutubeTracks(
+  id: number | string,
+): Promise<ParticipantYoutubeTrackApi[]> {
+  const { items } = await apiRequest<
+    ApiListResponse<ParticipantYoutubeTrackApi>
+  >(`/participants/${id}/youtube-tracks`);
+  return items;
+}
+
+export function replaceParticipantYoutubeTracks(
+  id: number | string,
+  items: { trackName: string; youtubeUrl: string; sortOrder: number }[],
+): Promise<unknown> {
+  return apiRequest(`/participants/${id}/youtube-tracks`, {
+    method: "POST",
+    body: items,
+  });
+}
+
+export interface ParticipantTeamMemberApi {
+  member_name: string;
+  sort_order: number;
+}
+
+export async function listParticipantTeamMembers(
+  id: number | string,
+): Promise<ParticipantTeamMemberApi[]> {
+  const { items } = await apiRequest<
+    ApiListResponse<ParticipantTeamMemberApi>
+  >(`/participants/${id}/team-members`);
+  return items;
+}
+
+export function replaceParticipantTeamMembers(
+  id: number | string,
+  items: { memberName: string; sortOrder: number }[],
+): Promise<unknown> {
+  return apiRequest(`/participants/${id}/team-members`, {
+    method: "POST",
+    body: items,
+  });
+}
+
 // Stays clear of Vercel's ~4.5MB serverless function body cap. Blobs at or
 // under this go through a single POST; bigger ones are split into chunks and
 // sent via OCI's multipart upload API instead, since no individual request
