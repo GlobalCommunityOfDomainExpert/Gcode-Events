@@ -44,6 +44,10 @@ export interface LiveRoundPanelProps {
   // Event-wide decisions — the Rounds tab already fetches these for its own
   // round-locking check, reused here instead of a second fetch.
   decisions: RoundDecision[];
+  // Refetches the parent page's event — needed after the audienceScoringEnabled
+  // sync effect below writes a new rating_mode, since that write doesn't
+  // otherwise reach this component's own `event` prop (see call site).
+  onEventChanged?: () => void;
 }
 
 // Extracted from the old standalone "Live" tab (merged into the Rounds tab
@@ -57,6 +61,7 @@ export function LiveRoundPanel({
   round,
   previousRound,
   decisions,
+  onEventChanged,
 }: LiveRoundPanelProps) {
   // Only participants Shortlisted in the previous round may perform in this
   // one — matches the old Live tab's eligibility filter. Every round now
@@ -109,7 +114,10 @@ export function LiveRoundPanel({
       setModeSaving(true);
       try {
         await updateEvent(event.id, { rating_mode: desired });
-        if (!cancelled) syncedRatingModeRef.current = syncKey;
+        if (!cancelled) {
+          syncedRatingModeRef.current = syncKey;
+          onEventChanged?.();
+        }
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -357,6 +365,22 @@ export function LiveRoundPanel({
     }
   }
 
+  // Reactions are anonymous now (no participant/attendee identity involved,
+  // see GCODE_RATINGS_API.submit_reaction) — the /rate URL is the same for
+  // every viewer, so there's nothing to personalize/email per attendee like
+  // sendRatingLinks does for Competitive mode. Just copy the one link.
+  async function handleCopyReactionLink() {
+    const url = `${window.location.origin}/events/${event.id}/rate`;
+    setError("");
+    setNotice("");
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice("Reaction link copied — share it however you like (QR code, screen, chat).");
+    } catch {
+      setError(`Couldn't copy automatically — here's the link: ${url}`);
+    }
+  }
+
   const columns: TableColumn<Attendee>[] = [
     {
       key: "name",
@@ -433,7 +457,11 @@ export function LiveRoundPanel({
                 ? "End Intermission"
                 : "Start Intermission"}
           </Button>
-          {round.audienceScoringEnabled && (
+          {event.ratingMode === "Casual" ? (
+            <Button variant="secondary" size="sm" onClick={handleCopyReactionLink}>
+              Copy Reaction Link
+            </Button>
+          ) : (
             <Button
               variant="secondary"
               size="sm"

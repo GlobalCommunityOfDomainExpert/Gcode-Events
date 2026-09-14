@@ -152,9 +152,10 @@ export async function listRoundRatings(
 }
 
 // Casual mode's fixed emoji set — not configurable per event. Shared by the
-// rate page's tap buttons, the bot simulator, and (implicitly) the
-// GCODE_EVENT_REACTIONS.EMOJI check constraint on the backend.
-export const REACTION_EMOJIS = ["👏", "🔥", "❤️", "👌", "👍"] as const;
+// rate page's tap buttons, the bot simulator, and the
+// GCODE_EVENT_REACTIONS.EMOJI check constraint on the backend — must match
+// that constraint exactly (👌 was a stale mismatch, fixed to 😂).
+export const REACTION_EMOJIS = ["👏", "🔥", "❤️", "😂", "👍"] as const;
 export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
 
 export interface ReactionItem {
@@ -162,18 +163,21 @@ export interface ReactionItem {
   emoji: string;
 }
 
-// Public — unlimited taps, no lock, fire-and-forget from the caller's
-// perspective. `attendeeId` is the tapping attendee's own participant id —
-// same shape as submitRating (rater in the path, performer in the body),
-// event_id resolved server-side from the participant rows, not client-sent.
+// Public and fully anonymous — no participant/attendee identity involved.
+// `deviceToken` (see lib/reactions/device-token.ts) is the only thing tying
+// repeated taps together; the server throttles to 1 per device per second
+// (GCODE_RATINGS_API.submit_reaction), silently dropping faster ones rather
+// than erroring, so this stays fire-and-forget from the caller's
+// perspective same as before.
 export function submitReaction(
-  attendeeId: number | string,
+  eventId: number | string,
   performerId: number | string,
   emoji: string,
+  deviceToken: string,
 ): Promise<{ ok: boolean }> {
-  return apiRequest(`/participants/${attendeeId}/reactions`, {
-    method: "PUT",
-    body: { performer_id: performerId, emoji },
+  return apiRequest(`/events/${eventId}/reactions`, {
+    method: "POST",
+    body: { performer_id: performerId, emoji, device_token: deviceToken },
   });
 }
 

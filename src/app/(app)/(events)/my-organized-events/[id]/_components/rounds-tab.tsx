@@ -66,6 +66,13 @@ export interface RoundsTabProps {
   // participant is added via AddParticipantsPanel so they show up without a
   // full reload. Organizer-only feature, so panelist callers can omit this.
   onAttendeesChanged?: () => void;
+  // Refetches the parent page's event — LiveRoundPanel auto-syncs
+  // EVENTS.RATING_MODE to match the live round's audienceScoringEnabled,
+  // but that write doesn't otherwise reach this component's own `event`
+  // prop, so without this callback the Casual/Competitive-dependent UI
+  // (Send Rating Links vs Copy Reaction Link, the mode badges) stays stale
+  // until a full page reload. Organizer-only, so panelist callers can omit.
+  onEventChanged?: () => void;
 }
 
 export function RoundsTab({
@@ -74,6 +81,7 @@ export function RoundsTab({
   viewerRole = "organizer",
   onlyRoundId,
   onAttendeesChanged,
+  onEventChanged,
 }: RoundsTabProps) {
   const session = useSession();
   const participants = useMemo(
@@ -961,6 +969,7 @@ export function RoundsTab({
                   round={activeRound}
                   previousRound={previousRound}
                   decisions={decisions}
+                  onEventChanged={onEventChanged}
                 />
               ))}
 

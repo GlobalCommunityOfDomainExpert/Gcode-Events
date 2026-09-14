@@ -214,6 +214,7 @@ export default function OrganizedEventDetailPage() {
                 event={event}
                 attendees={attendees}
                 onAttendeesChanged={refreshAttendees}
+                onEventChanged={refreshEvent}
               />
             )}
             {activeTab === "panelists" && <PanelistsTab eventId={event.id} />}
