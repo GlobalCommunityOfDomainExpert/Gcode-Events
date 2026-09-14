@@ -1,0 +1,24 @@
+-- Net diff to GCODE_RATINGS_API.submit_reaction (spec + body). Applied live
+-- via CLOB search/replace against the existing package source, not a full
+-- rewrite -- see GCODE-Backend/packages/GCODE_RATINGS_API/{spec,body}.sql
+-- for the actual runnable result.
+
+-- Signature change:
+--   was: submit_reaction(p_rater_attendee_id NUMBER, p_performer_participant_id NUMBER, p_emoji VARCHAR2)
+--   now: submit_reaction(p_event_id NUMBER, p_performer_participant_id NUMBER, p_emoji VARCHAR2, p_device_token VARCHAR2)
+
+-- Behavior change:
+--   - No longer looks up/validates a rater participant row at all (that's
+--     the whole point -- no identity, no registration required).
+--   - Still validates the performer: must exist, be PARTICIPANT-category,
+--     and belong to p_event_id.
+--   - New: rejects a missing/too-short p_device_token (-20037).
+--   - New: 1-second-per-device throttle -- looks up MAX(created_on) for
+--     this device_token across ALL performers (not scoped per-performer),
+--     and if the last reaction from this device was under 1s ago, silently
+--     RETURNs without inserting or erroring. This is the actual anti-spam
+--     enforcement; the client's own 1s cooldown (rate/page.tsx) is just
+--     immediate visual feedback on top, not itself a security boundary
+--     since a scripted caller would just skip the client code.
+--   - Inserts DEVICE_TOKEN instead of RATER_ATTENDEE_ID into
+--     GCODE_EVENT_REACTIONS.
