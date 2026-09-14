@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { AlertTriangle, Check, Compass, Mic } from "lucide-react";
 import { Button, Card, Icon } from "@/components/atoms";
@@ -16,6 +16,14 @@ import {
 } from "@/lib/api/ratings";
 import { ApiError } from "@/lib/api/client";
 import { ParticipantApi } from "@/lib/api/types";
+import { getDeviceToken } from "@/lib/reactions/device-token";
+
+// Client-side cooldown after any emoji tap, on top of the server's own
+// 1s-per-device throttle (GCODE_RATINGS_API.submit_reaction) — the server
+// throttle is what actually prevents spam (a scripted client would just
+// skip client code entirely), this is just immediate visual feedback so a
+// real person doesn't see their next few taps silently dropped.
+const REACTION_COOLDOWN_MS = 1000;
 
 export default function RateEventPage() {
   const params = useParams<{ id: string }>();
@@ -32,9 +40,16 @@ export default function RateEventPage() {
   const [rating, setRating] = useState(5);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [reactionCooldown, setReactionCooldown] = useState(false);
+  const deviceTokenRef = useRef<string | null>(null);
   // Re-renders every second so the countdown stays live without waiting on
   // the next SSE message.
   const [now, setNow] = useState(() => Date.now());
+
+  // Reactions (Casual mode) are fully anonymous — no rating link needed at
+  // all. Only numeric scoring (Competitive mode) is still tied to a real
+  // Attendee registration, since audience *scoring* stays registered-users-only.
+  const requiresAttendee = event?.ratingMode !== "Casual";
 
   useEffect(() => {
     if (!attendeeId) return;
@@ -59,10 +74,14 @@ export default function RateEventPage() {
   }, [attendeeId]);
 
   useEffect(() => {
-    if (!attendeeId || !params.id || attendeeStatus !== "ready") return;
-
+    if (!params.id || !event) return;
+    // Anonymous (Casual) viewers subscribe with no attendee_id at all —
+    // already_rated just stays meaningless/unused for them, everything else
+    // about the live-performer state is public.
+    const query =
+      requiresAttendee && attendeeId ? `?attendee_id=${attendeeId}` : "";
     const source = new EventSource(
-      `/api/events/${params.id}/live-performer/stream?attendee_id=${attendeeId}`,
+      `/api/events/${params.id}/live-performer/stream${query}`,
     );
     source.onmessage = (e) => {
       const data: LivePerformer = JSON.parse(e.data);
@@ -70,14 +89,14 @@ export default function RateEventPage() {
       setRating(5);
     };
     return () => source.close();
-  }, [attendeeId, params.id, attendeeStatus]);
+  }, [attendeeId, params.id, event, requiresAttendee]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  if (!event || attendeeStatus === "loading") {
+  if (!event || (requiresAttendee && attendeeStatus === "loading")) {
     return (
       <NotFoundState
         icon={Compass}
@@ -89,7 +108,7 @@ export default function RateEventPage() {
     );
   }
 
-  if (attendeeStatus === "error" || !attendee) {
+  if (requiresAttendee && (attendeeStatus === "error" || !attendee)) {
     return (
       <NotFoundState
         icon={Compass}
@@ -101,7 +120,7 @@ export default function RateEventPage() {
     );
   }
 
-  if (attendee.category === "PARTICIPANT") {
+  if (requiresAttendee && attendee?.category === "PARTICIPANT") {
     return (
       <NotFoundState
         icon={Compass}
@@ -122,8 +141,15 @@ export default function RateEventPage() {
   // On stage but the organizer hasn't hit Start Rating yet — distinct from
   // windowClosed below, which only applies once a window has actually opened
   // and expired. Without this split, a performer who's merely on stage reads
-  // as "rating window closed", which is wrong — it never opened.
-  const ratingNotStarted = !!live?.participant_id && !live?.window_closes_at;
+  // as "rating window closed", which is wrong — it never opened. Competitive
+  // only: reactions (Casual) are anonymous and don't have a "window" concept
+  // at all — the organizer's Live tab doesn't even show a Start Rating
+  // button for Casual rounds (see live-round-panel.tsx), so gating on
+  // window_closes_at here would leave reactions permanently unreachable.
+  const ratingNotStarted =
+    event.ratingMode === "Competitive" &&
+    !!live?.participant_id &&
+    !live?.window_closes_at;
   // Casual never expires — once started, reactions stay open until a new
   // performer is selected. Only Competitive's 2-minute window actually closes.
   const windowClosed =
@@ -133,11 +159,11 @@ export default function RateEventPage() {
     secondsLeft <= 0;
 
   async function handleSubmit() {
-    if (!live?.participant_id) return;
+    if (!live?.participant_id || !attendeeId) return;
     setSubmitting(true);
     setError("");
     try {
-      await submitRating(attendeeId!, live.participant_id, rating);
+      await submitRating(attendeeId, live.participant_id, rating);
       setLive({ ...live, already_rated: true });
     } catch (err) {
       setError(
@@ -148,6 +174,19 @@ export default function RateEventPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleReactionTap(emoji: string) {
+    if (!live?.participant_id || reactionCooldown) return;
+    deviceTokenRef.current ??= getDeviceToken();
+    void submitReaction(
+      event!.id,
+      live.participant_id,
+      emoji,
+      deviceTokenRef.current,
+    );
+    setReactionCooldown(true);
+    setTimeout(() => setReactionCooldown(false), REACTION_COOLDOWN_MS);
   }
 
   return (
@@ -219,16 +258,9 @@ export default function RateEventPage() {
                   <button
                     key={emoji}
                     type="button"
-                    className="text-3xl transition-transform active:scale-90"
-                    onClick={() => {
-                      if (live.participant_id) {
-                        void submitReaction(
-                          attendeeId!,
-                          live.participant_id,
-                          emoji,
-                        );
-                      }
-                    }}
+                    disabled={reactionCooldown}
+                    className="text-3xl transition-transform active:scale-90 disabled:opacity-40"
+                    onClick={() => handleReactionTap(emoji)}
                   >
                     {emoji}
                   </button>
