@@ -40,6 +40,7 @@ import { OrganizerCard } from "./_components/organizer-card";
 import { EventLinksCard } from "./_components/event-links-card";
 import { EligibilityTermsCard } from "./_components/eligibility-terms-card";
 import { RegistrationCard } from "./_components/registration-card";
+import { InterestButton } from "./_components/interest-button";
 import { EventInfoCard } from "./_components/event-info-card";
 import { DetailItem } from "./_components/detail-item";
 import {
@@ -53,7 +54,7 @@ import { EventDetailSkeleton } from "./_components/event-detail-skeleton";
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { event, status } = useEvent(params.id);
+  const { event, status, refresh } = useEvent(params.id);
   const now = useServerNow();
 
   if (status === "loading") {
@@ -219,6 +220,19 @@ export default function EventDetailPage() {
                     );
                   })}
                 </div>
+              </>
+            )}
+            {event.status !== "CANCELLED" && !isPast && (
+              <>
+                <InterestButton
+                  eventId={event.id}
+                  onInterested={() => void refresh({ silent: true })}
+                />
+                {(event.interestedCount ?? 0) > 0 && (
+                  <p className="text-small text-text-secondary text-center">
+                    {event.interestedCount} interested
+                  </p>
+                )}
               </>
             )}
             {event.status === "CANCELLED" ? (

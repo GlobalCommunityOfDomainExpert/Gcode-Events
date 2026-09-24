@@ -60,6 +60,9 @@ export interface EventDetail extends EventListItem {
   participant_price: number | null;
   participant_capacity: number | null;
   participant_registered_count: number;
+  // GCODE_EVENT_INTEREST row count — people who clicked "I'm Interested".
+  // Missing on a backend without the event-interest patch -> treated as 0.
+  interested_count?: number;
   // Organizer-facing display text for each category's pass-selection card.
   // Null/blank -> UI falls back to "Attendee"/"Participant" + no description.
   attendee_label: string | null;

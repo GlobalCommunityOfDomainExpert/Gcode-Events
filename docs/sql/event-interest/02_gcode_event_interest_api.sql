@@ -1,0 +1,9 @@
+-- Reference copy — real source lives in
+-- GCODE-Backend/packages/GCODE_EVENT_INTEREST_API/{spec,body}.sql.
+-- Also patched: GCODE_EVENTS_API.get_event gets one extra cursor column:
+--
+--   (SELECT COUNT(*) FROM gcode_event_interest gei
+--     WHERE gei.event_id = e.id) AS "interested_count",
+--
+-- (placed right after "registered_count"). The full runnable package bodies
+-- are in 00_run_all_on_prod.sql.
