@@ -726,6 +726,10 @@ export function adaptApiEvent(
     time: formatTime(event.start_date),
     location: resolveLocation(event.city, event.address),
     registeredCount: event.registered_count,
+    // Read off `event` directly, not `detail`: `detail` is inferred from the
+    // "description" key, which ORDS omits when it's null — that would zero
+    // the count for any event with no description.
+    interestedCount: (event as Partial<EventDetail>).interested_count ?? 0,
     capacity: event.max_attendees ?? undefined,
     spotsLeft:
       event.max_attendees != null

@@ -180,6 +180,11 @@ export function OverviewTab({
             }
           />
           <StatCard
+            label="Interested"
+            value={(event.interestedCount ?? 0).toLocaleString()}
+            sub="clicked I'm Interested"
+          />
+          <StatCard
             label="Revenue"
             value={event.priceAmount ? `₹${revenue.toLocaleString()}` : "₹0"}
             sub={
@@ -325,7 +330,8 @@ export function OverviewTab({
 
       <div>
         <p className="text-small text-text-secondary mb-3 flex items-center gap-2 font-bold tracking-widest uppercase">
-          Additional Information <span className="bg-border-light h-px flex-1" />
+          Additional Information{" "}
+          <span className="bg-border-light h-px flex-1" />
         </p>
         <div className="border-border-light bg-surface-light space-y-2 rounded-md border p-4">
           <p className="text-body text-text-primary">

@@ -248,7 +248,7 @@ export interface Event {
   time: string; // derived from EventListItem.start_date
   location: string; // derived from EventListItem.city + address
   registeredCount: number; // EventListItem.registered_count — live SUM(quantity) from GCODE_EVENT_PARTICIPANTS
-  interestedCount?: number; // no backend column — never set
+  interestedCount?: number; // EventDetail.interested_count — distinct emails who clicked "I'm Interested"
   spotsLeft?: number; // max_attendees - registeredCount
   capacity?: number; // EventListItem.max_attendees
   attendeeRegistration: RegistrationCategory; // always present, mirrors price/priceAmount/capacity/spotsLeft/registeredCount above; .enabled toggleable by the organizer
