@@ -58,6 +58,27 @@ export interface EventSocialLink {
   url: string;
 }
 
+// Backed by GCODE_EVENT_QUESTION_OPTIONS. One selectable answer for a
+// RADIO/CHECKBOX question.
+export interface EventQuestionOption {
+  id: string;
+  label: string;
+}
+
+// Backed by GCODE_EVENT_QUESTIONS. An organizer-authored question shown on
+// the additional-info page. Each question picks its own audience via
+// appliesTo — individually, not one shared page-wide setting.
+export interface EventQuestion {
+  id: string;
+  prompt: string;
+  type: "TEXT" | "RADIO" | "CHECKBOX";
+  required: boolean;
+  appliesTo: "ATTENDEE" | "PARTICIPANT";
+  sortOrder: number;
+  // Empty for TEXT questions.
+  options: EventQuestionOption[];
+}
+
 // Backed by GCODE_EVENT_ROUND_RUBRICS — contract-only, same as EventRound
 // below. One scored criterion within a round's judging rubric (e.g.
 // "Creativity" out of 10).
@@ -283,13 +304,15 @@ export interface Event {
   // public additional-info page. Missing/undefined -> true, same degrade
   // convention as ratingMode above.
   audioRecordingEnabled: boolean;
-  // EventDetail.age_category_requirement — gates/labels the age-category
-  // section on the public additional-info page.
-  ageCategoryRequirement: "OFF" | "OPTIONAL" | "REQUIRED";
-  // EventDetail.track_submission_enabled / .member_names_enabled — gate the
-  // participant-submitted YouTube tracks / team member names sections on
-  // the additional-info page. Missing/undefined -> false (brand-new
-  // opt-in features, no prior always-on behavior to preserve).
-  trackSubmissionEnabled: boolean;
-  memberNamesEnabled: boolean;
+  // EventDetail.audio_recording_applies_to — which registration category
+  // the audio section is asked of, individually. Missing/undefined ->
+  // "PARTICIPANT", matching the section's prior hardcoded PARTICIPANT-only
+  // behavior.
+  audioRecordingAppliesTo: "ATTENDEE" | "PARTICIPANT";
+  // Organizer-authored custom questions (detail fetch only, same as
+  // description/timeline/rounds above) — adapter hardcodes [] on a list-item
+  // fetch, since /events (list) never returns them. Each question carries
+  // its own appliesTo, so filter by category at the call site rather than
+  // gating the array as a whole.
+  questions: EventQuestion[];
 }

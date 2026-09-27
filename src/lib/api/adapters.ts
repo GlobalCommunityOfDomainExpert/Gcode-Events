@@ -5,6 +5,7 @@ import {
   EventTimelineItem,
   EventRound,
   EventPanelist,
+  EventQuestion,
   Coupon,
   UpiClaim,
   MyTicket,
@@ -28,6 +29,8 @@ import {
   PanelistInviteApi,
   CouponApi,
   UpiClaimApi,
+  EventQuestionApi,
+  EventQuestionOptionApi,
 } from "./types";
 import { API_BASE_URL } from "./client";
 
@@ -335,9 +338,67 @@ export function toCreatePayload(
       ? data.participantDescription.trim() || undefined
       : undefined,
     audio_recording_enabled: data.audioRecordingEnabled ? 1 : 0,
-    age_category_requirement: data.ageCategoryRequirement,
-    track_submission_enabled: data.trackSubmissionEnabled ? 1 : 0,
-    member_names_enabled: data.memberNamesEnabled ? 1 : 0,
+    audio_recording_applies_to: data.audioRecordingAppliesTo,
+  };
+}
+
+export interface QuestionPayloadItem {
+  prompt: string;
+  questionType: "TEXT" | "RADIO" | "CHECKBOX";
+  // 1/0, not a JS boolean — JSON_TABLE's NUMBER-typed PATH extraction
+  // doesn't coerce a JSON `true`/`false` literal, confirmed live (came back
+  // NULL -> defaulted to 0 regardless of what was sent).
+  isRequired: 1 | 0;
+  appliesTo: "ATTENDEE" | "PARTICIPANT";
+  sortOrder: number;
+  options: { label: string; sortOrder: number }[];
+}
+
+// Wizard question items -> GCODE_EVENT_QUESTIONS rows. Mirrors
+// toRoundsPayload's blank-filter convention — a question with no prompt
+// (or, for RADIO/CHECKBOX, no non-blank options) never reaches the backend.
+export function toQuestionsPayload(
+  data: EventDetailData,
+): QuestionPayloadItem[] {
+  return data.questions
+    .filter((q) => q.prompt.trim() !== "")
+    .map((q, index) => ({
+      prompt: q.prompt,
+      questionType: q.type,
+      isRequired: q.required ? 1 : 0,
+      appliesTo: q.appliesTo,
+      sortOrder: index,
+      options:
+        q.type === "TEXT"
+          ? []
+          : q.options
+              .filter((o) => o.label.trim() !== "")
+              .map((o, optionIndex) => ({
+                label: o.label,
+                sortOrder: optionIndex,
+              })),
+    }));
+}
+
+// GCODE_EVENT_QUESTIONS row (+ nested options) -> UI EventQuestion. See
+// EventQuestionApi.options comment in types.ts for why options needs the
+// defensive string-or-array parse.
+export function adaptEventQuestion(row: EventQuestionApi): EventQuestion {
+  const options: EventQuestionOptionApi[] =
+    typeof row.options === "string"
+      ? parseJsonArray<EventQuestionOptionApi>(row.options)
+      : (row.options ?? []);
+  return {
+    id: String(row.id),
+    prompt: row.prompt,
+    type: row.question_type,
+    required: Number(row.is_required) === 1,
+    appliesTo: row.applies_to,
+    sortOrder: row.sort_order,
+    options: options
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((o) => ({ id: String(o.id), label: o.label })),
   };
 }
 
@@ -358,6 +419,7 @@ export function toEventDraft(
   detail: EventDetail,
   timeline: EventTimelineApi[] = [],
   rounds: EventRoundApi[] = [],
+  questions: EventQuestionApi[] = [],
 ): EventDetailData {
   return {
     id: detail.id,
@@ -438,11 +500,18 @@ export function toEventDraft(
     }),
     certificate: Number(detail.certificate_offered) === 1,
     audioRecordingEnabled: Number(detail.audio_recording_enabled) !== 0,
-    ageCategoryRequirement: resolveAgeCategoryRequirement(
-      detail.age_category_requirement,
-    ),
-    trackSubmissionEnabled: Number(detail.track_submission_enabled) === 1,
-    memberNamesEnabled: Number(detail.member_names_enabled) === 1,
+    audioRecordingAppliesTo: detail.audio_recording_applies_to ?? "PARTICIPANT",
+    questions: questions.map((row) => {
+      const q = adaptEventQuestion(row);
+      return {
+        id: Number(q.id),
+        prompt: q.prompt,
+        type: q.type,
+        required: q.required,
+        appliesTo: q.appliesTo,
+        options: q.options.map((o) => ({ id: Number(o.id), label: o.label })),
+      };
+    }),
   };
 }
 
@@ -573,12 +642,6 @@ function resolveRatingMode(
   return mode === "CASUAL" ? "Casual" : "Competitive";
 }
 
-function resolveAgeCategoryRequirement(
-  value: "OFF" | "OPTIONAL" | "REQUIRED" | undefined,
-): Event["ageCategoryRequirement"] {
-  return value === "OFF" || value === "REQUIRED" ? value : "OPTIONAL";
-}
-
 function resolveRoundMode(
   mode: "ONLINE" | "OFFLINE" | undefined,
 ): EventRound["mode"] {
@@ -659,8 +722,17 @@ export function adaptApiEvent(
   eventTypeNames: Record<number, string>,
   modeNames: Record<number, string>,
   statusCodes: Record<number, string>,
+  questions: EventQuestionApi[] = [],
 ): Event {
-  const detail = "description" in event ? event : undefined;
+  // "description" in event used to be the discriminator here, but ORDS/
+  // APEX_JSON omits a null key entirely rather than emitting `null` — so
+  // any event with no description (a real, common case) made this whole
+  // check false, silently falling back to the "missing" default for every
+  // detail?.* field below (age category, track/member toggles, this
+  // feature's audioRecordingAppliesTo/questions, etc.), confirmed live.
+  // certificate_offered is EventDetail-only *and* NOT NULL on the EVENTS
+  // table, so it's always serialized on a real detail fetch.
+  const detail = "certificate_offered" in event ? event : undefined;
   const price = event.ticket_price === 0 ? "Free" : `₹${event.ticket_price}`;
 
   // Missing/undefined attendee_registration_enabled -> treated as enabled
@@ -739,11 +811,9 @@ export function adaptApiEvent(
     participantRegistration,
     ratingMode: resolveRatingMode(detail?.rating_mode),
     audioRecordingEnabled: detail?.audio_recording_enabled !== 0,
-    ageCategoryRequirement: resolveAgeCategoryRequirement(
-      detail?.age_category_requirement,
-    ),
-    trackSubmissionEnabled: detail?.track_submission_enabled === 1,
-    memberNamesEnabled: detail?.member_names_enabled === 1,
+    audioRecordingAppliesTo:
+      detail?.audio_recording_applies_to ?? "PARTICIPANT",
+    questions: questions.map(adaptEventQuestion),
     featured: event.is_featured === 1,
     maxTicketsPerRegistration:
       detail?.max_tickets_per_registration ?? undefined,

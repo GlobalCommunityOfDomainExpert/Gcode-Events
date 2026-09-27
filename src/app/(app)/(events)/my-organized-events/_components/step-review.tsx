@@ -167,23 +167,15 @@ export function StepReview({ data }: StepReviewProps) {
         <SectionLabel>Additional Information</SectionLabel>
         <ReviewRow
           label="Audio recording"
-          value={data.audioRecordingEnabled ? "Enabled" : "Disabled"}
-        />
-        <ReviewRow
-          label="Track submission"
-          value={data.trackSubmissionEnabled ? "Enabled" : "Disabled"}
-        />
-        <ReviewRow
-          label="Team member names"
-          value={data.memberNamesEnabled ? "Enabled" : "Disabled"}
-        />
-        <ReviewRow
-          label="Age category"
           value={
-            { OFF: "Off", OPTIONAL: "Optional", REQUIRED: "Required" }[
-              data.ageCategoryRequirement
-            ]
+            data.audioRecordingEnabled
+              ? `Enabled, for ${data.audioRecordingAppliesTo === "ATTENDEE" ? "Attendees" : "Participants"}`
+              : "Disabled"
           }
+        />
+        <ReviewRow
+          label="Custom questions"
+          value={String(data.questions.filter((q) => q.prompt.trim()).length)}
         />
       </Card>
     </div>

@@ -337,30 +337,14 @@ export function OverviewTab({
           <p className="text-body text-text-primary">
             Audio recording:{" "}
             <span className="font-medium">
-              {event.audioRecordingEnabled ? "Enabled" : "Disabled"}
+              {event.audioRecordingEnabled
+                ? `Enabled, for ${event.audioRecordingAppliesTo === "ATTENDEE" ? "Attendees" : "Participants"}`
+                : "Disabled"}
             </span>
           </p>
           <p className="text-body text-text-primary">
-            Track submission:{" "}
-            <span className="font-medium">
-              {event.trackSubmissionEnabled ? "Enabled" : "Disabled"}
-            </span>
-          </p>
-          <p className="text-body text-text-primary">
-            Team member names:{" "}
-            <span className="font-medium">
-              {event.memberNamesEnabled ? "Enabled" : "Disabled"}
-            </span>
-          </p>
-          <p className="text-body text-text-primary">
-            Age category:{" "}
-            <span className="font-medium">
-              {
-                { OFF: "Off", OPTIONAL: "Optional", REQUIRED: "Required" }[
-                  event.ageCategoryRequirement
-                ]
-              }
-            </span>
+            Custom questions:{" "}
+            <span className="font-medium">{event.questions.length}</span>
           </p>
         </div>
       </div>

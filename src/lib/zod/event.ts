@@ -14,6 +14,30 @@ const eventSocialLinkSchema = z.object({
   url: z.string(),
 });
 
+const eventQuestionOptionSchema = z.object({
+  // Existing GCODE_EVENT_QUESTION_OPTIONS.ID, null for an option added in
+  // this edit session — id isn't actually used on save (replace_questions
+  // is a full delete-then-reinsert, so it never updates in place like
+  // rounds/rubric aspire to), kept only so an existing option can be
+  // matched back up after a save+refetch round-trip.
+  id: z.number().nullable().default(null),
+  label: z.string().default(""),
+});
+
+const eventQuestionSchema = z.object({
+  // Existing GCODE_EVENT_QUESTIONS.ID, null for a question added in this
+  // edit session — same "not actually used on save" note as the option id.
+  id: z.number().nullable().default(null),
+  prompt: z.string().default(""),
+  type: z.enum(["TEXT", "RADIO", "CHECKBOX"]).default("TEXT"),
+  required: z.boolean().default(false),
+  // Which registration category this individual question is asked of —
+  // picked per question, not one shared page-wide setting.
+  appliesTo: z.enum(["ATTENDEE", "PARTICIPANT"]).default("PARTICIPANT"),
+  // Ignored for TEXT questions.
+  options: z.array(eventQuestionOptionSchema).default([]),
+});
+
 
 const eventRoundRubricCriterionSchema = z.object({
   // Existing GCODE_EVENT_ROUND_RUBRICS.ID, null for a criterion added in
@@ -101,20 +125,30 @@ export const eventDetailDataSchema = z.object({
   timeline: z.array(eventTimelineItemSchema).default([]), // EVENT_TIMELINE rows
   rounds: z.array(eventRoundItemSchema).default([]), // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25
   certificate: z.boolean().default(false), // no backend column yet
-  // EVENTS.AUDIO_RECORDING_ENABLED / .AGE_CATEGORY_REQUIREMENT — gate the
-  // audio/age sections on the public additional-info page. Defaults match
-  // today's always-on behavior for events created before this setting existed.
+  // EVENTS.AUDIO_RECORDING_ENABLED — gates the audio section on the public
+  // additional-info page. Default true matches today's always-on behavior
+  // for events created before this setting existed.
   audioRecordingEnabled: z.boolean().default(true),
-  ageCategoryRequirement: z.enum(["OFF", "OPTIONAL", "REQUIRED"]).default("OPTIONAL"),
-  // EVENTS.TRACK_SUBMISSION_ENABLED / .MEMBER_NAMES_ENABLED — gate 2 more
-  // participant-submitted sections on the additional-info page (the
-  // participant adds their own track/member rows there, same as audio).
-  // Brand-new opt-in features, default off.
-  trackSubmissionEnabled: z.boolean().default(false),
-  memberNamesEnabled: z.boolean().default(false),
+  // EVENTS.AUDIO_RECORDING_APPLIES_TO — which registration category the
+  // audio section is asked of, individually (not a combined "both" value —
+  // same per-item convention as each custom question's own appliesTo
+  // below). Defaults to "PARTICIPANT", matching the section's prior
+  // hardcoded PARTICIPANT-only behavior.
+  audioRecordingAppliesTo: z
+    .enum(["ATTENDEE", "PARTICIPANT"])
+    .default("PARTICIPANT"),
+  // Organizer-authored custom questions (GCODE_EVENT_QUESTIONS), shown on
+  // the additional-info page alongside audio — each question picks its own
+  // audience via its appliesTo field. Superseded the old fixed age-category/
+  // track-submission/team-member-names toggles (still on EVENTS, no longer
+  // surfaced here); an organizer who wants that today builds an equivalent
+  // question. Brand-new opt-in feature, default empty.
+  questions: z.array(eventQuestionSchema).default([]),
 });
 
 export type EventDetailData = z.infer<typeof eventDetailDataSchema>;
+export type EventQuestionData = z.infer<typeof eventQuestionSchema>;
+export type EventQuestionOptionData = z.infer<typeof eventQuestionOptionSchema>;
 
 export type UpdateEventDetailData = <K extends keyof EventDetailData>(
   key: K,

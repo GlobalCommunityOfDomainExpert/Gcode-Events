@@ -195,20 +195,27 @@ export default function EventRegisteredPage() {
         </div>
       </div>
 
-      {participant.category === "PARTICIPANT" &&
-        (event.audioRecordingEnabled ||
-          event.trackSubmissionEnabled ||
-          event.memberNamesEnabled ||
-          event.ageCategoryRequirement !== "OFF") && (
+      {(() => {
+        const category = participant.category ?? "ATTENDEE";
+        const audioAppliesToMe =
+          event.audioRecordingEnabled &&
+          event.audioRecordingAppliesTo === category;
+        const hasQuestions = event.questions.some(
+          (q) => q.appliesTo === category,
+        );
+        return audioAppliesToMe || hasQuestions;
+      })() && (
           <div className="border-border-light bg-surface-light flex items-start gap-4 rounded-md border p-6">
             <div className="bg-warning-light flex size-10 shrink-0 items-center justify-center rounded-full">
               <Icon icon={AlertTriangle} size="md" className="text-warning" />
             </div>
             <div className="space-y-3">
               <p className="text-body text-text-primary">
-                {event.audioRecordingEnabled
-                  ? "You registered as a Participant — submit your audio submission URL within 24 hours of registration closing or your entry will be disqualified."
-                  : "You registered as a Participant — there's some additional info to fill in for this event."}
+                {event.audioRecordingEnabled &&
+                event.audioRecordingAppliesTo ===
+                  (participant.category ?? "ATTENDEE")
+                  ? "Submit your audio submission URL within 24 hours of registration closing or your entry will be disqualified."
+                  : "There's some additional info to fill in for this event."}
               </p>
               <ButtonLink
                 href={`/events/${event.id}/additional-info?pid=${participant.id}`}

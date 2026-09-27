@@ -16,10 +16,10 @@ import {
 import {
   Button,
   Card,
+  Checkbox,
   Icon,
   Input,
   Label,
-  RemoveIconButton,
   Radio,
   SectionLabel,
 } from "@/components/atoms";
@@ -33,18 +33,15 @@ import {
 } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import {
-  AgeCategory,
   getParticipant,
-  listParticipantTeamMembers,
-  listParticipantYoutubeTracks,
-  replaceParticipantTeamMembers,
-  replaceParticipantYoutubeTracks,
-  submitParticipantAgeCategory,
+  listParticipantAnswers,
+  replaceParticipantAnswers,
   submitParticipantAudio,
   uploadParticipantAudio,
 } from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
 import { ParticipantApi } from "@/lib/api/types";
+import { EventQuestion } from "@/lib/event";
 
 const SUBMISSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -57,12 +54,6 @@ const SUBMISSION_MODE_OPTIONS: { value: SubmissionMode; label: string }[] = [
 ];
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-
-const AGE_CATEGORY_OPTIONS: { value: AgeCategory; label: string }[] = [
-  { value: "YOUNGSTER", label: "Youngster (below 18)" },
-  { value: "ADULT", label: "Adult (18–60)" },
-  { value: "SENIOR", label: "Senior Citizen (60 and above)" },
-];
 
 function formatCountdown(ms: number): string {
   const totalMinutes = Math.max(0, Math.floor(ms / 60000));
@@ -78,29 +69,6 @@ function isValidUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-interface TrackDraft {
-  trackName: string;
-  youtubeUrl: string;
-}
-
-function withAddedItem<T>(list: T[], item: T): T[] {
-  return [...list, item];
-}
-
-function withUpdatedItem<T>(
-  list: T[],
-  index: number,
-  updater: (item: T) => T,
-): T[] {
-  return list.map((item, itemIndex) =>
-    itemIndex === index ? updater(item) : item,
-  );
-}
-
-function withRemovedItem<T>(list: T[], index: number): T[] {
-  return list.filter((_, itemIndex) => itemIndex !== index);
 }
 
 // Neutral card + small tone-colored icon badge — same pattern as the
@@ -153,19 +121,18 @@ export default function AdditionalInfoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [submittedUrl, setSubmittedUrl] = useState<string | null>(null);
-  const [ageCategory, setAgeCategory] = useState<AgeCategory | null>(null);
-  const [ageCategorySaving, setAgeCategorySaving] = useState(false);
-  const [ageCategoryError, setAgeCategoryError] = useState("");
-  const [tracks, setTracks] = useState<TrackDraft[]>([]);
-  const [tracksSaving, setTracksSaving] = useState(false);
-  const [tracksError, setTracksError] = useState("");
-  const [tracksSaved, setTracksSaved] = useState(false);
-  const [tracksDirty, setTracksDirty] = useState(false);
-  const [members, setMembers] = useState<string[]>([]);
-  const [membersSaving, setMembersSaving] = useState(false);
-  const [membersError, setMembersError] = useState("");
-  const [membersSaved, setMembersSaved] = useState(false);
-  const [membersDirty, setMembersDirty] = useState(false);
+  // Custom-question answers. TEXT -> textAnswers[questionId]. RADIO/CHECKBOX
+  // -> optionAnswers[questionId] (a single-element set for RADIO). Keyed by
+  // question id (string) rather than nested under one big object so a
+  // single question's edit doesn't need to rebuild the whole structure.
+  const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
+  const [optionAnswers, setOptionAnswers] = useState<
+    Record<string, Set<string>>
+  >({});
+  const [answersSaving, setAnswersSaving] = useState(false);
+  const [answersError, setAnswersError] = useState("");
+  const [answersSaved, setAnswersSaved] = useState(false);
+  const [answersDirty, setAnswersDirty] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   // Re-renders every 30s so the countdown/disqualification state stays live
   // without the participant having to refresh the page.
@@ -184,21 +151,27 @@ export default function AdditionalInfoPage() {
         }
         setParticipant(row);
         setSubmittedUrl(row.audio_submission_url ?? null);
-        setAgeCategory(row.age_category ?? null);
         setParticipantStatus("ready");
 
-        const [trackRows, memberRows] = await Promise.all([
-          listParticipantYoutubeTracks(row.id),
-          listParticipantTeamMembers(row.id),
-        ]);
+        const answerRows = await listParticipantAnswers(row.id);
         if (cancelled) return;
-        setTracks(
-          trackRows.map((t) => ({
-            trackName: t.track_name,
-            youtubeUrl: t.youtube_url,
-          })),
-        );
-        setMembers(memberRows.map((m) => m.member_name));
+        // A TEXT question only ever produces an answer_text row; a
+        // RADIO/CHECKBOX question only ever produces option_id rows — so
+        // this splits cleanly without needing to know each question's type.
+        const initialText: Record<string, string> = {};
+        const initialOptions: Record<string, Set<string>> = {};
+        for (const answer of answerRows) {
+          const questionId = String(answer.question_id);
+          if (answer.option_id !== null) {
+            const set = initialOptions[questionId] ?? new Set<string>();
+            set.add(String(answer.option_id));
+            initialOptions[questionId] = set;
+          } else if (answer.answer_text !== null) {
+            initialText[questionId] = answer.answer_text;
+          }
+        }
+        setTextAnswers(initialText);
+        setOptionAnswers(initialOptions);
       } catch {
         if (!cancelled) setParticipantStatus("error");
       }
@@ -237,23 +210,23 @@ export default function AdditionalInfoPage() {
     );
   }
 
-  if (participant.category !== "PARTICIPANT") {
-    return (
-      <NotFoundState
-        icon={Compass}
-        title="Nothing to submit"
-        description="Additional info is only required for Participant-category registrations."
-        actionHref={`/events/${event.id}`}
-        actionLabel="Back to Event"
-      />
-    );
-  }
+  const category = participant.category ?? "ATTENDEE";
+  // Audio and every custom question pick their own audience individually —
+  // no page-wide switch. A category with nothing applicable to it still
+  // loads the page, just showing the "nothing needed" card below.
+  const audioAppliesToMe =
+    event.audioRecordingEnabled && event.audioRecordingAppliesTo === category;
+  const applicableQuestions = event.questions.filter(
+    (q) => q.appliesTo === category,
+  );
 
-  // Window closes 24h after the event's participant registration deadline,
-  // not 24h after this participant applied — falls back to applied_on if the
-  // organizer hasn't set a participant registration deadline.
+  // Window closes 24h after this registration's own category deadline
+  // (Participant or Attendee), not 24h after this participant applied —
+  // falls back to applied_on if the organizer hasn't set one.
   const registrationClosesAt =
-    event.participantRegistration.registrationDeadlineIso ??
+    (category === "PARTICIPANT"
+      ? event.participantRegistration.registrationDeadlineIso
+      : event.attendeeRegistration.registrationDeadlineIso) ??
     participant.applied_on;
   const deadline = new Date(
     new Date(registrationClosesAt).getTime() + SUBMISSION_WINDOW_MS,
@@ -289,116 +262,87 @@ export default function AdditionalInfoPage() {
     setAudioBlob(file);
   }
 
-  async function handleAgeCategoryChange(value: AgeCategory) {
-    const previous = ageCategory;
-    setAgeCategory(value);
-    setAgeCategorySaving(true);
-    setAgeCategoryError("");
-    try {
-      await submitParticipantAgeCategory(participant!.id, value);
-    } catch (err) {
-      setAgeCategory(previous);
-      setAgeCategoryError(
-        err instanceof ApiError || err instanceof Error
-          ? err.message
-          : "Couldn't save your answer. Please try again.",
-      );
-    } finally {
-      setAgeCategorySaving(false);
+  function setTextAnswer(questionId: string, value: string) {
+    setAnswersSaved(false);
+    setAnswersDirty(true);
+    setTextAnswers((prev) => ({ ...prev, [questionId]: value }));
+  }
+
+  function selectRadioOption(questionId: string, optionId: string) {
+    setAnswersSaved(false);
+    setAnswersDirty(true);
+    setOptionAnswers((prev) => ({ ...prev, [questionId]: new Set([optionId]) }));
+  }
+
+  function toggleCheckboxOption(questionId: string, optionId: string) {
+    setAnswersSaved(false);
+    setAnswersDirty(true);
+    setOptionAnswers((prev) => {
+      const next = new Set(prev[questionId] ?? []);
+      if (next.has(optionId)) next.delete(optionId);
+      else next.add(optionId);
+      return { ...prev, [questionId]: next };
+    });
+  }
+
+  // Required-question check is client-side only, same as the audio
+  // deadline's disqualification note above — this only blocks the Save
+  // Answers click, nothing enforces it server-side.
+  function unansweredRequiredPrompts(): string[] {
+    return applicableQuestions
+      .filter((q) => q.required)
+      .filter((q) => {
+        if (q.type === "TEXT") return !textAnswers[q.id]?.trim();
+        return !(optionAnswers[q.id]?.size > 0);
+      })
+      .map((q) => q.prompt);
+  }
+
+  async function saveAnswers() {
+    const missing = unansweredRequiredPrompts();
+    if (missing.length > 0) {
+      setAnswersError(`Please answer: ${missing.join(", ")}`);
+      return;
     }
-  }
-
-  function addTrack() {
-    setTracksSaved(false);
-    setTracksDirty(true);
-    setTracks(withAddedItem(tracks, { trackName: "", youtubeUrl: "" }));
-  }
-
-  function updateTrack(index: number, field: keyof TrackDraft, value: string) {
-    setTracksSaved(false);
-    setTracksDirty(true);
-    setTracks(
-      withUpdatedItem(tracks, index, (item) => ({ ...item, [field]: value })),
-    );
-  }
-
-  function removeTrack(index: number) {
-    setTracksSaved(false);
-    setTracksDirty(true);
-    setTracks(withRemovedItem(tracks, index));
-  }
-
-  async function saveTracks() {
-    setTracksSaving(true);
-    setTracksError("");
-    setTracksSaved(false);
+    setAnswersSaving(true);
+    setAnswersError("");
+    setAnswersSaved(false);
     try {
-      const items = tracks
-        .filter((t) => t.trackName.trim() !== "" && t.youtubeUrl.trim() !== "")
-        .map((t, index) => ({
-          trackName: t.trackName,
-          youtubeUrl: t.youtubeUrl,
-          sortOrder: index,
-        }));
-      await replaceParticipantYoutubeTracks(participant!.id, items);
-      setTracksSaved(true);
-      setTracksDirty(false);
+      const items: { questionId: number; optionId?: number; answerText?: string }[] =
+        [];
+      for (const question of applicableQuestions) {
+        if (question.type === "TEXT") {
+          const value = textAnswers[question.id]?.trim();
+          if (value) {
+            items.push({ questionId: Number(question.id), answerText: value });
+          }
+        } else {
+          for (const optionId of optionAnswers[question.id] ?? []) {
+            items.push({
+              questionId: Number(question.id),
+              optionId: Number(optionId),
+            });
+          }
+        }
+      }
+      await replaceParticipantAnswers(participant!.id, items);
+      setAnswersSaved(true);
+      setAnswersDirty(false);
     } catch (err) {
-      setTracksError(
+      setAnswersError(
         err instanceof ApiError || err instanceof Error
           ? err.message
-          : "Couldn't save your tracks. Please try again.",
+          : "Couldn't save your answers. Please try again.",
       );
     } finally {
-      setTracksSaving(false);
-    }
-  }
-
-  function addMember() {
-    setMembersSaved(false);
-    setMembersDirty(true);
-    setMembers(withAddedItem(members, ""));
-  }
-
-  function updateMember(index: number, value: string) {
-    setMembersSaved(false);
-    setMembersDirty(true);
-    setMembers(withUpdatedItem(members, index, () => value));
-  }
-
-  function removeMember(index: number) {
-    setMembersSaved(false);
-    setMembersDirty(true);
-    setMembers(withRemovedItem(members, index));
-  }
-
-  async function saveMembers() {
-    setMembersSaving(true);
-    setMembersError("");
-    setMembersSaved(false);
-    try {
-      const items = members
-        .filter((name) => name.trim() !== "")
-        .map((name, index) => ({ memberName: name, sortOrder: index }));
-      await replaceParticipantTeamMembers(participant!.id, items);
-      setMembersSaved(true);
-      setMembersDirty(false);
-    } catch (err) {
-      setMembersError(
-        err instanceof ApiError || err instanceof Error
-          ? err.message
-          : "Couldn't save your team members. Please try again.",
-      );
-    } finally {
-      setMembersSaving(false);
+      setAnswersSaving(false);
     }
   }
 
   // Anything the participant typed/recorded/picked but hasn't hit Save/Submit
-  // on yet — age category auto-saves on click, so it's never "unsaved".
+  // on yet.
   const hasUnsavedChanges =
-    tracksDirty ||
-    membersDirty ||
+    answersDirty ||
     audioBlob !== null ||
     (mode === "link" && audioUrl.trim() !== "");
 
@@ -476,15 +420,15 @@ export default function AdditionalInfoPage() {
         <h1 className="text-large text-text-primary font-bold">
           Additional Info — {event.title}
         </h1>
-        {event.audioRecordingEnabled && (
+        {audioAppliesToMe && (
           <p className="text-small text-text-secondary">
-            Participants must submit their audio submission URL within 24
-            hours of registration closing, or the entry is disqualified.
+            You must submit your audio submission URL within 24 hours of
+            registration closing, or the entry is disqualified.
           </p>
         )}
       </div>
 
-      {event.audioRecordingEnabled &&
+      {audioAppliesToMe &&
         (isDisqualified ? (
           <StatusCard tone="danger" icon={AlertTriangle}>
             The 24-hour submission window closed on{" "}
@@ -507,132 +451,82 @@ export default function AdditionalInfoPage() {
 
       {error && <Banner tone="danger">{error}</Banner>}
 
-      {!event.audioRecordingEnabled &&
-        !event.trackSubmissionEnabled &&
-        !event.memberNamesEnabled &&
-        event.ageCategoryRequirement === "OFF" && (
-          <StatusCard tone="success" icon={Check}>
-            Nothing additional needed for this event.
-          </StatusCard>
-        )}
-
-      {event.ageCategoryRequirement !== "OFF" && (
-        <Card padding="md" className="space-y-3">
-          <SectionLabel>
-            Age Category
-            {event.ageCategoryRequirement === "REQUIRED" ? " (required)" : ""}
-          </SectionLabel>
-          {ageCategoryError && (
-            <Banner tone="danger">{ageCategoryError}</Banner>
-          )}
-          <div className="flex flex-wrap gap-4">
-            {AGE_CATEGORY_OPTIONS.map((option) => (
-              <Radio
-                key={option.value}
-                name="age-category"
-                label={option.label}
-                checked={ageCategory === option.value}
-                disabled={ageCategorySaving}
-                onChange={() => handleAgeCategoryChange(option.value)}
-              />
-            ))}
-          </div>
-        </Card>
+      {!audioAppliesToMe && applicableQuestions.length === 0 && (
+        <StatusCard tone="success" icon={Check}>
+          Nothing additional needed for this event.
+        </StatusCard>
       )}
 
-      {event.memberNamesEnabled && (
-        <Card padding="md" className="space-y-4">
-          <SectionLabel>Team Members</SectionLabel>
-          {membersError && <Banner tone="danger">{membersError}</Banner>}
-          <div className="space-y-2">
-            {members.map((name, index) => (
-              <div key={index} className="flex items-center gap-2">
+      {applicableQuestions.length > 0 && (
+        <Card padding="md" className="space-y-5">
+          <SectionLabel>Additional Questions</SectionLabel>
+          {answersError && <Banner tone="danger">{answersError}</Banner>}
+          {applicableQuestions.map((question: EventQuestion) => (
+            <div key={question.id} className="space-y-2">
+              <Label htmlFor={`question-${question.id}`}>
+                {question.prompt}
+                {question.required ? " *" : ""}
+              </Label>
+              {question.type === "TEXT" && (
                 <Input
-                  placeholder="Member name"
-                  value={name}
-                  onChange={(e) => updateMember(index, e.target.value)}
-                  className="flex-1"
+                  id={`question-${question.id}`}
+                  value={textAnswers[question.id] ?? ""}
+                  onChange={(e) =>
+                    setTextAnswer(question.id, e.target.value)
+                  }
                 />
-                <RemoveIconButton
-                  onClick={() => removeMember(index)}
-                  ariaLabel="Remove member"
-                />
-              </div>
-            ))}
-          </div>
-          <Button variant="secondary" size="sm" onClick={addMember}>
-            + Add member
-          </Button>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="primary"
-              onClick={saveMembers}
-              disabled={membersSaving}
-            >
-              {membersSaving ? "Saving…" : "Save team members"}
-            </Button>
-            {membersSaved && (
-              <span className="text-small text-success">Saved.</span>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {event.trackSubmissionEnabled && (
-        <Card padding="md" className="space-y-4">
-          <SectionLabel>Track Submission</SectionLabel>
-          <p className="text-small text-text-secondary">
-            Add your YouTube track links — track name and URL, any number.
-          </p>
-          {tracksError && <Banner tone="danger">{tracksError}</Banner>}
-          <div className="space-y-3">
-            {tracks.map((track, index) => (
-              <div key={index} className="flex items-start gap-2">
-                <div className="flex flex-1 flex-col gap-2 sm:flex-row">
-                  <Input
-                    placeholder="Track name"
-                    value={track.trackName}
-                    onChange={(e) =>
-                      updateTrack(index, "trackName", e.target.value)
-                    }
-                    className="flex-1"
-                  />
-                  <Input
-                    type="url"
-                    placeholder="https://youtu.be/..."
-                    value={track.youtubeUrl}
-                    onChange={(e) =>
-                      updateTrack(index, "youtubeUrl", e.target.value)
-                    }
-                    className="flex-1"
-                  />
+              )}
+              {question.type === "RADIO" && (
+                <div className="flex flex-wrap gap-4">
+                  {question.options.map((option) => (
+                    <Radio
+                      key={option.id}
+                      name={`question-${question.id}`}
+                      label={option.label}
+                      checked={
+                        optionAnswers[question.id]?.has(option.id) ?? false
+                      }
+                      onChange={() =>
+                        selectRadioOption(question.id, option.id)
+                      }
+                    />
+                  ))}
                 </div>
-                <RemoveIconButton
-                  onClick={() => removeTrack(index)}
-                  ariaLabel="Remove track"
-                />
-              </div>
-            ))}
-          </div>
-          <Button variant="secondary" size="sm" onClick={addTrack}>
-            + Add track
-          </Button>
+              )}
+              {question.type === "CHECKBOX" && (
+                <div className="flex flex-wrap gap-4">
+                  {question.options.map((option) => (
+                    <Checkbox
+                      key={option.id}
+                      label={option.label}
+                      checked={
+                        optionAnswers[question.id]?.has(option.id) ?? false
+                      }
+                      onChange={() =>
+                        toggleCheckboxOption(question.id, option.id)
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
           <div className="flex items-center gap-3">
             <Button
               variant="primary"
-              onClick={saveTracks}
-              disabled={tracksSaving}
+              onClick={saveAnswers}
+              disabled={answersSaving}
             >
-              {tracksSaving ? "Saving…" : "Save tracks"}
+              {answersSaving ? "Saving…" : "Save answers"}
             </Button>
-            {tracksSaved && (
+            {answersSaved && (
               <span className="text-small text-success">Saved.</span>
             )}
           </div>
         </Card>
       )}
 
-      {!isPastDeadline && event.audioRecordingEnabled && (
+      {!isPastDeadline && audioAppliesToMe && (
         <Card padding="md" className="space-y-4">
           <SectionLabel>Submit your audio</SectionLabel>
           <ToggleGroup
@@ -789,7 +683,8 @@ export default function AdditionalInfoPage() {
       >
         <p className="text-body text-text-secondary">
           You have unsaved changes — an in-progress audio submission, or
-          track/team member edits you haven&apos;t saved yet. Leaving now
+          answer edits you haven&apos;t saved yet. Leaving
+          now
           will discard them.
         </p>
       </Modal>

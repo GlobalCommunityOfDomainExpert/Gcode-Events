@@ -5,6 +5,7 @@ import {
   ApiListResponse,
   CreateEventPayload,
   UpdateEventPayload,
+  EventQuestionApi,
 } from "./types";
 
 export interface ListEventsParams {
@@ -106,6 +107,37 @@ export function replaceEventTimeline(
   }[],
 ): Promise<unknown> {
   return apiRequest(`/events/${id}/timeline`, { method: "POST", body: items });
+}
+
+// Organizer-authored custom questions (TEXT/RADIO/CHECKBOX, shown on the
+// additional-info page). Full-replace child collection, mirrors
+// listEventTimeline/replaceEventTimeline above. See adapters.ts'
+// QuestionPayloadItem for the item shape (not imported here, same as
+// replaceEventTimeline's inline item type below — avoids a circular import,
+// since adapters.ts imports EventTimelineApi from this file).
+export async function listEventQuestions(
+  id: number | string,
+): Promise<EventQuestionApi[]> {
+  const { items } = await apiRequest<ApiListResponse<EventQuestionApi>>(
+    `/events/${id}/questions`,
+  );
+  return items;
+}
+
+export function replaceEventQuestions(
+  id: number | string,
+  items: {
+    prompt: string;
+    questionType: "TEXT" | "RADIO" | "CHECKBOX";
+    isRequired: 1 | 0;
+    sortOrder: number;
+    options: { label: string; sortOrder: number }[];
+  }[],
+): Promise<unknown> {
+  return apiRequest(`/events/${id}/questions`, {
+    method: "POST",
+    body: items,
+  });
 }
 
 export function deleteEvent(id: number | string): Promise<void> {
