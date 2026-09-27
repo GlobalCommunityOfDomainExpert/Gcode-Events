@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState, useSyncExternalStore } from "react";
-import { Check, Heart, Mail } from "lucide-react";
+import { Heart, Mail, Phone } from "lucide-react";
 import { Button, Icon, Input } from "@/components/atoms";
 import { FormField, Modal } from "@/components/molecules";
 import { expressInterest } from "@/lib/api/interest";
@@ -10,6 +10,15 @@ import { getSession } from "@/lib/auth/session";
 import { VerifyEmailModal } from "../register/_components/verify-email-modal";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Loose on purpose — an optional leading "+" then 7-15 digits. Format only,
+// never OTP/SMS-verified (unlike email), so this just catches typos.
+const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
+
+// Strips spaces/dashes/parens so "+91 98765 43210" validates and is sent
+// the same way as "+919876543210" — the server does the same normalization.
+function normalizePhone(phone: string): string {
+  return phone.replace(/[^0-9+]/g, "");
+}
 
 // UX-only memory of "this browser already showed interest" so the button
 // stays ticked across reloads. The server is the source of truth and is
@@ -67,22 +76,33 @@ function useInterested(eventId: string) {
 
 export interface InterestButtonProps {
   eventId: string;
+  interestedCount?: number;
   // Called after a successful submit so the page can re-fetch the count.
   onInterested?: () => void;
 }
 
-// Signed in -> one click. Guest -> email -> OTP (the same verify modal the
-// register flow uses) -> submit.
-export function InterestButton({ eventId, onInterested }: InterestButtonProps) {
+// Icon-only heart button, meant to sit next to the Share button. Signed in
+// -> one click, no popup. Guest -> a popup asks for email + phone, then the
+// same OTP modal the register flow uses verifies the email (the phone is
+// format-checked only, never OTP-verified).
+export function InterestButton({
+  eventId,
+  interestedCount = 0,
+  onInterested,
+}: InterestButtonProps) {
   const interested = useInterested(eventId);
   const [submitting, setSubmitting] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(identity: { userId: string } | { email: string }) {
+  async function submit(
+    identity: { userId: string } | { email: string; phone: string },
+  ) {
     setSubmitting(true);
     setError(null);
     try {
@@ -102,65 +122,69 @@ export function InterestButton({ eventId, onInterested }: InterestButtonProps) {
     if (session) {
       void submit({ userId: session.userId });
     } else {
-      setEmailOpen(true);
+      setDetailsOpen(true);
     }
   }
 
-  function handleEmailSubmit(event: FormEvent) {
+  function handleDetailsSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!EMAIL_PATTERN.test(email.trim())) {
-      setEmailError("Enter a valid email address");
-      return;
-    }
-    setEmailError(null);
-    setEmailOpen(false);
+    const normalizedPhone = normalizePhone(phone);
+    const validEmail = EMAIL_PATTERN.test(email.trim());
+    const validPhone = PHONE_PATTERN.test(normalizedPhone);
+    setEmailError(validEmail ? null : "Enter a valid email address");
+    setPhoneError(validPhone ? null : "Enter a valid phone number");
+    if (!validEmail || !validPhone) return;
+    setDetailsOpen(false);
     setVerifyOpen(true);
   }
 
   async function handleVerified() {
     setVerifyOpen(false);
-    await submit({ email: email.trim() });
-  }
-
-  if (interested) {
-    return (
-      <Button variant="secondary" className="w-full" disabled>
-        <Icon icon={Check} size="sm" className="text-success" />
-        Interested
-      </Button>
-    );
+    await submit({ email: email.trim(), phone: normalizePhone(phone) });
   }
 
   return (
-    <>
+    <div className="flex items-center gap-2">
       <Button
-        variant="outline"
-        className="w-full"
+        variant={interested ? "secondary" : "outline"}
+        size="xs"
+        className="aspect-square !px-0"
         loading={submitting}
+        disabled={interested}
         onClick={handleClick}
+        aria-label={interested ? "You're interested" : "I'm Interested"}
+        title={interested ? "You're interested" : "I'm Interested"}
       >
-        <Icon icon={Heart} size="sm" />
-        I&apos;m Interested
+        <Icon
+          icon={Heart}
+          size="sm"
+          className={interested ? "fill-danger text-danger" : ""}
+        />
       </Button>
+      {interestedCount > 0 && (
+        <span className="text-small text-text-secondary">
+          {interestedCount}
+        </span>
+      )}
       {error && (
-        <p className="text-danger text-small text-center" role="alert">
+        <p className="text-danger text-small" role="alert">
           {error}
         </p>
       )}
 
       <Modal
-        open={emailOpen}
-        onClose={() => setEmailOpen(false)}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
         title="Show your interest"
       >
         <form
           className="flex flex-col gap-4"
           noValidate
-          onSubmit={handleEmailSubmit}
+          onSubmit={handleDetailsSubmit}
         >
           <p className="text-body text-text-secondary">
-            Enter your email and we&apos;ll send a code to verify it. The
-            organizer only sees how many people are interested.
+            Enter your email and phone number. We&apos;ll send a code to verify
+            your email. The organizer only sees how many people are interested.
           </p>
           <FormField
             label="Email"
@@ -179,6 +203,22 @@ export function InterestButton({ eventId, onInterested }: InterestButtonProps) {
               autoFocus
             />
           </FormField>
+          <FormField
+            label="Phone Number"
+            htmlFor="interest-phone"
+            error={phoneError ?? undefined}
+          >
+            <Input
+              id="interest-phone"
+              type="tel"
+              autoComplete="tel"
+              icon={Phone}
+              placeholder="+91 98765 43210"
+              value={phone}
+              error={!!phoneError}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </FormField>
           <Button type="submit" variant="primary" className="w-full">
             Send Code
           </Button>
@@ -191,6 +231,6 @@ export function InterestButton({ eventId, onInterested }: InterestButtonProps) {
         onClose={() => setVerifyOpen(false)}
         onVerified={handleVerified}
       />
-    </>
+    </div>
   );
 }

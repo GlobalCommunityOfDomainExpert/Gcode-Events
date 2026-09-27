@@ -75,6 +75,16 @@ export default function EventDetailPage() {
 
   const isPast = hasEventEnded(event, now);
 
+  // Hidden once cancelled/ended — nothing left to be interested in by then.
+  const interestButtonNode =
+    event.status !== "CANCELLED" && !isPast ? (
+      <InterestButton
+        eventId={event.id}
+        interestedCount={event.interestedCount}
+        onInterested={() => void refresh({ silent: true })}
+      />
+    ) : undefined;
+
   // Rendered twice: inline right after the header on mobile (so price/CTA
   // isn't buried below the full details/agenda/eligibility scroll), and in
   // the sticky sidebar on desktop. Same node, two responsive placements.
@@ -222,19 +232,6 @@ export default function EventDetailPage() {
                 </div>
               </>
             )}
-            {event.status !== "CANCELLED" && !isPast && (
-              <>
-                <InterestButton
-                  eventId={event.id}
-                  onInterested={() => void refresh({ silent: true })}
-                />
-                {(event.interestedCount ?? 0) > 0 && (
-                  <p className="text-small text-text-secondary text-center">
-                    {event.interestedCount} interested
-                  </p>
-                )}
-              </>
-            )}
             {event.status === "CANCELLED" ? (
               <Button variant="secondary" className="w-full" disabled>
                 Event Cancelled
@@ -336,6 +333,7 @@ export default function EventDetailPage() {
             <ShareEventCard
               url={`${typeof window !== "undefined" ? window.location.origin : ""}/events/${event.id}`}
               title={event.title}
+              interestButton={interestButtonNode}
             />
           </div>
 
@@ -460,6 +458,7 @@ export default function EventDetailPage() {
           <ShareEventCard
             url={`${typeof window !== "undefined" ? window.location.origin : ""}/events/${event.id}`}
             title={event.title}
+            interestButton={interestButtonNode}
           />
         </div>
       </div>
