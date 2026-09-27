@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getEvent, listEventTimeline } from "@/lib/api/events";
+import {
+  getEvent,
+  listEventTimeline,
+  listEventQuestions,
+} from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
 import { getEventTypes, getModes, getStatuses } from "@/lib/api/lookups";
 import {
@@ -28,11 +32,12 @@ export function useEvent(id: string | undefined) {
       if (!id) return;
       if (!silent) setStatus("loading");
       try {
-        const [detail, timeline, rounds, types, modes, statuses] =
+        const [detail, timeline, rounds, questions, types, modes, statuses] =
           await Promise.all([
             getEvent(id),
             listEventTimeline(id),
             listEventRounds(id),
+            listEventQuestions(id),
             getEventTypes(),
             getModes(),
             getStatuses(),
@@ -49,6 +54,7 @@ export function useEvent(id: string | undefined) {
           typeNames,
           modeNames,
           statusCodes,
+          questions,
         );
         // Fall back to timeline span when the event has no explicit end date.
         let duration = adapted.duration;

@@ -1,9 +1,10 @@
 # "I'm Interested" on events
 
-Lightweight interest signal: a visitor clicks **I'm Interested** on an event
-page. Logged-in users are recorded straight away; guests enter an email and
-verify it with the existing guest OTP, then the interest is stored. One row
-per (event, email).
+Lightweight interest signal: a visitor clicks the heart icon button (next to
+Share, on the event page). Logged-in users are recorded straight away; guests
+enter an email + phone and verify the email with the existing guest OTP, then
+the interest is stored. One row per (event, email). The phone is
+regex-validated only — never OTP/SMS-verified.
 
 Run in this order in WKSP_GCODE2 (take a backup first; additive only):
 

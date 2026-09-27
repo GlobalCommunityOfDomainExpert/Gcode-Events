@@ -5,6 +5,7 @@ CREATE TABLE GCODE_EVENT_INTEREST (
   ID         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   EVENT_ID   NUMBER NOT NULL REFERENCES EVENTS (ID),
   EMAIL      VARCHAR2(255) NOT NULL,
+  PHONE      VARCHAR2(20),
   USER_ID    NUMBER,
   CREATED_ON TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
   CONSTRAINT UQ_GCODE_EVENT_INTEREST UNIQUE (EVENT_ID, EMAIL)
@@ -13,7 +14,10 @@ CREATE TABLE GCODE_EVENT_INTEREST (
 CREATE INDEX IX_GCODE_EVENT_INTEREST_EVENT ON GCODE_EVENT_INTEREST (EVENT_ID);
 
 -- EMAIL is stored lower-cased. USER_ID is set when the interest came from a
--- logged-in user, or when a guest's verified email matches a registered user.
+-- logged-in user, or when a guest's verified email matches a registered
+-- user. PHONE is only ever collected from guests (regex-validated, never
+-- OTP/SMS-verified) and stripped of spaces/dashes/parens before storage —
+-- logged-in callers never provide one, so it's nullable.
 
 -- 2. Package
 CREATE OR REPLACE
@@ -21,11 +25,13 @@ PACKAGE GCODE_EVENT_INTEREST_API AS
 
   -- Records "I'm interested" for an event. One row per (event, email);
   -- repeat calls are a no-op. Logged-in callers pass p_user_id (email is
-  -- looked up); guests pass p_email, which must have been OTP-verified
-  -- via AUTH_PKG (GCODE_PENDING_USERS.is_verified = 'Y', not expired).
+  -- looked up, no phone collected). Guests pass p_email, which must have
+  -- been OTP-verified via AUTH_PKG (GCODE_PENDING_USERS.is_verified = 'Y',
+  -- not expired), plus p_phone — format-checked only, never OTP/SMS-verified.
   PROCEDURE express_interest(
     p_event_id IN NUMBER,
     p_email    IN VARCHAR2 DEFAULT NULL,
+    p_phone    IN VARCHAR2 DEFAULT NULL,
     p_user_id  IN NUMBER   DEFAULT NULL
   );
 
@@ -38,9 +44,11 @@ PACKAGE BODY GCODE_EVENT_INTEREST_API AS
   PROCEDURE express_interest(
     p_event_id IN NUMBER,
     p_email    IN VARCHAR2 DEFAULT NULL,
+    p_phone    IN VARCHAR2 DEFAULT NULL,
     p_user_id  IN NUMBER   DEFAULT NULL
   ) IS
     l_email    VARCHAR2(255);
+    l_phone    VARCHAR2(20);
     l_user_id  NUMBER := p_user_id;
     l_verified NUMBER;
     l_event    NUMBER;
@@ -63,6 +71,15 @@ PACKAGE BODY GCODE_EVENT_INTEREST_API AS
         RAISE_APPLICATION_ERROR(-20042, 'Valid email is required');
       END IF;
 
+      -- Format only, same as the email pattern check above — no OTP/SMS
+      -- verification of the phone itself. Strip spaces/dashes/parens before
+      -- checking and storing, so "+91 98765 43210" and "+919876543210"
+      -- both validate and land in the table the same way.
+      l_phone := REGEXP_REPLACE(TRIM(p_phone), '[^0-9+]', '');
+      IF l_phone IS NULL OR NOT REGEXP_LIKE(l_phone, '^\+?[0-9]{7,15}$') THEN
+        RAISE_APPLICATION_ERROR(-20044, 'Valid phone number is required');
+      END IF;
+
       SELECT COUNT(*) INTO l_verified
         FROM gcode_pending_users
        WHERE LOWER(email) = l_email
@@ -81,10 +98,17 @@ PACKAGE BODY GCODE_EVENT_INTEREST_API AS
     END IF;
 
     BEGIN
-      INSERT INTO gcode_event_interest (event_id, email, user_id)
-      VALUES (p_event_id, l_email, l_user_id);
+      INSERT INTO gcode_event_interest (event_id, email, phone, user_id)
+      VALUES (p_event_id, l_email, l_phone, l_user_id);
     EXCEPTION
-      WHEN DUP_VAL_ON_INDEX THEN NULL;  -- already interested: idempotent
+      WHEN DUP_VAL_ON_INDEX THEN
+        -- Already interested — a resubmit still refreshes phone if the
+        -- guest is fixing a typo; stays idempotent either way.
+        IF l_phone IS NOT NULL THEN
+          UPDATE gcode_event_interest
+             SET phone = l_phone
+           WHERE event_id = p_event_id AND email = l_email;
+        END IF;
     END;
   END express_interest;
 
@@ -117,6 +141,7 @@ BEGIN
   GCODE_EVENT_INTEREST_API.express_interest(
     p_event_id => :id,
     p_email    => APEX_JSON.get_varchar2(p_path => ''email''),
+    p_phone    => APEX_JSON.get_varchar2(p_path => ''phone''),
     -- user_id is a 30-40 digit id sent as a JSON string; read as text to keep precision.
     p_user_id  => TO_NUMBER(APEX_JSON.get_varchar2(p_path => ''user_id''))
   );

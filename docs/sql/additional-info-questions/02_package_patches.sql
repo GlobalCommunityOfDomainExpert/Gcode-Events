@@ -1,0 +1,73 @@
+-- Reference notes — real runnable source lives in GCODE-Backend:
+--   packages/GCODE_EVENTS_API/{spec,body}.sql
+--   packages/GCODE_EVENT_PARTICIPANTS_API/{spec,body}.sql
+-- Full bodies are in 00_run_all_on_prod.sql.
+
+-- GCODE_EVENTS_API.create_event / update_event: one new param each,
+-- p_audio_recording_applies_to (events.audio_recording_applies_to%TYPE),
+-- default 'PARTICIPANT' on create_event, default NULL (NVL-preserves
+-- existing value) on update_event — same pattern as every other toggle
+-- param on these two procs.
+
+-- GCODE_EVENTS_API.get_event: one new cursor column,
+--   e.audio_recording_applies_to AS "audio_recording_applies_to"
+-- placed right after "member_names_enabled".
+
+-- GCODE_EVENTS_API.replace_questions (new): full delete-then-bulk-insert,
+-- same convention as replace_timeline/replace_media, but two levels deep —
+-- each question's own "options" sub-array is pulled out per-row with a
+-- FORMAT JSON PATH column, then re-parsed with a second JSON_TABLE call
+-- once that question's real (generated) id is known, so the options carry
+-- the right QUESTION_ID FK:
+--
+--   PROCEDURE replace_questions (p_event_id IN events.id%TYPE, p_items IN CLOB) IS
+--     v_question_id gcode_event_questions.id%TYPE;
+--   BEGIN
+--     DELETE FROM gcode_event_questions WHERE event_id = p_event_id;
+--     FOR q IN (
+--       SELECT prompt, question_type, is_required, applies_to, sort_order, options_json
+--       FROM JSON_TABLE(p_items, '$[*]' COLUMNS (
+--         prompt        VARCHAR2(500) PATH '$.prompt',
+--         question_type VARCHAR2(20)  PATH '$.questionType',
+--         is_required   NUMBER        PATH '$.isRequired',
+--         applies_to    VARCHAR2(20)  PATH '$.appliesTo',
+--         sort_order    NUMBER        PATH '$.sortOrder',
+--         options_json  CLOB FORMAT JSON PATH '$.options'
+--       ))
+--     ) LOOP
+--       INSERT INTO gcode_event_questions
+--         (event_id, prompt, question_type, is_required, applies_to, sort_order)
+--       VALUES
+--         (p_event_id, q.prompt, q.question_type, NVL(q.is_required, 0),
+--          NVL(q.applies_to, 'PARTICIPANT'), NVL(q.sort_order, 0))
+--       RETURNING id INTO v_question_id;
+--       IF q.options_json IS NOT NULL THEN
+--         INSERT INTO gcode_event_question_options (question_id, option_label, sort_order)
+--         SELECT v_question_id, o.option_label, o.sort_order
+--         FROM JSON_TABLE(q.options_json, '$[*]' COLUMNS (
+--           option_label VARCHAR2(200) PATH '$.label',
+--           sort_order   NUMBER        PATH '$.sortOrder'
+--         )) o;
+--       END IF;
+--     END LOOP;
+--   END replace_questions;
+--
+-- Full-replace means editing the question list, even a one-word typo fix,
+-- deletes and reinserts ALL of the event's questions — which cascades to
+-- PARTICIPANT_QUESTION_ANSWERS via the FK, wiping any answers already given
+-- to them. Known/accepted tradeoff, same as GCODE_EVENT_ROUNDS elsewhere.
+
+-- GCODE_EVENT_PARTICIPANTS_API.replace_answers (new): same delete-then-
+-- bulk-insert shape as replace_youtube_tracks/replace_team_members —
+--
+--   PROCEDURE replace_answers (p_participant_id IN gcode_event_participants.id%TYPE, p_items IN CLOB) IS
+--   BEGIN
+--     DELETE FROM participant_question_answers WHERE participant_id = p_participant_id;
+--     INSERT INTO participant_question_answers (participant_id, question_id, option_id, answer_text)
+--     SELECT p_participant_id, j.question_id, j.option_id, j.answer_text
+--     FROM JSON_TABLE(p_items, '$[*]' COLUMNS (
+--       question_id NUMBER         PATH '$.questionId',
+--       option_id   NUMBER         PATH '$.optionId',
+--       answer_text VARCHAR2(1000) PATH '$.answerText'
+--     )) j;
+--   END replace_answers;

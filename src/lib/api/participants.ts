@@ -4,6 +4,7 @@ import {
   CreateParticipantPayload,
   MyParticipationApi,
   ParticipantApi,
+  ParticipantAnswerApi,
 } from "./types";
 
 // Guest registration: no sign-in required. Server finds-or-creates the
@@ -136,6 +137,31 @@ export function replaceParticipantTeamMembers(
   items: { memberName: string; sortOrder: number }[],
 ): Promise<unknown> {
   return apiRequest(`/participants/${id}/team-members`, {
+    method: "POST",
+    body: items,
+  });
+}
+
+// Participant's answers to the event's organizer-authored questions
+// (GCODE_EVENT_QUESTIONS), gated per-event by EVENTS.ADDITIONAL_INFO_APPLIES_TO.
+// Full-replace, same convention as the tracks/team-members pair above — one
+// row per selected option for RADIO/CHECKBOX (several rows, same
+// question_id, for a multi-select CHECKBOX answer), or one row with
+// answerText for TEXT.
+export async function listParticipantAnswers(
+  id: number | string,
+): Promise<ParticipantAnswerApi[]> {
+  const { items } = await apiRequest<ApiListResponse<ParticipantAnswerApi>>(
+    `/participants/${id}/answers`,
+  );
+  return items;
+}
+
+export function replaceParticipantAnswers(
+  id: number | string,
+  items: { questionId: number; optionId?: number; answerText?: string }[],
+): Promise<unknown> {
+  return apiRequest(`/participants/${id}/answers`, {
     method: "POST",
     body: items,
   });

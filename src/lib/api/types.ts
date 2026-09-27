@@ -81,8 +81,54 @@ export interface EventDetail extends EventListItem {
   // Gate participant-submitted YouTube tracks / team member names on the
   // additional-info page. Missing/undefined -> treated as disabled — both
   // are brand-new opt-in features with no prior always-on behavior.
+  // Deprecated — not read anywhere in the app any more (kept only because
+  // the backend column still exists on old events). Age category, track
+  // submission and team member names as fixed toggles have been replaced
+  // by organizer-authored custom questions (see EventQuestionApi below);
+  // an organizer who wants this today builds an equivalent question.
   track_submission_enabled?: number;
   member_names_enabled?: number;
+  // Which registration category the audio-recording section applies to —
+  // individually, not a combined "both" value. Missing/undefined ->
+  // "PARTICIPANT", matching the section's prior hardcoded PARTICIPANT-only
+  // behavior before this setting existed.
+  audio_recording_applies_to?: "ATTENDEE" | "PARTICIPANT";
+}
+
+// GCODE_EVENT_QUESTIONS + nested GCODE_EVENT_QUESTION_OPTIONS row, from
+// GET /events/:id/questions. Organizer-authored, full-replace child
+// collection (mirrors EventRoundApi/EventRoundRubricApi in shape). The
+// live /events/:id/questions handler is a raw SQL Collection Query whose
+// JSON_ARRAYAGG(...) "options" column comes back as an escaped JSON
+// *string*, not a nested array, same as EventRoundApi.rubric — parse
+// defensively.
+export interface EventQuestionOptionApi {
+  id: number;
+  label: string;
+  sortOrder: number;
+}
+
+export interface EventQuestionApi {
+  id: number;
+  prompt: string;
+  question_type: "TEXT" | "RADIO" | "CHECKBOX";
+  is_required: number;
+  // Which registration category this individual question is asked of —
+  // no page-wide switch, no combined "both" value; every question picks
+  // exactly one.
+  applies_to: "ATTENDEE" | "PARTICIPANT";
+  sort_order: number;
+  options: EventQuestionOptionApi[] | string | null;
+}
+
+// GET /participants/:id/answers — one row per selected option for a
+// RADIO/CHECKBOX question (several rows, same question_id, for a
+// multi-select CHECKBOX answer), or one row with answer_text and a null
+// option_id for a TEXT question.
+export interface ParticipantAnswerApi {
+  question_id: number;
+  option_id: number | null;
+  answer_text: string | null;
 }
 
 export interface ApiListResponse<T> {
@@ -164,6 +210,7 @@ export interface CreateEventPayload {
   age_category_requirement?: "OFF" | "OPTIONAL" | "REQUIRED";
   track_submission_enabled?: number;
   member_names_enabled?: number;
+  audio_recording_applies_to?: "ATTENDEE" | "PARTICIPANT";
 }
 
 export type UpdateEventPayload = Partial<CreateEventPayload>;

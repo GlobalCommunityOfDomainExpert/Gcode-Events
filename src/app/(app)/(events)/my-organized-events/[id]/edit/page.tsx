@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PencilOff } from "lucide-react";
 import { NotFoundState } from "@/components/molecules";
-import { getEvent, listEventTimeline } from "@/lib/api/events";
+import {
+  getEvent,
+  listEventTimeline,
+  listEventQuestions,
+} from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
 import { toEventDraft } from "@/lib/api/adapters";
 import { EventWizard } from "@/app/(app)/(events)/my-organized-events/_components/event-wizard";
@@ -22,13 +26,14 @@ export default function EditOrganizedEventPage() {
     void (async () => {
       setStatus("loading");
       try {
-        const [detail, timeline, rounds] = await Promise.all([
+        const [detail, timeline, rounds, questions] = await Promise.all([
           getEvent(params.id),
           listEventTimeline(params.id),
           listEventRounds(params.id),
+          listEventQuestions(params.id),
         ]);
         if (cancelled) return;
-        setDraft(toEventDraft(detail, timeline, rounds));
+        setDraft(toEventDraft(detail, timeline, rounds, questions));
         setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
