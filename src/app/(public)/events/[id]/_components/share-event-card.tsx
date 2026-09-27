@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { Mail, MessageCircle, Share2 } from "lucide-react";
 import { Button, Card, Icon, SectionLabel } from "@/components/atoms";
 import { Modal } from "@/components/molecules";
@@ -8,9 +8,16 @@ import { Modal } from "@/components/molecules";
 interface ShareEventCardProps {
   url: string;
   title: string;
+  // Rendered next to the Share button — the event page passes the
+  // "I'm Interested" heart icon button here so the two sit side by side.
+  interestButton?: ReactNode;
 }
 
-export function ShareEventCard({ url, title }: ShareEventCardProps) {
+export function ShareEventCard({
+  url,
+  title,
+  interestButton,
+}: ShareEventCardProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const canNativeShare =
@@ -42,10 +49,13 @@ export function ShareEventCard({ url, title }: ShareEventCardProps) {
     <>
       <Card className="space-y-3">
         <SectionLabel>Share Event</SectionLabel>
-        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          <Icon icon={Share2} size="sm" />
-          Share
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+            <Icon icon={Share2} size="sm" />
+            Share
+          </Button>
+          {interestButton}
+        </div>
       </Card>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Share Event">

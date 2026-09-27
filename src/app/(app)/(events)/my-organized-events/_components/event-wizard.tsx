@@ -24,6 +24,7 @@ import {
   replaceEventSocialLinks,
   replaceEventMedia,
   replaceEventTimeline,
+  replaceEventQuestions,
   uploadCoverImage,
   assignCategory,
   removeCategory,
@@ -35,6 +36,7 @@ import {
   toCreatePayload,
   toTimelinePayload,
   toRoundsPayload,
+  toQuestionsPayload,
 } from "@/lib/api/adapters";
 
 const stepLabels = [
@@ -152,6 +154,9 @@ export function EventWizard({ mode, eventId, initialData }: EventWizardProps) {
 
     const rounds = toRoundsPayload(data);
     await replaceEventRounds(id, rounds);
+
+    const questions = toQuestionsPayload(data);
+    await replaceEventQuestions(id, questions);
 
     // Cover image: recover the bytes from the blob: preview URL and upload.
     if (data.coverImageUrl.startsWith("blob:")) {
