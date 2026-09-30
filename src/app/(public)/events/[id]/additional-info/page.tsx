@@ -4,7 +4,6 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeft,
   Check,
   Clock,
   Compass,
@@ -19,7 +18,6 @@ import {
   Checkbox,
   Icon,
   Input,
-  Label,
   Radio,
   SectionLabel,
 } from "@/components/atoms";
@@ -27,7 +25,7 @@ import {
   AudioRecorder,
   Banner,
   Breadcrumb,
-  Modal,
+  FormField,
   NotFoundState,
   ToggleGroup,
 } from "@/components/molecules";
@@ -129,11 +127,7 @@ export default function AdditionalInfoPage() {
   const [optionAnswers, setOptionAnswers] = useState<
     Record<string, Set<string>>
   >({});
-  const [answersSaving, setAnswersSaving] = useState(false);
-  const [answersError, setAnswersError] = useState("");
-  const [answersSaved, setAnswersSaved] = useState(false);
-  const [answersDirty, setAnswersDirty] = useState(false);
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [attemptedConfirm, setAttemptedConfirm] = useState(false);
   // Re-renders every 30s so the countdown/disqualification state stays live
   // without the participant having to refresh the page.
   const [now, setNow] = useState(() => new Date());
@@ -237,6 +231,8 @@ export default function AdditionalInfoPage() {
   // that already have an audio_submission_url).
   const isPastDeadline = msRemaining <= 0;
   const isDisqualified = isPastDeadline && !submittedUrl;
+  const audioRequired = audioAppliesToMe && !isPastDeadline && !submittedUrl;
+  const questionErrors = attemptedConfirm ? requiredQuestionErrors() : {};
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -263,20 +259,14 @@ export default function AdditionalInfoPage() {
   }
 
   function setTextAnswer(questionId: string, value: string) {
-    setAnswersSaved(false);
-    setAnswersDirty(true);
     setTextAnswers((prev) => ({ ...prev, [questionId]: value }));
   }
 
   function selectRadioOption(questionId: string, optionId: string) {
-    setAnswersSaved(false);
-    setAnswersDirty(true);
     setOptionAnswers((prev) => ({ ...prev, [questionId]: new Set([optionId]) }));
   }
 
   function toggleCheckboxOption(questionId: string, optionId: string) {
-    setAnswersSaved(false);
-    setAnswersDirty(true);
     setOptionAnswers((prev) => {
       const next = new Set(prev[questionId] ?? []);
       if (next.has(optionId)) next.delete(optionId);
@@ -285,77 +275,17 @@ export default function AdditionalInfoPage() {
     });
   }
 
-  // Required-question check is client-side only, same as the audio
-  // deadline's disqualification note above — this only blocks the Save
-  // Answers click, nothing enforces it server-side.
-  function unansweredRequiredPrompts(): string[] {
-    return applicableQuestions
-      .filter((q) => q.required)
-      .filter((q) => {
-        if (q.type === "TEXT") return !textAnswers[q.id]?.trim();
-        return !(optionAnswers[q.id]?.size > 0);
-      })
-      .map((q) => q.prompt);
-  }
-
-  async function saveAnswers() {
-    const missing = unansweredRequiredPrompts();
-    if (missing.length > 0) {
-      setAnswersError(`Please answer: ${missing.join(", ")}`);
-      return;
+  function requiredQuestionErrors() {
+    const errors: Record<string, string> = {};
+    for (const question of applicableQuestions) {
+      if (!question.required) continue;
+      const answered =
+        question.type === "TEXT"
+          ? !!textAnswers[question.id]?.trim()
+          : !!optionAnswers[question.id]?.size;
+      if (!answered) errors[question.id] = "This field is required.";
     }
-    setAnswersSaving(true);
-    setAnswersError("");
-    setAnswersSaved(false);
-    try {
-      const items: { questionId: number; optionId?: number; answerText?: string }[] =
-        [];
-      for (const question of applicableQuestions) {
-        if (question.type === "TEXT") {
-          const value = textAnswers[question.id]?.trim();
-          if (value) {
-            items.push({ questionId: Number(question.id), answerText: value });
-          }
-        } else {
-          for (const optionId of optionAnswers[question.id] ?? []) {
-            items.push({
-              questionId: Number(question.id),
-              optionId: Number(optionId),
-            });
-          }
-        }
-      }
-      await replaceParticipantAnswers(participant!.id, items);
-      setAnswersSaved(true);
-      setAnswersDirty(false);
-    } catch (err) {
-      setAnswersError(
-        err instanceof ApiError || err instanceof Error
-          ? err.message
-          : "Couldn't save your answers. Please try again.",
-      );
-    } finally {
-      setAnswersSaving(false);
-    }
-  }
-
-  // Anything the participant typed/recorded/picked but hasn't hit Save/Submit
-  // on yet.
-  const hasUnsavedChanges =
-    answersDirty ||
-    audioBlob !== null ||
-    (mode === "link" && audioUrl.trim() !== "");
-
-  function goToTicket() {
-    router.push(`/events/${event!.id}/registered?pid=${participant!.id}`);
-  }
-
-  function handleConfirmClick() {
-    if (hasUnsavedChanges) {
-      setShowLeaveConfirm(true);
-    } else {
-      goToTicket();
-    }
+    return errors;
   }
 
   function handleModeChange(value: SubmissionMode) {
@@ -365,31 +295,62 @@ export default function AdditionalInfoPage() {
     setError("");
   }
 
-  async function handleSubmit() {
-    if (mode === "link") {
-      if (!isValidUrl(audioUrl.trim())) {
-        setError("Enter a valid link (e.g. a Google Drive or YouTube URL).");
-        return;
+  async function handleConfirm() {
+    setAttemptedConfirm(true);
+    const missingQuestionErrors = requiredQuestionErrors();
+    const missingAudio = audioRequired &&
+      (mode === "link" ? !audioUrl.trim() : !audioBlob);
+    if (Object.keys(missingQuestionErrors).length || missingAudio) {
+      setError("");
+      if (missingAudio && mode === "link" && !audioUrl.trim()) {
+        setError("Audio submission URL is required.");
+      } else if (missingAudio) {
+        setError("Record or select an audio submission before confirming.");
       }
-    } else if (!audioBlob) {
       return;
     }
-    setSubmitting(true);
+    const hasAudioReplacement =
+      audioBlob !== null || (mode === "link" && !!audioUrl.trim());
+    if (
+      audioAppliesToMe &&
+      !isPastDeadline &&
+      hasAudioReplacement &&
+      mode === "link" &&
+      !isValidUrl(audioUrl.trim())
+    ) {
+      setError("Enter a valid link (e.g. a Google Drive or YouTube URL).");
+      return;
+    }
+
     setError("");
+    setSubmitting(true);
     try {
-      const { audio_submission_url } =
-        mode === "link"
-          ? await submitParticipantAudio(participant!.id, audioUrl.trim())
-          : await uploadParticipantAudio(participant!.id, audioBlob!);
-      setSubmittedUrl(audio_submission_url);
-      setAudioBlob(null);
-      setAudioUrl("");
+      const items: { questionId: number; optionId?: number; answerText?: string }[] = [];
+      for (const question of applicableQuestions) {
+        if (question.type === "TEXT") {
+          const value = textAnswers[question.id]?.trim();
+          if (value) items.push({ questionId: Number(question.id), answerText: value });
+        } else {
+          for (const optionId of optionAnswers[question.id] ?? []) {
+            items.push({ questionId: Number(question.id), optionId: Number(optionId) });
+          }
+        }
+      }
+      if (applicableQuestions.length) {
+        await replaceParticipantAnswers(participant!.id, items);
+      }
+      if (audioAppliesToMe && !isPastDeadline && hasAudioReplacement) {
+        const { audio_submission_url } = audioBlob
+          ? await uploadParticipantAudio(participant!.id, audioBlob)
+          : await submitParticipantAudio(participant!.id, audioUrl.trim());
+        setSubmittedUrl(audio_submission_url);
+      }
+      router.replace(`/events/${event!.id}/registered?pid=${participant!.id}&info=complete`);
     } catch (err) {
-      setError(
-        err instanceof ApiError || err instanceof Error
-          ? err.message
-          : "Couldn't save your submission. Please try again.",
-      );
+      const message = err instanceof ApiError || err instanceof Error
+        ? err.message
+        : "Couldn't save your additional information. Please try again.";
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -406,14 +367,6 @@ export default function AdditionalInfoPage() {
             { label: "Additional Info" },
           ]}
         />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => router.back()}
-          className="shrink-0"
-        >
-          <Icon icon={ArrowLeft} size="sm" /> Back
-        </Button>
       </div>
 
       <div>
@@ -460,17 +413,24 @@ export default function AdditionalInfoPage() {
       {applicableQuestions.length > 0 && (
         <Card padding="md" className="space-y-5">
           <SectionLabel>Additional Questions</SectionLabel>
-          {answersError && <Banner tone="danger">{answersError}</Banner>}
           {applicableQuestions.map((question: EventQuestion) => (
-            <div key={question.id} className="space-y-2">
-              <Label htmlFor={`question-${question.id}`}>
-                {question.prompt}
-                {question.required ? " *" : ""}
-              </Label>
+            <FormField
+              key={question.id}
+              label={question.prompt}
+              htmlFor={
+                question.type === "TEXT"
+                  ? `question-${question.id}`
+                  : `question-${question.id}-${question.options[0]?.id ?? ""}`
+              }
+              required={question.required}
+              error={questionErrors[question.id]}
+            >
               {question.type === "TEXT" && (
                 <Input
                   id={`question-${question.id}`}
                   value={textAnswers[question.id] ?? ""}
+                  error={!!questionErrors[question.id]}
+                  aria-describedby={questionErrors[question.id] ? `question-${question.id}-error` : undefined}
                   onChange={(e) =>
                     setTextAnswer(question.id, e.target.value)
                   }
@@ -481,7 +441,10 @@ export default function AdditionalInfoPage() {
                   {question.options.map((option) => (
                     <Radio
                       key={option.id}
+                      id={`question-${question.id}-${option.id}`}
                       name={`question-${question.id}`}
+                      error={!!questionErrors[question.id]}
+                      aria-describedby={questionErrors[question.id] ? `question-${question.id}-error` : undefined}
                       label={option.label}
                       checked={
                         optionAnswers[question.id]?.has(option.id) ?? false
@@ -498,7 +461,10 @@ export default function AdditionalInfoPage() {
                   {question.options.map((option) => (
                     <Checkbox
                       key={option.id}
+                      id={`question-${question.id}-${option.id}`}
                       label={option.label}
+                      error={!!questionErrors[question.id]}
+                      aria-describedby={questionErrors[question.id] ? `question-${question.id}-error` : undefined}
                       checked={
                         optionAnswers[question.id]?.has(option.id) ?? false
                       }
@@ -509,20 +475,8 @@ export default function AdditionalInfoPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </FormField>
           ))}
-          <div className="flex items-center gap-3">
-            <Button
-              variant="primary"
-              onClick={saveAnswers}
-              disabled={answersSaving}
-            >
-              {answersSaving ? "Saving…" : "Save answers"}
-            </Button>
-            {answersSaved && (
-              <span className="text-small text-success">Saved.</span>
-            )}
-          </div>
         </Card>
       )}
 
@@ -617,33 +571,18 @@ export default function AdditionalInfoPage() {
                 below. A private link the reviewer can&apos;t open counts as no
                 submission.
               </p>
-              <div className="space-y-1">
-                <Label htmlFor="audio-url">Audio Submission URL</Label>
+              <FormField label="Audio Submission URL" htmlFor="audio-url" required={audioRequired} error={error === "Audio submission URL is required." ? error : undefined}>
                 <Input
                   id="audio-url"
                   type="url"
                   value={audioUrl}
+                  error={error === "Audio submission URL is required."}
                   onChange={(e) => setAudioUrl(e.target.value)}
                   placeholder="https://drive.google.com/file/d/... or https://youtu.be/..."
                 />
-              </div>
+              </FormField>
             </>
           )}
-
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={
-              submitting ||
-              (mode === "link" ? audioUrl.trim() === "" : !audioBlob)
-            }
-          >
-            {submitting
-              ? "Saving…"
-              : submittedUrl
-                ? "Replace Submission"
-                : "Submit"}
-          </Button>
           {submittedUrl && (
             <a
               href={submittedUrl}
@@ -658,36 +597,10 @@ export default function AdditionalInfoPage() {
       )}
 
       <div className="flex justify-end">
-        <Button variant="primary" onClick={handleConfirmClick}>
-          Confirm
+        <Button variant="primary" onClick={handleConfirm} disabled={submitting}>
+          {submitting ? "Submitting…" : "Confirm"}
         </Button>
       </div>
-
-      <Modal
-        open={showLeaveConfirm}
-        onClose={() => setShowLeaveConfirm(false)}
-        title="Unsaved changes"
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setShowLeaveConfirm(false)}
-            >
-              Stay and save
-            </Button>
-            <Button variant="primary" onClick={goToTicket}>
-              Leave without saving
-            </Button>
-          </>
-        }
-      >
-        <p className="text-body text-text-secondary">
-          You have unsaved changes — an in-progress audio submission, or
-          answer edits you haven&apos;t saved yet. Leaving
-          now
-          will discard them.
-        </p>
-      </Modal>
     </div>
   );
 }

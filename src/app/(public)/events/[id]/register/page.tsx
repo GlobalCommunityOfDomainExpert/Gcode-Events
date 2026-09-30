@@ -18,7 +18,7 @@ import {
   Checkbox,
   Icon,
   Input,
-  SectionLabel,
+  Link,
 } from "@/components/atoms";
 import {
   Banner,
@@ -67,6 +67,7 @@ export default function EventRegisterPage() {
   const [quantityInput, setQuantityInput] = useState("1");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   // Tracks which email has actually passed OTP verification — cleared
   // implicitly whenever the typed email no longer matches it, so editing
@@ -301,15 +302,38 @@ export default function EventRegisterPage() {
   }
 
   function submit() {
-    if (!session && (!firstName.trim() || !email.trim() || !phone.trim())) {
-      setError("Full name, email and phone are required.");
+    const nextFieldErrors: Record<string, string> = {};
+    if (!session) {
+      if (!firstName.trim())
+        nextFieldErrors["first-name"] = "First name is required.";
+      if (!lastName.trim())
+        nextFieldErrors["last-name"] = "Last name is required.";
+      if (!email.trim()) nextFieldErrors.email = "Email address is required.";
+      if (!phone.trim()) nextFieldErrors.phone = "Phone number is required.";
+    }
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      setError("");
+      const firstInvalidId = Object.keys(nextFieldErrors)[0];
+      if (window.matchMedia("(max-width: 767px)").matches) {
+        window.setTimeout(() => {
+          const input = document.getElementById(firstInvalidId);
+          input?.scrollIntoView({ behavior: "smooth", block: "center" });
+          input?.focus({ preventScroll: true });
+        }, 0);
+      }
       return;
     }
+    setFieldErrors({});
     if (!agreedToTerms) {
       setError("Please accept the Code of Conduct.");
       return;
     }
-    if (!session && email.trim() !== verifiedEmail) {
+    if (
+      !session &&
+      event?.id !== "422" &&
+      email.trim() !== verifiedEmail
+    ) {
       setError("");
       setShowVerifyModal(true);
       return;
@@ -417,9 +441,19 @@ export default function EventRegisterPage() {
       <div className="mx-auto max-w-xl space-y-4">
         {breadcrumbRow}
         <div>
-          <h1 className="text-large text-text-primary font-bold">
-            How would you like to join?
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-large text-text-primary min-w-0 font-bold">
+              How would you like to join?
+            </h1>
+            <Link
+              href={`/events/${event.id}?from=register&category=${category}`}
+              variant="primary"
+              size="sm"
+              className="shrink-0 text-primary"
+            >
+              View More...
+            </Link>
+          </div>
           <p className="text-small text-text-secondary">
             Select your primary pass type below.
           </p>
@@ -463,9 +497,19 @@ export default function EventRegisterPage() {
     <div className="mx-auto max-w-5xl space-y-4">
       {breadcrumbRow}
       <div>
-        <h1 className="text-large text-text-primary font-bold">
-          Register for {event.title}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-large text-text-primary min-w-0 font-bold">
+            Register for {event.title}
+          </h1>
+          <Link
+            href={`/events/${event.id}?from=register&category=${category}`}
+            variant="primary"
+            size="sm"
+            className="shrink-0 text-primary"
+          >
+            View More...
+          </Link>
+        </div>
         <p className="text-small text-text-secondary">
           {event.date} · {event.time} · {event.location}
         </p>
@@ -485,7 +529,6 @@ export default function EventRegisterPage() {
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="space-y-4">
             <Card padding="md" className="space-y-4">
-              <SectionLabel>{selected.label} Information</SectionLabel>
               {session ? (
                 <p className="text-body text-text-primary">
                   Registering as{" "}
@@ -494,43 +537,89 @@ export default function EventRegisterPage() {
               ) : (
                 <>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="First Name" htmlFor="first-name">
+                    <FormField
+                      label="First Name"
+                      htmlFor="first-name"
+                      required
+                      error={fieldErrors["first-name"]}
+                    >
                       <Input
                         id="first-name"
                         icon={User}
                         value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
+                        error={!!fieldErrors["first-name"]}
+                        onChange={(e) => {
+                          setFirstName(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              "first-name": "",
+                            }));
+                        }}
                         placeholder="First name"
                       />
                     </FormField>
-                    <FormField label="Last Name" htmlFor="last-name">
+                    <FormField
+                      label="Last Name"
+                      htmlFor="last-name"
+                      required
+                      error={fieldErrors["last-name"]}
+                    >
                       <Input
                         id="last-name"
                         icon={User}
                         value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
+                        error={!!fieldErrors["last-name"]}
+                        onChange={(e) => {
+                          setLastName(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              "last-name": "",
+                            }));
+                        }}
                         placeholder="Last name"
                       />
                     </FormField>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="Email Address" htmlFor="email">
+                    <FormField
+                      label="Email Address"
+                      htmlFor="email"
+                      required
+                      error={fieldErrors.email}
+                    >
                       <Input
                         id="email"
                         type="email"
                         icon={Mail}
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        error={!!fieldErrors.email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({ ...prev, email: "" }));
+                        }}
                         placeholder="you@example.com"
                       />
                     </FormField>
-                    <FormField label="Phone Number" htmlFor="phone">
+                    <FormField
+                      label="Phone Number"
+                      htmlFor="phone"
+                      required
+                      error={fieldErrors.phone}
+                    >
                       <Input
                         id="phone"
                         type="tel"
                         icon={Phone}
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        error={!!fieldErrors.phone}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({ ...prev, phone: "" }));
+                        }}
                         placeholder="9876543210"
                       />
                     </FormField>
@@ -719,7 +808,6 @@ export default function EventRegisterPage() {
         </div>
       )}
 
-      {!session && (
         <VerifyEmailModal
           open={showVerifyModal}
           email={email.trim()}
@@ -727,7 +815,6 @@ export default function EventRegisterPage() {
           onClose={() => setShowVerifyModal(false)}
           onVerified={handleEmailVerified}
         />
-      )}
     </div>
   );
 }

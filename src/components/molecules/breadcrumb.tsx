@@ -12,20 +12,23 @@ export interface BreadcrumbProps {
 
 export function Breadcrumb({ items }: BreadcrumbProps) {
   return (
-    <nav aria-label="Breadcrumb" className="min-w-0">
-      <ol className="text-small flex min-w-0 items-center gap-2">
+    <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
+      <ol className="text-small flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (
             <Fragment key={item.label}>
-              <li className={isLast ? "min-w-0 flex-1 truncate" : "shrink-0"}>
+              <li className="min-w-0 max-w-[28vw] shrink sm:max-w-48">
                 {item.href && !isLast ? (
                   <Link href={item.href} variant="secondary" size="sm">
-                    {item.label}
+                    <span className="block truncate" title={item.label}>
+                      {item.label}
+                    </span>
                   </Link>
                 ) : (
                   <span
                     aria-current={isLast ? "page" : undefined}
+                    title={item.label}
                     className="text-text-primary block truncate font-medium"
                   >
                     {item.label}
