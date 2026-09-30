@@ -9,6 +9,7 @@ import {
   Calendar,
   Check,
   Compass,
+  Download,
   MapPin,
 } from "lucide-react";
 import {
@@ -133,6 +134,7 @@ export default function EventRegisteredPage() {
     participant.category === "PARTICIPANT"
       ? event.participantRegistration.label
       : event.attendeeRegistration.label;
+
   if (needsAdditionalInfo) return <RegisteredSkeleton />;
 
   return (
@@ -230,6 +232,17 @@ export default function EventRegisteredPage() {
               {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code covers
               this whole booking — present it once at check-in.
             </p>
+            {qrDataUrl && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <a
+                  href={qrDataUrl}
+                  download={`${bookingRef}.png`}
+                  className="border-border-light text-text-primary inline-flex h-9 items-center gap-2 rounded-sm border px-3 text-small font-medium hover:bg-bg-light"
+                >
+                  <Icon icon={Download} size="sm" /> Download PNG
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </div>
