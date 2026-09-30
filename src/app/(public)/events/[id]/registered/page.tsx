@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
 import {
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Calendar,
@@ -37,6 +36,7 @@ export default function EventRegisteredPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const participantId = searchParams.get("pid");
+  const additionalInfoComplete = searchParams.get("info") === "complete";
   const { event, status: eventStatus } = useEvent(params.id);
   const session = getSession();
 
@@ -82,6 +82,23 @@ export default function EventRegisteredPage() {
     );
   }, [participant]);
 
+  const category = participant?.category ?? "ATTENDEE";
+  const needsAdditionalInfo =
+    !additionalInfoComplete &&
+    !!event &&
+    !!participant &&
+    ((event.audioRecordingEnabled &&
+      event.audioRecordingAppliesTo === category) ||
+      event.questions.some((question) => question.appliesTo === category));
+
+  useEffect(() => {
+    if (needsAdditionalInfo && event && participant) {
+      router.replace(
+        `/events/${event.id}/additional-info?pid=${participant.id}`,
+      );
+    }
+  }, [event, needsAdditionalInfo, participant, router]);
+
   if (eventStatus === "loading" || participantStatus === "loading") {
     return <RegisteredSkeleton />;
   }
@@ -116,6 +133,7 @@ export default function EventRegisteredPage() {
     participant.category === "PARTICIPANT"
       ? event.participantRegistration.label
       : event.attendeeRegistration.label;
+  if (needsAdditionalInfo) return <RegisteredSkeleton />;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -152,6 +170,12 @@ export default function EventRegisteredPage() {
           <p className="text-small text-text-secondary">
             {quantity} ticket{quantity === 1 ? "" : "s"} confirmed
           </p>
+          {event.id === "422" && (
+            <p className="text-small text-text-primary mt-2">
+              For more information, call <strong>9355251219</strong> or
+              WhatsApp <strong>8588868562</strong>.
+            </p>
+          )}
         </div>
       </div>
 
@@ -194,39 +218,6 @@ export default function EventRegisteredPage() {
           </p>
         </div>
       </div>
-
-      {(() => {
-        const category = participant.category ?? "ATTENDEE";
-        const audioAppliesToMe =
-          event.audioRecordingEnabled &&
-          event.audioRecordingAppliesTo === category;
-        const hasQuestions = event.questions.some(
-          (q) => q.appliesTo === category,
-        );
-        return audioAppliesToMe || hasQuestions;
-      })() && (
-          <div className="border-border-light bg-surface-light flex items-start gap-4 rounded-md border p-6">
-            <div className="bg-warning-light flex size-10 shrink-0 items-center justify-center rounded-full">
-              <Icon icon={AlertTriangle} size="md" className="text-warning" />
-            </div>
-            <div className="space-y-3">
-              <p className="text-body text-text-primary">
-                {event.audioRecordingEnabled &&
-                event.audioRecordingAppliesTo ===
-                  (participant.category ?? "ATTENDEE")
-                  ? "Submit your audio submission URL within 24 hours of registration closing or your entry will be disqualified."
-                  : "There's some additional info to fill in for this event."}
-              </p>
-              <ButtonLink
-                href={`/events/${event.id}/additional-info?pid=${participant.id}`}
-                variant="primary"
-                size="sm"
-              >
-                Additional Info <Icon icon={ArrowRight} size="sm" />
-              </ButtonLink>
-            </div>
-          </div>
-        )}
 
       <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
         <SectionLabel>Your Ticket</SectionLabel>
