@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Calendar,
@@ -54,6 +54,9 @@ import { EventDetailSkeleton } from "./_components/event-detail-skeleton";
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromRegister = searchParams.get("from") === "register";
+  const returnCategory = searchParams.get("category");
   const { event, status, refresh } = useEvent(params.id);
   const now = useServerNow();
 
@@ -273,7 +276,18 @@ export default function EventDetailPage() {
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => router.back()}
+          onClick={() =>
+            fromRegister
+              ? router.push(
+                  `/events/${event.id}/register${
+                    returnCategory === "ATTENDEE" ||
+                    returnCategory === "PARTICIPANT"
+                      ? `?category=${returnCategory}`
+                      : ""
+                  }`,
+                )
+              : router.back()
+          }
           className="shrink-0"
         >
           <Icon icon={ArrowLeft} size="sm" /> Back
