@@ -1,8 +1,11 @@
 import { apiRequest, ApiError } from "./client";
 import {
+  CreateCashfreeOrderPayload,
+  CreateCashfreeOrderResult,
   CreateRazorpayOrderPayload,
   CreateRazorpayOrderResult,
   RazorpayOrderApi,
+  VerifyCashfreeOrderResult,
   VerifyRazorpayPaymentPayload,
 } from "./types";
 
@@ -44,6 +47,53 @@ export async function verifyRazorpayPayment(
     { method: "POST", body: payload },
   );
   if (!result?.participant_id) {
+    throw new ApiError(
+      "Payment verification returned no data. Please try again.",
+      502,
+    );
+  }
+  return result;
+}
+
+// Cashfree equivalent of createRazorpayOrder — same server-sizes-the-amount
+// rule, and a coupon that fully covers the price short-circuits to
+// `{free: true, participant_id}` (check `"free" in result`). The backend also
+// enforces every registration rule here, before any money moves (already
+// registered, event full, window closed, unverified email, bad phone), and
+// reports them as readable ApiError messages.
+export async function createCashfreeOrder(
+  eventId: number | string,
+  payload: CreateCashfreeOrderPayload,
+): Promise<CreateCashfreeOrderResult> {
+  const result = await apiRequest<CreateCashfreeOrderResult | null>(
+    `/events/${eventId}/cashfree-order`,
+    { method: "POST", body: payload },
+  );
+  if (
+    !result ||
+    (!("free" in result) &&
+      !(result as { payment_session_id?: string }).payment_session_id)
+  ) {
+    throw new ApiError(
+      "Payment order creation returned no data. Please try again.",
+      502,
+    );
+  }
+  return result;
+}
+
+// Unlike Razorpay there's no client-side signature to forward: the backend
+// re-reads the order from Cashfree and only registers the participant if
+// Cashfree itself says PAID for the stored amount. Idempotent, which is how
+// the checkout return flow polls it.
+export async function verifyCashfreeOrder(
+  orderId: string,
+): Promise<VerifyCashfreeOrderResult> {
+  const result = await apiRequest<VerifyCashfreeOrderResult | null>(
+    `/participants/cashfree`,
+    { method: "POST", body: { order_id: orderId } },
+  );
+  if (!result?.status) {
     throw new ApiError(
       "Payment verification returned no data. Please try again.",
       502,
