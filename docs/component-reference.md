@@ -75,6 +75,8 @@ No CSS Modules anywhere in `src/` — styling is entirely Tailwind utilities + t
 | API | `api/client.ts`, `api/adapters.ts`, `api/{auth,events,lookups,participants,payments,ratings}.ts`, `api/types.ts` | REST client, DTO→UI adapters, per-resource fetchers, raw DTO types |
 | Auth | `auth/format.ts`, `auth/hash-password.ts`, `auth/password-strength.ts`, `auth/session.ts`, `auth/use-google-id-token.tsx` | Avatar initials, client-side SHA-256 hashing, password rules, session/JWT, Google OAuth bridge |
 | Storage | `oci/object-storage.ts` | Server-only OCI Object Storage client (explicit "never import from client components" warning) |
-| Payments | `payments/razorpay.ts` | Razorpay checkout request/response types + wrapper |
+| Payments | `payments/cashfree.ts` | Cashfree checkout loader + wrapper (default gateway) |
+| Payments | `payments/razorpay.ts` | Razorpay checkout request/response types + wrapper (legacy, selectable via env) |
+| Payments | `payments/provider.ts` | Build-time gateway switch, Cashfree default |
 | Live | `reactions/bot-simulator.ts` | Simulated scoreboard reactions, rate scaled by `sqrt(registeredCount)` |
 | Forms | `store/wizard-store.ts`, `zod/event.ts` | Zustand event-wizard state (devtools middleware), Zod schema backing it |

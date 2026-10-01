@@ -51,7 +51,7 @@ src/app/
 │           ├── layout.tsx             generateMetadata() — SERVER fetch getEvent(id) for OG/Twitter tags
 │           ├── page.tsx                 Event detail: booking card, agenda, eligibility/terms, share card
 │           ├── additional-info/page.tsx  Post-registration audio submission (PARTICIPANT category, 24h deadline)
-│           ├── register/page.tsx          Guest/session registration, Razorpay flow, OTP email verification
+│           ├── register/page.tsx          Guest/session registration, Cashfree checkout (Razorpay legacy), OTP email verification
 │           ├── registered/page.tsx         Confirmation: QR ticket, booking reference
 │           ├── rate/page.tsx                Live rating (Casual reactions / Competitive 0-10) via SSE
 │           ├── scoreboard/page.tsx           Public scoreboard via SSE + floating emoji animation
@@ -93,4 +93,4 @@ Both SSE routes are hand-rolled `ReadableStream` + `text/event-stream` responses
 - **No server actions**, **no DB/ORM** — everything domain-related goes through `src/lib/api/client.ts` (`apiRequest<T>()`) to an Oracle ORDS endpoint (`API_BASE_URL`, overridable via `NEXT_PUBLIC_API_BASE_URL`).
 - **One true server-side fetch**: `generateMetadata()` in `(public)/events/[id]/layout.tsx`.
 - **Route Handlers as backend-for-frontend**: the audio-submission routes exist specifically so OCI credentials never reach the client (`src/lib/oci/object-storage.ts` is server-only, explicitly commented as such).
-- **Payments**: Razorpay order creation/verification also goes through `apiRequest` (`src/lib/api/payments.ts`), Razorpay checkout SDK loaded client-side (`src/lib/payments/razorpay.ts`).
+- **Payments**: Cashfree order creation/verification goes through `apiRequest` (`src/lib/api/payments.ts`), Cashfree checkout SDK loaded client-side (`src/lib/payments/cashfree.ts`); the gateway is chosen by `src/lib/payments/provider.ts` (Cashfree default, Razorpay legacy path in `razorpay.ts`).
