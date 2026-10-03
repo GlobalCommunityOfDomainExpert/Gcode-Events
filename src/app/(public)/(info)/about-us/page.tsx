@@ -34,9 +34,9 @@ export default function AboutUsPage() {
           ],
         },
         {
-          heading: "Platform Operator",
+          heading: "Legal Business Name",
           blocks: [
-            "GCODE Events is operated by Gig Eco Marketplace Private Limited.",
+            "The legal business name of GCODE Events is Gig Eco Marketplace Private Limited.",
             "For questions regarding the platform, events or participation, please contact us through the [Contact Us](/contact-us) page.",
           ],
         },
