@@ -10,7 +10,7 @@ High-level map of gcode-core-events. For deep dives see [Routing & API](/routing
 - **Zustand 5** — event-wizard form state
 - **Zod 4** — event-wizard schema validation
 - **Oracle Cloud** — ORDS REST API (Autonomous DB) as the sole backend, OCI Object Storage for file uploads
-- **Razorpay** — event registration payments
+- **Cashfree** — event registration payments (default; legacy Razorpay flow still selectable via `NEXT_PUBLIC_PAYMENT_PROVIDER=razorpay`). Backend in `docs/sql/cashfree/`
 - **Google Identity Services** (`@react-oauth/google`) — OAuth sign-in
 
 ::: tip This is not stock Next.js

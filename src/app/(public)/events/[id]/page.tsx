@@ -41,6 +41,7 @@ import { EventLinksCard } from "./_components/event-links-card";
 import { EligibilityTermsCard } from "./_components/eligibility-terms-card";
 import { RegistrationCard } from "./_components/registration-card";
 import { InterestButton } from "./_components/interest-button";
+import { EventEnquiryButton } from "./_components/event-enquiry-button";
 import { EventInfoCard } from "./_components/event-info-card";
 import { DetailItem } from "./_components/detail-item";
 import {
@@ -86,6 +87,10 @@ export default function EventDetailPage() {
         interestedCount={event.interestedCount}
         onInterested={() => void refresh({ silent: true })}
       />
+    ) : undefined;
+  const tellMeMoreButtonNode =
+    event.status !== "CANCELLED" && !isPast ? (
+      <EventEnquiryButton eventId={event.id} eventTitle={event.title} />
     ) : undefined;
 
   // Rendered twice: inline right after the header on mobile (so price/CTA
@@ -347,6 +352,7 @@ export default function EventDetailPage() {
             <ShareEventCard
               url={`${typeof window !== "undefined" ? window.location.origin : ""}/events/${event.id}`}
               title={event.title}
+              tellMeMoreButton={tellMeMoreButtonNode}
               interestButton={interestButtonNode}
             />
           </div>
@@ -472,6 +478,7 @@ export default function EventDetailPage() {
           <ShareEventCard
             url={`${typeof window !== "undefined" ? window.location.origin : ""}/events/${event.id}`}
             title={event.title}
+            tellMeMoreButton={tellMeMoreButtonNode}
             interestButton={interestButtonNode}
           />
         </div>

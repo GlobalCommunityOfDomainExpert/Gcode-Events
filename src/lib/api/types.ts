@@ -430,6 +430,36 @@ export interface VerifyRazorpayPaymentPayload {
   razorpay_signature: string;
 }
 
+// Mirrors ORDS POST /events/:id/cashfree-order binds ->
+// GCODE_CASHFREE_PAYMENTS_API.create_order (docs/sql/cashfree/). Same request
+// shape as Razorpay's, except phone is required for every payer (signed in or
+// not) because Cashfree rejects orders without a valid 10-digit number.
+export type CreateCashfreeOrderPayload = CreateRazorpayOrderPayload;
+
+// payment_session_id is what Cashfree's checkout.js needs — the backend holds
+// the app id/secret, so (unlike Razorpay) no public key is echoed back.
+// amount is RUPEES here, not paise.
+export interface CashfreeOrderApi {
+  order_id: string;
+  payment_session_id: string;
+  amount: number;
+  currency: string;
+}
+
+export type CreateCashfreeOrderResult = CashfreeOrderApi | FreeRegistrationApi;
+
+// Mirrors ORDS POST /participants/cashfree -> verify_order. The backend asks
+// Cashfree for the order's real status; nothing the browser reports is trusted.
+//   PAID               registered, participant_id is set
+//   PENDING            not paid yet / still being processed — safe to poll again
+//   FAILED             order expired or was terminated without payment
+//   PAID_UNREGISTERED  charged, but registration failed (e.g. event just filled
+//                      up); needs a manual refund — see docs/sql/cashfree/
+export interface VerifyCashfreeOrderResult {
+  status: "PAID" | "PENDING" | "FAILED" | "PAID_UNREGISTERED";
+  participant_id: number | null;
+}
+
 // Contract-only — GCODE_COUPONS doesn't exist on the live backend yet (see
 // docs/sql/coupons/). Organizer's list view for one event
 // (GET /events/:id/coupons), mirrors GCODE_COUPONS_API.list_coupons_for_event.
