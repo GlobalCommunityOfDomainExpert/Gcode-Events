@@ -8,14 +8,16 @@ import { Modal } from "@/components/molecules";
 interface ShareEventCardProps {
   url: string;
   title: string;
+  tellMeMoreButton?: ReactNode;
   // Rendered next to the Share button — the event page passes the
-  // "I'm Interested" heart icon button here so the two sit side by side.
+  // event enquiry and "I'm Interested" buttons here so the actions stay together.
   interestButton?: ReactNode;
 }
 
 export function ShareEventCard({
   url,
   title,
+  tellMeMoreButton,
   interestButton,
 }: ShareEventCardProps) {
   const [open, setOpen] = useState(false);
@@ -54,6 +56,7 @@ export function ShareEventCard({
             <Icon icon={Share2} size="sm" />
             Share
           </Button>
+          {tellMeMoreButton}
           {interestButton}
         </div>
       </Card>
