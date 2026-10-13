@@ -76,12 +76,12 @@ export default function EventRegisteredPage() {
   // ticket in this registration's quantity. Encodes an opaque reference the
   // check-in flow can look up server-side; nothing sensitive.
   useEffect(() => {
-    if (!participant) return;
+    if (!participant || params.id === "481") return;
     const payload = `GCODE-PARTICIPANT-${participant.id}`;
     void QRCode.toDataURL(payload, { width: 200, margin: 1 }).then(
       setQrDataUrl,
     );
-  }, [participant]);
+  }, [params.id, participant]);
 
   const category = participant?.category ?? "ATTENDEE";
   const needsAdditionalInfo =
@@ -129,6 +129,7 @@ export default function EventRegisteredPage() {
   }
 
   const quantity = participant.quantity;
+  const isBsssPartnerEvent = event.id === "481";
   const bookingRef = `GCODE-P${participant.id}`;
   const categoryLabel =
     participant.category === "PARTICIPANT"
@@ -172,10 +173,25 @@ export default function EventRegisteredPage() {
           <p className="text-small text-text-secondary">
             {quantity} ticket{quantity === 1 ? "" : "s"} confirmed
           </p>
+          {isBsssPartnerEvent && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <p className="text-small text-text-primary">
+                Want to become a GCODE Business Partner? Register as a Service
+                Partner or Investor to access startup collaboration and
+                investment opportunities:
+              </p>
+              <a
+                href="https://gcode.in/ords/r/gcode2/gcode/sign-up"
+                className="bg-primary hover:bg-primary-hover text-small inline-flex min-h-10 shrink-0 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
+              >
+                Register as a GCODE Business Partner
+              </a>
+            </div>
+          )}
           {event.id === "422" && (
             <p className="text-small text-text-primary mt-2">
-              For more information, call <strong>9355251219</strong> or
-              WhatsApp <strong>8588868562</strong>.
+              For more information, call <strong>9355251219</strong> or WhatsApp{" "}
+              <strong>8588868562</strong>.
             </p>
           )}
         </div>
@@ -221,31 +237,35 @@ export default function EventRegisteredPage() {
         </div>
       </div>
 
-      <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
-        <SectionLabel>Your Ticket</SectionLabel>
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
-          <div className="space-y-2">
-            <p className="text-small text-text-secondary">Booking Reference</p>
-            <BookingRef>{bookingRef}</BookingRef>
-            <p className="text-small text-text-secondary">
-              {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code covers
-              this whole booking — present it once at check-in.
-            </p>
-            {qrDataUrl && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                <a
-                  href={qrDataUrl}
-                  download={`${bookingRef}.png`}
-                  className="border-border-light text-text-primary inline-flex h-9 items-center gap-2 rounded-sm border px-3 text-small font-medium hover:bg-bg-light"
-                >
-                  <Icon icon={Download} size="sm" /> Download PNG
-                </a>
-              </div>
-            )}
+      {!isBsssPartnerEvent && (
+        <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
+          <SectionLabel>Your Ticket</SectionLabel>
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
+            <div className="space-y-2">
+              <p className="text-small text-text-secondary">
+                Booking Reference
+              </p>
+              <BookingRef>{bookingRef}</BookingRef>
+              <p className="text-small text-text-secondary">
+                {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code
+                covers this whole booking — present it once at check-in.
+              </p>
+              {qrDataUrl && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <a
+                    href={qrDataUrl}
+                    download={`${bookingRef}.png`}
+                    className="border-border-light text-text-primary text-small hover:bg-bg-light inline-flex h-9 items-center gap-2 rounded-sm border px-3 font-medium"
+                  >
+                    <Icon icon={Download} size="sm" /> Download PNG
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {session && (
         <div className="flex flex-col gap-3 sm:flex-row">
