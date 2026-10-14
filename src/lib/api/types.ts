@@ -131,6 +131,16 @@ export interface ParticipantAnswerApi {
   answer_text: string | null;
 }
 
+export interface ParticipantAdvancedAnswerApi {
+  question_id: number;
+  setting_id: number;
+  source_option_id: number | null;
+  parent_advanced_option_id: number | null;
+  advanced_option_id: number | null;
+  is_other: number;
+  answer_text: string | null;
+}
+
 export interface ApiListResponse<T> {
   items: T[];
   hasMore: boolean;
