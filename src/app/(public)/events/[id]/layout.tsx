@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getEvent } from "@/lib/api/events";
-import { resolveImageUrl } from "@/lib/api/adapters";
 
 export async function generateMetadata({
   params,
@@ -13,29 +12,23 @@ export async function generateMetadata({
     const detail = await getEvent(id);
     const title = `${detail.event_name} | GCODE Events`;
     const description =
-      (detail.description ?? "").trim().slice(0, 160) ||
+      (detail.description ?? "").trim().slice(0, 125) ||
       "Discover this event on GCODE Events.";
-    const image = resolveImageUrl(detail.cover_image_url);
-
     return {
       title,
       description,
       openGraph: {
         title,
         description,
-        // width/height let the crawler render the image on the first scrape
-        // of a new URL instead of waiting on its own async image processing
-        // (Facebook's debugger warns "og:image properties are not yet
-        // available" without these). Declared, not measured — organizers
-        // upload arbitrary-sized covers, so this is a hint, not a promise.
-        images: image ? [{ url: image, width: 1200, height: 630 }] : undefined,
+        url: `/events/${id}`,
+        siteName: "GCODE Events",
+        locale: "en_IN",
         type: "website",
       },
       twitter: {
         card: "summary_large_image",
         title,
         description,
-        images: image ? [image] : undefined,
       },
     };
   } catch {
