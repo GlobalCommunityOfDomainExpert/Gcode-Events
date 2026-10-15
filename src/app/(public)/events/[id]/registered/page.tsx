@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
 import {
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Calendar,
   Check,
   Compass,
+  Download,
   MapPin,
 } from "lucide-react";
 import {
@@ -37,6 +37,7 @@ export default function EventRegisteredPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const participantId = searchParams.get("pid");
+  const additionalInfoComplete = searchParams.get("info") === "complete";
   const { event, status: eventStatus } = useEvent(params.id);
   const session = getSession();
 
@@ -75,12 +76,29 @@ export default function EventRegisteredPage() {
   // ticket in this registration's quantity. Encodes an opaque reference the
   // check-in flow can look up server-side; nothing sensitive.
   useEffect(() => {
-    if (!participant) return;
+    if (!participant || params.id === "481") return;
     const payload = `GCODE-PARTICIPANT-${participant.id}`;
     void QRCode.toDataURL(payload, { width: 200, margin: 1 }).then(
       setQrDataUrl,
     );
-  }, [participant]);
+  }, [params.id, participant]);
+
+  const category = participant?.category ?? "ATTENDEE";
+  const needsAdditionalInfo =
+    !additionalInfoComplete &&
+    !!event &&
+    !!participant &&
+    ((event.audioRecordingEnabled &&
+      event.audioRecordingAppliesTo === category) ||
+      event.questions.some((question) => question.appliesTo === category));
+
+  useEffect(() => {
+    if (needsAdditionalInfo && event && participant) {
+      router.replace(
+        `/events/${event.id}/additional-info?pid=${participant.id}`,
+      );
+    }
+  }, [event, needsAdditionalInfo, participant, router]);
 
   if (eventStatus === "loading" || participantStatus === "loading") {
     return <RegisteredSkeleton />;
@@ -111,11 +129,14 @@ export default function EventRegisteredPage() {
   }
 
   const quantity = participant.quantity;
+  const isBsssPartnerEvent = event.id === "481";
   const bookingRef = `GCODE-P${participant.id}`;
   const categoryLabel =
     participant.category === "PARTICIPANT"
       ? event.participantRegistration.label
       : event.attendeeRegistration.label;
+
+  if (needsAdditionalInfo) return <RegisteredSkeleton />;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -152,6 +173,27 @@ export default function EventRegisteredPage() {
           <p className="text-small text-text-secondary">
             {quantity} ticket{quantity === 1 ? "" : "s"} confirmed
           </p>
+          {isBsssPartnerEvent && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <p className="text-small text-text-primary">
+                Want to become a GCODE Business Partner? Register as a Service
+                Partner or Investor to access startup collaboration and
+                investment opportunities:
+              </p>
+              <a
+                href="https://gcode.in/ords/r/gcode2/gcode/sign-up"
+                className="bg-primary hover:bg-primary-hover text-small inline-flex min-h-10 shrink-0 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
+              >
+                Register as a GCODE Business Partner
+              </a>
+            </div>
+          )}
+          {event.id === "422" && (
+            <p className="text-small text-text-primary mt-2">
+              For more information, call <strong>9355251219</strong> or WhatsApp{" "}
+              <strong>8588868562</strong>.
+            </p>
+          )}
         </div>
       </div>
 
@@ -195,53 +237,35 @@ export default function EventRegisteredPage() {
         </div>
       </div>
 
-      {(() => {
-        const category = participant.category ?? "ATTENDEE";
-        const audioAppliesToMe =
-          event.audioRecordingEnabled &&
-          event.audioRecordingAppliesTo === category;
-        const hasQuestions = event.questions.some(
-          (q) => q.appliesTo === category,
-        );
-        return audioAppliesToMe || hasQuestions;
-      })() && (
-          <div className="border-border-light bg-surface-light flex items-start gap-4 rounded-md border p-6">
-            <div className="bg-warning-light flex size-10 shrink-0 items-center justify-center rounded-full">
-              <Icon icon={AlertTriangle} size="md" className="text-warning" />
-            </div>
-            <div className="space-y-3">
-              <p className="text-body text-text-primary">
-                {event.audioRecordingEnabled &&
-                event.audioRecordingAppliesTo ===
-                  (participant.category ?? "ATTENDEE")
-                  ? "Submit your audio submission URL within 24 hours of registration closing or your entry will be disqualified."
-                  : "There's some additional info to fill in for this event."}
+      {!isBsssPartnerEvent && (
+        <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
+          <SectionLabel>Your Ticket</SectionLabel>
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
+            <div className="space-y-2">
+              <p className="text-small text-text-secondary">
+                Booking Reference
               </p>
-              <ButtonLink
-                href={`/events/${event.id}/additional-info?pid=${participant.id}`}
-                variant="primary"
-                size="sm"
-              >
-                Additional Info <Icon icon={ArrowRight} size="sm" />
-              </ButtonLink>
+              <BookingRef>{bookingRef}</BookingRef>
+              <p className="text-small text-text-secondary">
+                {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code
+                covers this whole booking — present it once at check-in.
+              </p>
+              {qrDataUrl && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <a
+                    href={qrDataUrl}
+                    download={`${bookingRef}.png`}
+                    className="border-border-light text-text-primary text-small hover:bg-bg-light inline-flex h-9 items-center gap-2 rounded-sm border px-3 font-medium"
+                  >
+                    <Icon icon={Download} size="sm" /> Download PNG
+                  </a>
+                </div>
+              )}
             </div>
-          </div>
-        )}
-
-      <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
-        <SectionLabel>Your Ticket</SectionLabel>
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
-          <div className="space-y-2">
-            <p className="text-small text-text-secondary">Booking Reference</p>
-            <BookingRef>{bookingRef}</BookingRef>
-            <p className="text-small text-text-secondary">
-              {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code covers
-              this whole booking — present it once at check-in.
-            </p>
           </div>
         </div>
-      </div>
+      )}
 
       {session && (
         <div className="flex flex-col gap-3 sm:flex-row">

@@ -63,6 +63,10 @@ export interface EventSocialLink {
 export interface EventQuestionOption {
   id: string;
   label: string;
+  settingId?: number;
+  advancedOptions: EventQuestionOption[];
+  advancedEnabled: boolean;
+  advancedRequired: boolean;
 }
 
 // Backed by GCODE_EVENT_QUESTIONS. An organizer-authored question shown on
@@ -73,6 +77,7 @@ export interface EventQuestion {
   prompt: string;
   type: "TEXT" | "RADIO" | "CHECKBOX";
   required: boolean;
+  allowOther: boolean;
   appliesTo: "ATTENDEE" | "PARTICIPANT";
   sortOrder: number;
   // Empty for TEXT questions.
@@ -315,4 +320,5 @@ export interface Event {
   // its own appliesTo, so filter by category at the call site rather than
   // gating the array as a whole.
   questions: EventQuestion[];
+  advancedAdditionalQuestionsEnabled: boolean;
 }

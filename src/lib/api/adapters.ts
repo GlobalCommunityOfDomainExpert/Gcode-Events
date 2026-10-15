@@ -380,6 +380,66 @@ export function toQuestionsPayload(
     }));
 }
 
+export function toAdvancedQuestionConfiguration(data: EventDetailData) {
+  const toNode = (option: EventDetailData["questions"][number]["options"][number], sortOrder: number): Record<string, unknown> => ({
+    id: option.id,
+    label: option.label,
+    sortOrder,
+    enabled: option.advancedEnabled,
+    required: option.advancedRequired,
+    options: option.advancedOptions.filter((child) => child.label.trim()).map(toNode),
+  });
+  return data.questions.flatMap((q) => q.type === "CHECKBOX" ? q.options.filter((o) => o.id !== null).map((o, sortOrder) => ({
+    questionId: q.id,
+    sourceOptionId: o.id,
+    enabled: o.advancedEnabled && !/^(other|others|other \(please specify\))$/i.test(o.label.trim()),
+    required: o.advancedRequired,
+    allowOther: q.allowOther,
+    options: o.advancedOptions.filter((child) => child.label.trim()).map(toNode),
+    sortOrder,
+  })) : []);
+}
+
+type AdvancedQuestionNode = { id: number | string | null; label: string; settingId?: number | null; advancedEnabled: boolean; advancedRequired: boolean; advancedOptions: AdvancedQuestionNode[] };
+type QuestionWithAdvancedNodes = { id: number | string | null; allowOther: boolean; options: AdvancedQuestionNode[] };
+export function attachAdvancedQuestionConfiguration<T extends QuestionWithAdvancedNodes>(
+  questions: T[], settings: { setting_id: number; question_id: number; source_option_id: number | null; parent_advanced_option_id?: number | null; parent_adv_option_id?: number | null; is_enabled: number; is_required: number; allow_other: number }[],
+  options: { id: number; setting_id: number; option_label: string; sort_order: number }[],
+): T[] {
+  const parentOptionId = (setting: (typeof settings)[number]) =>
+    setting.parent_advanced_option_id ?? setting.parent_adv_option_id ?? null;
+  const attach = (questionId: number, settingId: number, stringIds: boolean): AdvancedQuestionNode[] => options
+    .filter((option) => Number(option.setting_id) === Number(settingId))
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((option) => {
+      const childSetting = settings.find((setting) => Number(setting.question_id) === Number(questionId) && Number(parentOptionId(setting)) === Number(option.id));
+      return {
+        id: stringIds ? String(option.id) : option.id, label: option.option_label,
+        settingId: childSetting?.setting_id,
+        advancedEnabled: Number(childSetting?.is_enabled) === 1,
+        advancedRequired: Number(childSetting?.is_required) === 1,
+        advancedOptions: childSetting ? attach(questionId, childSetting.setting_id, stringIds) : [],
+      };
+    });
+  return questions.map((question) => ({
+    ...question,
+    allowOther: settings.some((setting) => Number(setting.question_id) === Number(question.id) && Number(setting.allow_other) === 1),
+    options: question.options.map((option) => {
+      const stringIds = typeof question.id === "string";
+      const matchingSettings = settings.filter((item) => Number(item.question_id) === Number(question.id) && Number(item.source_option_id) === Number(option.id));
+      const setting = matchingSettings.find((item) => {
+        const parentId = parentOptionId(item);
+        return parentId == null || Number(parentId) === 0;
+      });
+      return setting ? {
+        ...option, settingId: setting.setting_id, advancedEnabled: Number(setting.is_enabled) === 1,
+        advancedRequired: Number(setting.is_required) === 1,
+        advancedOptions: attach(Number(question.id), setting.setting_id, stringIds),
+      } : option;
+    }),
+  } as T));
+}
+
 // GCODE_EVENT_QUESTIONS row (+ nested options) -> UI EventQuestion. See
 // EventQuestionApi.options comment in types.ts for why options needs the
 // defensive string-or-array parse.
@@ -398,7 +458,8 @@ export function adaptEventQuestion(row: EventQuestionApi): EventQuestion {
     options: options
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((o) => ({ id: String(o.id), label: o.label })),
+      .map((o) => ({ id: String(o.id), label: o.label, advancedOptions: [], advancedEnabled: false, advancedRequired: false })),
+    allowOther: false,
   };
 }
 
@@ -508,10 +569,14 @@ export function toEventDraft(
         prompt: q.prompt,
         type: q.type,
         required: q.required,
+        allowOther: q.allowOther,
         appliesTo: q.appliesTo,
-        options: q.options.map((o) => ({ id: Number(o.id), label: o.label })),
+        options: q.options.map((o) => ({ id: Number(o.id), settingId: null, label: o.label,
+          advancedOptions: o.advancedOptions.map((a) => ({ id: Number(a.id), settingId: null, label: a.label, advancedOptions: [], advancedEnabled: false, advancedRequired: false })),
+          advancedEnabled: o.advancedEnabled, advancedRequired: o.advancedRequired })),
       };
     }),
+    advancedAdditionalQuestionsEnabled: false,
   };
 }
 
@@ -813,6 +878,7 @@ export function adaptApiEvent(
     audioRecordingEnabled: detail?.audio_recording_enabled !== 0,
     audioRecordingAppliesTo:
       detail?.audio_recording_applies_to ?? "PARTICIPANT",
+    advancedAdditionalQuestionsEnabled: false,
     questions: questions.map(adaptEventQuestion),
     featured: event.is_featured === 1,
     maxTicketsPerRegistration:

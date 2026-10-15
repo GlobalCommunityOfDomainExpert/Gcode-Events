@@ -18,7 +18,7 @@ import {
   Checkbox,
   Icon,
   Input,
-  SectionLabel,
+  Link,
 } from "@/components/atoms";
 import {
   Banner,
@@ -30,7 +30,12 @@ import {
 } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { registerForEvent } from "@/lib/api/participants";
-import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/api/payments";
+import {
+  createCashfreeOrder,
+  createRazorpayOrder,
+  verifyCashfreeOrder,
+  verifyRazorpayPayment,
+} from "@/lib/api/payments";
 import { validateCoupon } from "@/lib/api/coupons";
 import { submitUpiClaim } from "@/lib/api/upi-claims";
 import { ValidateCouponResponse } from "@/lib/api/types";
@@ -41,10 +46,51 @@ import {
   loadRazorpayCheckout,
   openRazorpayCheckout,
 } from "@/lib/payments/razorpay";
+import {
+  loadCashfreeCheckout,
+  openCashfreeCheckout,
+} from "@/lib/payments/cashfree";
+import { PAYMENT_PROVIDER } from "@/lib/payments/provider";
 import { VerifyEmailModal } from "./_components/verify-email-modal";
 import { RegisterSkeleton } from "./_components/register-skeleton";
 
 type Category = "ATTENDEE" | "PARTICIPANT";
+
+// Cashfree rejects anything that isn't a 10-digit mobile; the backend keeps the
+// last 10 digits, so "+91 98765 43210" is fine as typed.
+function isValidPhone(value: string): boolean {
+  return value.replace(/\D/g, "").length >= 10;
+}
+
+type CashfreeOutcome =
+  | { kind: "paid"; participantId: number }
+  | { kind: "unregistered" }
+  | { kind: "pending" };
+
+// Polls verify (idempotent) because Cashfree can take a moment to flip the
+// order to PAID after checkout reports success.
+async function confirmCashfreeOrder(
+  orderId: string,
+  { attempts }: { attempts: number },
+): Promise<CashfreeOutcome> {
+  for (let i = 0; i < attempts; i++) {
+    const result = await verifyCashfreeOrder(orderId);
+    if (result.status === "PAID" && result.participant_id) {
+      return { kind: "paid", participantId: result.participant_id };
+    }
+    if (result.status === "PAID_UNREGISTERED") return { kind: "unregistered" };
+    if (result.status === "FAILED") break;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1500));
+  }
+  return { kind: "pending" };
+}
+
+const CASHFREE_UNCONFIRMED_MESSAGE =
+  "We're still confirming your payment. If it was deducted, your ticket will be confirmed automatically — check My Events in a few minutes.";
+
+function cashfreeUnregisteredMessage(orderId: string): string {
+  return `Your payment was received but we couldn't complete your registration (for example, the event just sold out). You will be refunded — please contact support and quote reference ${orderId}.`;
+}
 
 // Signed-in users book by user_id (from the JWT) — the backend already has
 // their account, so there's nothing to ask. Guests (no session) go through
@@ -67,6 +113,7 @@ export default function EventRegisterPage() {
   const [quantityInput, setQuantityInput] = useState("1");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   // Tracks which email has actually passed OTP verification — cleared
   // implicitly whenever the typed email no longer matches it, so editing
@@ -108,6 +155,46 @@ export default function EventRegisterPage() {
     quantity: number;
     category: Category;
   } | null>(null);
+
+  // Cashfree sends the customer back here with ?cf_order_id=… when checkout
+  // redirected instead of staying in the modal (some UPI/bank flows). Finish
+  // the registration from there; the backend confirms with Cashfree itself.
+  // No cancellation flag on purpose: React StrictMode runs effect → cleanup →
+  // effect in dev, and the ref guard makes the second run a no-op, so a
+  // cleanup that cancelled the first run's polling would strand it.
+  const returnedOrderId = searchParams.get("cf_order_id");
+  const handledReturn = useRef(false);
+  useEffect(() => {
+    if (!returnedOrderId || handledReturn.current) return;
+    handledReturn.current = true;
+    (async () => {
+      setSubmitting(true);
+      try {
+        const outcome = await confirmCashfreeOrder(returnedOrderId, {
+          attempts: 5,
+        });
+        if (outcome.kind === "paid") {
+          router.replace(
+            `/events/${params.id}/registered?pid=${outcome.participantId}`,
+          );
+          return;
+        }
+        setError(
+          outcome.kind === "unregistered"
+            ? cashfreeUnregisteredMessage(returnedOrderId)
+            : CASHFREE_UNCONFIRMED_MESSAGE,
+        );
+      } catch (err) {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "We couldn't confirm your payment. Please check My Events shortly.",
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    })();
+  }, [returnedOrderId, params.id, router]);
 
   useEffect(() => {
     if (event && !initializedStep.current) {
@@ -215,6 +302,9 @@ export default function EventRegisterPage() {
   }
 
   const isPaid = selected.price > 0;
+  // Cashfree needs a phone for every payer, signed in or not (platform
+  // onboarding doesn't collect one), so the field is asked at registration.
+  const useCashfree = isPaid && PAYMENT_PROVIDER === "cashfree";
   const currentQuantity = clampQuantity(Number(quantityInput));
   const total = selected.price * currentQuantity;
   // A coupon only counts while it's still priced for the current
@@ -291,8 +381,13 @@ export default function EventRegisterPage() {
   // Signed-in -> book by user_id, nothing else needed. Guest -> full name +
   // email + phone, same as always.
   function identityPayload():
-    { user_id: string } | { email: string; full_name: string; phone: string } {
-    if (session) return { user_id: session.userId };
+    | { user_id: string; phone?: string }
+    | { email: string; full_name: string; phone: string } {
+    if (session) {
+      return useCashfree
+        ? { user_id: session.userId, phone: phone.trim() }
+        : { user_id: session.userId };
+    }
     return {
       email: email.trim(),
       full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
@@ -301,15 +396,43 @@ export default function EventRegisterPage() {
   }
 
   function submit() {
-    if (!session && (!firstName.trim() || !email.trim() || !phone.trim())) {
-      setError("Full name, email and phone are required.");
+    const nextFieldErrors: Record<string, string> = {};
+    if (!session) {
+      if (!firstName.trim())
+        nextFieldErrors["first-name"] = "First name is required.";
+      if (!lastName.trim())
+        nextFieldErrors["last-name"] = "Last name is required.";
+      if (!email.trim()) nextFieldErrors.email = "Email address is required.";
+      if (!phone.trim()) nextFieldErrors.phone = "Phone number is required.";
+    }
+    if (useCashfree && !nextFieldErrors.phone && !isValidPhone(phone)) {
+      nextFieldErrors.phone = phone.trim()
+        ? "Enter a valid 10-digit phone number."
+        : "Phone number is required.";
+    }
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      setError("");
+      const firstInvalidId = Object.keys(nextFieldErrors)[0];
+      if (window.matchMedia("(max-width: 767px)").matches) {
+        window.setTimeout(() => {
+          const input = document.getElementById(firstInvalidId);
+          input?.scrollIntoView({ behavior: "smooth", block: "center" });
+          input?.focus({ preventScroll: true });
+        }, 0);
+      }
       return;
     }
+    setFieldErrors({});
     if (!agreedToTerms) {
       setError("Please accept the Code of Conduct.");
       return;
     }
-    if (!session && email.trim() !== verifiedEmail) {
+    if (
+      !session &&
+      event?.id !== "422" &&
+      email.trim() !== verifiedEmail
+    ) {
       setError("");
       setShowVerifyModal(true);
       return;
@@ -322,7 +445,9 @@ export default function EventRegisterPage() {
     setSubmitting(true);
     setError("");
     try {
-      if (isPaid) {
+      if (useCashfree) {
+        await payWithCashfree(quantity);
+      } else if (isPaid) {
         await payWithRazorpay(quantity);
       } else {
         const { participant_id } = await registerForEvent(params.id, {
@@ -404,6 +529,50 @@ export default function EventRegisterPage() {
     });
   }
 
+  // Same shape as payWithRazorpay, but nothing the browser reports is trusted:
+  // once checkout closes we ask the backend, which asks Cashfree, whether the
+  // order is really paid. A closed tab is covered by the backend webhook.
+  async function payWithCashfree(quantity: number) {
+    const order = await createCashfreeOrder(params.id, {
+      ...identityPayload(),
+      quantity,
+      category,
+      coupon_code: effectiveCoupon ? couponCode.trim() : undefined,
+    });
+
+    if ("free" in order) {
+      router.push(`/events/${params.id}/registered?pid=${order.participant_id}`);
+      return;
+    }
+
+    await loadCashfreeCheckout();
+    const result = await openCashfreeCheckout(order.payment_session_id);
+    // Checkout redirected away (some UPI/bank flows) — the ?cf_order_id return
+    // handler finishes the job when the customer comes back.
+    if (result.redirect) return;
+
+    // The modal reported success: give Cashfree a few seconds to settle. If it
+    // reported an error/dismissal, one check is enough (a payment can still
+    // have gone through, which this catches).
+    const outcome = await confirmCashfreeOrder(order.order_id, {
+      attempts: result.paymentDetails ? 5 : 1,
+    });
+    if (outcome.kind === "paid") {
+      router.push(`/events/${params.id}/registered?pid=${outcome.participantId}`);
+      return;
+    }
+    setSubmitting(false);
+    if (outcome.kind === "unregistered") {
+      setError(cashfreeUnregisteredMessage(order.order_id));
+    } else if (result.paymentDetails) {
+      setError(CASHFREE_UNCONFIRMED_MESSAGE);
+    } else {
+      setError(
+        "Payment was not completed. You have not been charged — please try again.",
+      );
+    }
+  }
+
   if (
     step === "select" &&
     event.attendeeRegistration.enabled &&
@@ -417,9 +586,19 @@ export default function EventRegisterPage() {
       <div className="mx-auto max-w-xl space-y-4">
         {breadcrumbRow}
         <div>
-          <h1 className="text-large text-text-primary font-bold">
-            How would you like to join?
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-large text-text-primary min-w-0 font-bold">
+              How would you like to join?
+            </h1>
+            <Link
+              href={`/events/${event.id}?from=register&category=${category}`}
+              variant="primary"
+              size="sm"
+              className="shrink-0 text-primary"
+            >
+              View More...
+            </Link>
+          </div>
           <p className="text-small text-text-secondary">
             Select your primary pass type below.
           </p>
@@ -463,9 +642,19 @@ export default function EventRegisterPage() {
     <div className="mx-auto max-w-5xl space-y-4">
       {breadcrumbRow}
       <div>
-        <h1 className="text-large text-text-primary font-bold">
-          Register for {event.title}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-large text-text-primary min-w-0 font-bold">
+            Register for {event.title}
+          </h1>
+          <Link
+            href={`/events/${event.id}?from=register&category=${category}`}
+            variant="primary"
+            size="sm"
+            className="shrink-0 text-primary"
+          >
+            View More...
+          </Link>
+        </div>
         <p className="text-small text-text-secondary">
           {event.date} · {event.time} · {event.location}
         </p>
@@ -485,52 +674,121 @@ export default function EventRegisterPage() {
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="space-y-4">
             <Card padding="md" className="space-y-4">
-              <SectionLabel>{selected.label} Information</SectionLabel>
               {session ? (
-                <p className="text-body text-text-primary">
-                  Registering as{" "}
-                  <span className="font-semibold">{session.fullName}</span>
-                </p>
-              ) : (
                 <>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="First Name" htmlFor="first-name">
-                      <Input
-                        id="first-name"
-                        icon={User}
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder="First name"
-                      />
-                    </FormField>
-                    <FormField label="Last Name" htmlFor="last-name">
-                      <Input
-                        id="last-name"
-                        icon={User}
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        placeholder="Last name"
-                      />
-                    </FormField>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField label="Email Address" htmlFor="email">
-                      <Input
-                        id="email"
-                        type="email"
-                        icon={Mail}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                      />
-                    </FormField>
-                    <FormField label="Phone Number" htmlFor="phone">
+                  <p className="text-body text-text-primary">
+                    Registering as{" "}
+                    <span className="font-semibold">{session.fullName}</span>
+                  </p>
+                  {useCashfree && (
+                    <FormField
+                      label="Phone Number"
+                      htmlFor="phone"
+                      required
+                      error={fieldErrors.phone}
+                    >
                       <Input
                         id="phone"
                         type="tel"
                         icon={Phone}
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        error={!!fieldErrors.phone}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({ ...prev, phone: "" }));
+                        }}
+                        placeholder="9876543210"
+                      />
+                    </FormField>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      label="First Name"
+                      htmlFor="first-name"
+                      required
+                      error={fieldErrors["first-name"]}
+                    >
+                      <Input
+                        id="first-name"
+                        icon={User}
+                        value={firstName}
+                        error={!!fieldErrors["first-name"]}
+                        onChange={(e) => {
+                          setFirstName(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              "first-name": "",
+                            }));
+                        }}
+                        placeholder="First name"
+                      />
+                    </FormField>
+                    <FormField
+                      label="Last Name"
+                      htmlFor="last-name"
+                      required
+                      error={fieldErrors["last-name"]}
+                    >
+                      <Input
+                        id="last-name"
+                        icon={User}
+                        value={lastName}
+                        error={!!fieldErrors["last-name"]}
+                        onChange={(e) => {
+                          setLastName(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({
+                              ...prev,
+                              "last-name": "",
+                            }));
+                        }}
+                        placeholder="Last name"
+                      />
+                    </FormField>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      label="Email Address"
+                      htmlFor="email"
+                      required
+                      error={fieldErrors.email}
+                    >
+                      <Input
+                        id="email"
+                        type="email"
+                        icon={Mail}
+                        value={email}
+                        error={!!fieldErrors.email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({ ...prev, email: "" }));
+                        }}
+                        placeholder="you@example.com"
+                      />
+                    </FormField>
+                    <FormField
+                      label="Phone Number"
+                      htmlFor="phone"
+                      required
+                      error={fieldErrors.phone}
+                    >
+                      <Input
+                        id="phone"
+                        type="tel"
+                        icon={Phone}
+                        value={phone}
+                        error={!!fieldErrors.phone}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (e.target.value.trim())
+                            setFieldErrors((prev) => ({ ...prev, phone: "" }));
+                        }}
                         placeholder="9876543210"
                       />
                     </FormField>
@@ -719,7 +977,6 @@ export default function EventRegisterPage() {
         </div>
       )}
 
-      {!session && (
         <VerifyEmailModal
           open={showVerifyModal}
           email={email.trim()}
@@ -727,7 +984,6 @@ export default function EventRegisterPage() {
           onClose={() => setShowVerifyModal(false)}
           onVerified={handleEmailVerified}
         />
-      )}
     </div>
   );
 }

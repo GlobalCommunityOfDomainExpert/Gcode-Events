@@ -155,9 +155,8 @@ export function UpiClaimsTab({ eventId }: UpiClaimsTabProps) {
         <p className="text-body text-text-secondary">
           Attendees who paid via the offline UPI QR at the venue self-report
           their transaction reference (UTR) here. Confirming a claim
-          registers them for free — check the UTR against your own bank or
-          Razorpay settlement first, this system can&apos;t verify it for
-          you.
+          registers them for free — check the UTR against your own bank
+          statement first, this system can&apos;t verify it for you.
         </p>
       </div>
 

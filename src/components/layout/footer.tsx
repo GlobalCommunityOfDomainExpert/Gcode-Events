@@ -126,16 +126,14 @@ export function Footer() {
             />
             <FooterLinkGroup
               title="Company"
-              links={[
-                { label: "About Us", href: "#" },
-                { label: "Contact Us", href: "#" },
-              ]}
+              links={[{ label: "Contact Us", href: "/contact-us" }]}
             />
             <FooterLinkGroup
               title="Legal"
               links={[
-                { label: "Terms & Conditions", href: "#" },
-                { label: "Refund Policy", href: "#" },
+                { label: "Terms & Conditions", href: "/terms-and-conditions" },
+                { label: "Privacy Policy", href: "/privacy-policy" },
+                { label: "Refund Policy", href: "/refund-policy" },
               ]}
             />
           </div>

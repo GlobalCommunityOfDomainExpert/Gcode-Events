@@ -8,14 +8,24 @@ import { Modal } from "@/components/molecules";
 interface ShareEventCardProps {
   url: string;
   title: string;
+  tellMeMoreButton?: ReactNode;
   // Rendered next to the Share button — the event page passes the
-  // "I'm Interested" heart icon button here so the two sit side by side.
+  // event enquiry and "I'm Interested" buttons here so the actions stay together.
   interestButton?: ReactNode;
+}
+
+// WhatsApp/Facebook/LinkedIn cache link previews per exact URL, so a stale
+// scrape sticks for weeks. A fresh ?v= on every share forces a re-scrape.
+function withShareVersion(url: string): string {
+  const u = new URL(url, window.location.origin);
+  u.searchParams.set("v", Math.random().toString(36).slice(2, 8));
+  return u.toString();
 }
 
 export function ShareEventCard({
   url,
   title,
+  tellMeMoreButton,
   interestButton,
 }: ShareEventCardProps) {
   const [open, setOpen] = useState(false);
@@ -25,7 +35,7 @@ export function ShareEventCard({
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(withShareVersion(url));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -35,7 +45,7 @@ export function ShareEventCard({
 
   async function handleNativeShare() {
     try {
-      await navigator.share({ title, url });
+      await navigator.share({ title, url: withShareVersion(url) });
     } catch {
       // user cancelled or unsupported — no-op
     }
@@ -54,6 +64,7 @@ export function ShareEventCard({
             <Icon icon={Share2} size="sm" />
             Share
           </Button>
+          {tellMeMoreButton}
           {interestButton}
         </div>
       </Card>
@@ -75,7 +86,7 @@ export function ShareEventCard({
               size="sm"
               onClick={() =>
                 openShareWindow(
-                  `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(url)}`,
+                  `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(withShareVersion(url))}`,
                 )
               }
             >
@@ -87,7 +98,7 @@ export function ShareEventCard({
               size="sm"
               onClick={() =>
                 openShareWindow(
-                  `https://wa.me/?text=${encodeURIComponent(`${title} ${url}`)}`,
+                  `https://wa.me/?text=${encodeURIComponent(`${title} ${withShareVersion(url)}`)}`,
                 )
               }
             >
@@ -99,7 +110,7 @@ export function ShareEventCard({
               size="sm"
               onClick={() =>
                 openShareWindow(
-                  `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+                  `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(withShareVersion(url))}`,
                 )
               }
             >
@@ -110,7 +121,7 @@ export function ShareEventCard({
               size="sm"
               onClick={() =>
                 openShareWindow(
-                  `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+                  `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(withShareVersion(url))}`,
                 )
               }
             >
@@ -121,7 +132,7 @@ export function ShareEventCard({
               size="sm"
               onClick={() =>
                 openShareWindow(
-                  `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
+                  `https://twitter.com/intent/tweet?url=${encodeURIComponent(withShareVersion(url))}&text=${encodeURIComponent(title)}`,
                 )
               }
             >
@@ -132,7 +143,7 @@ export function ShareEventCard({
               size="sm"
               onClick={() =>
                 openShareWindow(
-                  `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
+                  `https://www.reddit.com/submit?url=${encodeURIComponent(withShareVersion(url))}&title=${encodeURIComponent(title)}`,
                 )
               }
             >

@@ -5,6 +5,9 @@ import {
   getEvent,
   listEventTimeline,
   listEventQuestions,
+  getEventAdvancedEnabled,
+  listAdvancedOptionSettings,
+  listAdvancedOptions,
 } from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
 import { getEventTypes, getModes, getStatuses } from "@/lib/api/lookups";
@@ -13,6 +16,7 @@ import {
   adaptTimelineItem,
   adaptEventRound,
   formatDuration,
+  attachAdvancedQuestionConfiguration,
 } from "@/lib/api/adapters";
 import { Event } from "@/lib/event";
 
@@ -42,6 +46,19 @@ export function useEvent(id: string | undefined) {
             getModes(),
             getStatuses(),
           ]);
+        let advancedEnabled = false;
+        let optionSettings: Awaited<ReturnType<typeof listAdvancedOptionSettings>> = [];
+        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> = [];
+        try {
+          advancedEnabled = await getEventAdvancedEnabled(id);
+          if (advancedEnabled) {
+            [optionSettings, advancedOptions] = await Promise.all([
+              listAdvancedOptionSettings(id), listAdvancedOptions(id),
+            ]);
+          }
+        } catch {
+          advancedEnabled = false;
+        }
         const typeNames = Object.fromEntries(types.map((t) => [t.id, t.name]));
         const modeNames = Object.fromEntries(
           modes.map((m) => [m.id, m.mode_name]),
@@ -72,8 +89,11 @@ export function useEvent(id: string | undefined) {
             );
           }
         }
+        const enrichedQuestions = attachAdvancedQuestionConfiguration(adapted.questions, optionSettings, advancedOptions);
         setEvent({
           ...adapted,
+          advancedAdditionalQuestionsEnabled: advancedEnabled,
+          questions: enrichedQuestions,
           timeline: timeline.map(adaptTimelineItem),
           rounds: rounds.map(adaptEventRound),
           duration,

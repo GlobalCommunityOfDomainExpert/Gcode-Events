@@ -8,11 +8,12 @@ export interface CheckboxProps extends Omit<
 > {
   label?: string;
   indeterminate?: boolean;
+  error?: boolean;
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   (
-    { label, indeterminate = false, className = "", id, ...props },
+    { label, indeterminate = false, error = false, className = "", id, ...props },
     forwardedRef,
   ) => {
     const internalRef = useRef<HTMLInputElement>(null);
@@ -31,12 +32,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
         <input
           id={id}
           type="checkbox"
+          aria-invalid={error || undefined}
           ref={(node) => {
             internalRef.current = node;
             if (typeof forwardedRef === "function") forwardedRef(node);
             else if (forwardedRef) forwardedRef.current = node;
           }}
-          className={`border-border-light accent-primary focus-visible:ring-primary mt-0.5 size-5 shrink-0 rounded-sm border focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed ${className}`}
+          className={`${error ? "border-danger focus-visible:ring-danger " : "border-border-light focus-visible:ring-primary "}accent-primary mt-0.5 size-5 shrink-0 rounded-sm border focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed ${className}`}
           {...props}
         />
         {label && <span className="min-w-0">{label}</span>}
