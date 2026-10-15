@@ -20,13 +20,14 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
+  cache?: RequestCache;
 }
 
 // ORDS returns HTTP 200 with `{ error: "..." }` for not-found/invalid requests
 // rather than a 4xx status, so both must be checked.
 export async function apiRequest<T>(
   path: string,
-  { method = "GET", body, query }: RequestOptions = {},
+  { method = "GET", body, query, cache }: RequestOptions = {},
 ): Promise<T> {
   const url = new URL(`${API_BASE_URL}${path}`);
   if (query) {
@@ -47,6 +48,7 @@ export async function apiRequest<T>(
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    cache,
   });
 
   const data = await res.json().catch(() => null);

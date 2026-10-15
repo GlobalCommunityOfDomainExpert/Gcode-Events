@@ -25,11 +25,15 @@ import {
   replaceEventMedia,
   replaceEventTimeline,
   replaceEventQuestions,
+  setEventAdvancedEnabled,
+  saveAdvancedQuestionConfiguration,
+  listEventQuestions,
   uploadCoverImage,
   assignCategory,
   removeCategory,
 } from "@/lib/api/events";
 import { replaceEventRounds } from "@/lib/api/rounds";
+import { listParticipants } from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
 import { getStatuses } from "@/lib/api/lookups";
 import {
@@ -37,6 +41,7 @@ import {
   toTimelinePayload,
   toRoundsPayload,
   toQuestionsPayload,
+  toAdvancedQuestionConfiguration,
 } from "@/lib/api/adapters";
 
 const stepLabels = [
@@ -155,8 +160,39 @@ export function EventWizard({ mode, eventId, initialData }: EventWizardProps) {
     const rounds = toRoundsPayload(data);
     await replaceEventRounds(id, rounds);
 
-    const questions = toQuestionsPayload(data);
-    await replaceEventQuestions(id, questions);
+    // The existing /questions route deletes and recreates every question.
+    // Avoid calling it for unrelated event edits; handleUpdate blocks actual
+    // question changes when registrations exist.
+    const questionsChanged = !initialData || JSON.stringify(toQuestionsPayload(initialData)) !== JSON.stringify(toQuestionsPayload(data));
+    if (questionsChanged) await replaceEventQuestions(id, toQuestionsPayload(data));
+    const wasAdvanced = initialData?.advancedAdditionalQuestionsEnabled ?? false;
+    if (data.advancedAdditionalQuestionsEnabled || wasAdvanced) {
+      if (data.advancedAdditionalQuestionsEnabled && !wasAdvanced) await setEventAdvancedEnabled(id, true);
+      const savedQuestions = await listEventQuestions(id);
+      const resetAdvancedIds = (option: EventDetailData["questions"][number]["options"][number]): EventDetailData["questions"][number]["options"][number] => ({
+        ...option,
+        id: questionsChanged ? null : option.id,
+        advancedOptions: option.advancedOptions.map(resetAdvancedIds),
+      });
+      const configured = data.questions.filter((q) => q.prompt.trim()).map((q, qi) => {
+        const saved = savedQuestions[qi];
+        const opts = typeof saved?.options === "string" ? JSON.parse(saved.options) : (saved?.options ?? []);
+        return {
+          ...q,
+          id: saved?.id ?? q.id,
+          options: q.options.filter((o) => o.label.trim()).map((o, oi) => ({
+            ...o,
+            id: opts[oi]?.id ?? o.id,
+            // The legacy save route recreates base option IDs, so new
+            // advanced choices must be attached to those freshly saved IDs.
+            advancedOptions: o.advancedOptions.map(resetAdvancedIds),
+          })),
+        };
+      });
+      const configuredData = { ...data, questions: configured };
+      await saveAdvancedQuestionConfiguration(id, toAdvancedQuestionConfiguration(configuredData));
+      if (!data.advancedAdditionalQuestionsEnabled) await setEventAdvancedEnabled(id, false);
+    }
 
     // Cover image: recover the bytes from the blob: preview URL and upload.
     if (data.coverImageUrl.startsWith("blob:")) {
@@ -203,6 +239,16 @@ export function EventWizard({ mode, eventId, initialData }: EventWizardProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const questionsChanged = initialData && JSON.stringify(toQuestionsPayload(initialData)) !== JSON.stringify(toQuestionsPayload(data));
+      const usesAdvancedQuestions = Boolean(
+        data.advancedAdditionalQuestionsEnabled || initialData?.advancedAdditionalQuestionsEnabled,
+      );
+      if (questionsChanged && usesAdvancedQuestions) {
+        const participants = await listParticipants(eventId);
+        if (participants.length > 0) {
+          throw new Error("This event already has registrations, so its additional questions cannot be changed safely. Revert the question edits to save the other event changes.");
+        }
+      }
       await updateEvent(eventId, {
         ...toCreatePayload(data),
         status_id: statusId,

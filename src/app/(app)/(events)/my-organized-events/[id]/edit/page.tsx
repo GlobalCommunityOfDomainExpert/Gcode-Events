@@ -8,9 +8,12 @@ import {
   getEvent,
   listEventTimeline,
   listEventQuestions,
+  getEventAdvancedEnabled,
+  listAdvancedOptionSettings,
+  listAdvancedOptions,
 } from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
-import { toEventDraft } from "@/lib/api/adapters";
+import { toEventDraft, attachAdvancedQuestionConfiguration } from "@/lib/api/adapters";
 import { EventWizard } from "@/app/(app)/(events)/my-organized-events/_components/event-wizard";
 import { EventDetailData } from "@/lib/zod/event";
 
@@ -26,14 +29,20 @@ export default function EditOrganizedEventPage() {
     void (async () => {
       setStatus("loading");
       try {
-        const [detail, timeline, rounds, questions] = await Promise.all([
+        const [detail, timeline, rounds, questions, advancedEnabled, optionSettings, advancedOptions] = await Promise.all([
           getEvent(params.id),
           listEventTimeline(params.id),
           listEventRounds(params.id),
           listEventQuestions(params.id),
+          getEventAdvancedEnabled(params.id).catch(() => false),
+          listAdvancedOptionSettings(params.id).catch(() => []),
+          listAdvancedOptions(params.id).catch(() => []),
         ]);
         if (cancelled) return;
-        setDraft(toEventDraft(detail, timeline, rounds, questions));
+        const draft = toEventDraft(detail, timeline, rounds, questions);
+        draft.advancedAdditionalQuestionsEnabled = advancedEnabled;
+        draft.questions = attachAdvancedQuestionConfiguration(draft.questions, optionSettings, advancedOptions);
+        setDraft(draft);
         setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
