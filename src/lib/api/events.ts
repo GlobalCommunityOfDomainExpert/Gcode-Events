@@ -175,14 +175,32 @@ export function setEventAdvancedEnabled(id: number | string, enabled: boolean) {
 }
 
 export async function listAdvancedOptionSettings(id: number | string) {
-  // Settings are a small collection (one per configured source option), and
-  // this endpoint has worked with ORDS's default page. Keep it out of the
-  // custom pagination loop used for the larger options collection.
-  const { items } = await apiRequest<ApiListResponse<AdvancedOptionSettingApi>>(
-    `/events/${id}/advanced-question-tree-settings`,
-    { cache: "no-store" },
-  );
-  return items;
+  // ORDS paginates this query endpoint too. If only the first page is read,
+  // settings for later categories are missing and their follow-ups won't be
+  // attached to the event question tree.
+  const path = `/events/${id}/advanced-question-tree-settings`;
+  const items: AdvancedOptionSettingApi[] = [];
+  let pageNumber: number | undefined;
+
+  while (true) {
+    const page = await apiRequest<{
+      items: AdvancedOptionSettingApi[];
+      next?: { $ref: string };
+    }>(path, {
+      query: pageNumber === undefined ? undefined : { page: pageNumber },
+      cache: "no-store",
+    });
+    items.push(...page.items);
+
+    if (!page.next?.$ref) return items;
+
+    const nextPage = new URL(page.next.$ref, API_BASE_URL).searchParams.get("page");
+    const parsedPageNumber = nextPage === null ? NaN : Number(nextPage);
+    if (!Number.isInteger(parsedPageNumber) || parsedPageNumber <= (pageNumber ?? 0)) {
+      throw new Error("Advanced question settings returned an invalid ORDS next-page link.");
+    }
+    pageNumber = parsedPageNumber;
+  }
 }
 
 export function listAdvancedOptions(id: number | string) {
