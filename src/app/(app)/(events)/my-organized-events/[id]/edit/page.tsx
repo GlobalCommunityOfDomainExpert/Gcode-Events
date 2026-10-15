@@ -29,15 +29,21 @@ export default function EditOrganizedEventPage() {
     void (async () => {
       setStatus("loading");
       try {
-        const [detail, timeline, rounds, questions, advancedEnabled, optionSettings, advancedOptions] = await Promise.all([
+        const [detail, timeline, rounds, questions, advancedEnabled] = await Promise.all([
           getEvent(params.id),
           listEventTimeline(params.id),
           listEventRounds(params.id),
           listEventQuestions(params.id),
           getEventAdvancedEnabled(params.id).catch(() => false),
-          listAdvancedOptionSettings(params.id).catch(() => []),
-          listAdvancedOptions(params.id).catch(() => []),
         ]);
+        let optionSettings: Awaited<ReturnType<typeof listAdvancedOptionSettings>> = [];
+        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> = [];
+        if (advancedEnabled) {
+          [optionSettings, advancedOptions] = await Promise.all([
+            listAdvancedOptionSettings(params.id),
+            listAdvancedOptions(params.id),
+          ]);
+        }
         if (cancelled) return;
         const draft = toEventDraft(detail, timeline, rounds, questions);
         draft.advancedAdditionalQuestionsEnabled = advancedEnabled;

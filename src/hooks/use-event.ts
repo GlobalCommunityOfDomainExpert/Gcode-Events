@@ -49,15 +49,11 @@ export function useEvent(id: string | undefined) {
         let advancedEnabled = false;
         let optionSettings: Awaited<ReturnType<typeof listAdvancedOptionSettings>> = [];
         let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> = [];
-        try {
-          advancedEnabled = await getEventAdvancedEnabled(id);
-          if (advancedEnabled) {
-            [optionSettings, advancedOptions] = await Promise.all([
-              listAdvancedOptionSettings(id), listAdvancedOptions(id),
-            ]);
-          }
-        } catch {
-          advancedEnabled = false;
+        advancedEnabled = await getEventAdvancedEnabled(id).catch(() => false);
+        if (advancedEnabled) {
+          [optionSettings, advancedOptions] = await Promise.all([
+            listAdvancedOptionSettings(id), listAdvancedOptions(id),
+          ]);
         }
         const typeNames = Object.fromEntries(types.map((t) => [t.id, t.name]));
         const modeNames = Object.fromEntries(
