@@ -33,7 +33,6 @@ import {
   removeCategory,
 } from "@/lib/api/events";
 import { replaceEventRounds } from "@/lib/api/rounds";
-import { listParticipants } from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
 import { getStatuses } from "@/lib/api/lookups";
 import {
@@ -239,16 +238,6 @@ export function EventWizard({ mode, eventId, initialData }: EventWizardProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const questionsChanged = initialData && JSON.stringify(toQuestionsPayload(initialData)) !== JSON.stringify(toQuestionsPayload(data));
-      const usesAdvancedQuestions = Boolean(
-        data.advancedAdditionalQuestionsEnabled || initialData?.advancedAdditionalQuestionsEnabled,
-      );
-      if (questionsChanged && usesAdvancedQuestions) {
-        const participants = await listParticipants(eventId);
-        if (participants.length > 0) {
-          throw new Error("This event already has registrations, so its additional questions cannot be changed safely. Revert the question edits to save the other event changes.");
-        }
-      }
       await updateEvent(eventId, {
         ...toCreatePayload(data),
         status_id: statusId,
