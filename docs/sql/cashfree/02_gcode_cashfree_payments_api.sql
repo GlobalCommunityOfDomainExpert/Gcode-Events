@@ -23,8 +23,8 @@
 -- Config/secret rows read from GCODE_APP_SECRETS:
 --   CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_BASE_URL, CASHFREE_API_VERSION   (required)
 --   CASHFREE_NOTIFY_URL, CASHFREE_RETURN_BASE_URL, CASHFREE_ORDER_EXPIRY_MINUTES    (optional)
---   CASHFREE_ENV = 'PRODUCTION' switches all of the above to their CASHFREE_PROD_* twins
---   (CASHFREE_PROD_APP_ID, CASHFREE_PROD_SECRET_KEY, ...). Absent or anything else = sandbox rows.
+--   Stored as TEST_CASHFREE_<X> (test) and CASHFREE_PROD_<X> (live), chosen by the CASHFREE_ENV row:
+--   'PRODUCTION' = live rows; absent or anything else = TEST_ rows.
 
 CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
 
@@ -99,15 +99,17 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     WHEN NO_DATA_FOUND THEN RETURN NULL;
   END read_row;
 
-  -- CASHFREE_ENV = 'PRODUCTION' makes every CASHFREE_<X> lookup read CASHFREE_PROD_<X>
-  -- instead. Any other value (or no row) keeps the sandbox rows CASHFREE_<X>.
+  -- Row names per environment. CASHFREE_ENV = 'PRODUCTION' reads CASHFREE_PROD_<X>; anything else
+  -- (including no CASHFREE_ENV row) reads TEST_CASHFREE_<X>, so a missing switch can never hit live.
   FUNCTION resolve_name(p_name VARCHAR2) RETURN VARCHAR2 IS
   BEGIN
-    IF UPPER(NVL(read_row('CASHFREE_ENV'), 'SANDBOX')) = 'PRODUCTION'
-       AND p_name LIKE 'CASHFREE\_%' ESCAPE '\' THEN
+    IF p_name NOT LIKE 'CASHFREE\_%' ESCAPE '\' THEN
+      RETURN p_name;
+    END IF;
+    IF UPPER(NVL(read_row('CASHFREE_ENV'), 'TEST')) = 'PRODUCTION' THEN
       RETURN 'CASHFREE_PROD_' || SUBSTR(p_name, LENGTH('CASHFREE_') + 1);
     END IF;
-    RETURN p_name;
+    RETURN 'TEST_' || p_name;
   END resolve_name;
 
   FUNCTION get_secret(p_name VARCHAR2) RETURN VARCHAR2 IS

@@ -1,8 +1,8 @@
 -- Production Cashfree config rows for GCODE_APP_SECRETS.
 -- Run in SQL Commands on the database that serves production. Replace every <...> yourself;
--- never commit real keys. Needs the updated 02_gcode_cashfree_payments_api.sql (CASHFREE_ENV support).
+-- never commit real keys. Needs the updated 02_gcode_cashfree_payments_api.sql (TEST_/CASHFREE_PROD_ lookup).
 --
--- Sandbox rows (CASHFREE_*) stay untouched; production lives beside them as CASHFREE_PROD_*.
+-- Test rows are TEST_CASHFREE_*; production lives beside them as CASHFREE_PROD_*.
 
 INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_APP_ID',               '<live app id>');
 INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_SECRET_KEY',           '<live secret key>');
@@ -21,4 +21,4 @@ SELECT secret_name FROM GCODE_APP_SECRETS WHERE secret_name LIKE 'CASHFREE\_PROD
 INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_ENV', 'PRODUCTION');
 COMMIT;
 -- Roll back to sandbox instantly (no redeploy):
--- UPDATE GCODE_APP_SECRETS SET secret_value = 'SANDBOX' WHERE secret_name = 'CASHFREE_ENV'; COMMIT;
+-- UPDATE GCODE_APP_SECRETS SET secret_value = 'TEST' WHERE secret_name = 'CASHFREE_ENV'; COMMIT;
