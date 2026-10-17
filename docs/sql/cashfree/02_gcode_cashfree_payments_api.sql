@@ -23,6 +23,8 @@
 -- Config/secret rows read from GCODE_APP_SECRETS:
 --   CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_BASE_URL, CASHFREE_API_VERSION   (required)
 --   CASHFREE_NOTIFY_URL, CASHFREE_RETURN_BASE_URL, CASHFREE_ORDER_EXPIRY_MINUTES    (optional)
+--   CASHFREE_ENV = 'PRODUCTION' switches all of the above to their CASHFREE_PROD_* twins
+--   (CASHFREE_PROD_APP_ID, CASHFREE_PROD_SECRET_KEY, ...). Absent or anything else = sandbox rows.
 
 CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
 
@@ -87,23 +89,41 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
   ---------------------------------------------------------------------------
   -- Config / secrets
   ---------------------------------------------------------------------------
-  FUNCTION get_secret(p_name VARCHAR2) RETURN VARCHAR2 IS
-    v_val GCODE_APP_SECRETS.secret_value%TYPE;
-  BEGIN
-    SELECT secret_value INTO v_val FROM GCODE_APP_SECRETS WHERE secret_name = p_name;
-    RETURN v_val;
-  EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-      RAISE_APPLICATION_ERROR(-20030, 'Missing config row ' || p_name || ' in GCODE_APP_SECRETS.');
-  END get_secret;
-
-  FUNCTION get_optional(p_name VARCHAR2) RETURN VARCHAR2 IS
+  -- Raw single-row lookup; NULL when the row is absent.
+  FUNCTION read_row(p_name VARCHAR2) RETURN VARCHAR2 IS
     v_val GCODE_APP_SECRETS.secret_value%TYPE;
   BEGIN
     SELECT secret_value INTO v_val FROM GCODE_APP_SECRETS WHERE secret_name = p_name;
     RETURN v_val;
   EXCEPTION
     WHEN NO_DATA_FOUND THEN RETURN NULL;
+  END read_row;
+
+  -- CASHFREE_ENV = 'PRODUCTION' makes every CASHFREE_<X> lookup read CASHFREE_PROD_<X>
+  -- instead. Any other value (or no row) keeps the sandbox rows CASHFREE_<X>.
+  FUNCTION resolve_name(p_name VARCHAR2) RETURN VARCHAR2 IS
+  BEGIN
+    IF UPPER(NVL(read_row('CASHFREE_ENV'), 'SANDBOX')) = 'PRODUCTION'
+       AND p_name LIKE 'CASHFREE\_%' ESCAPE '\' THEN
+      RETURN 'CASHFREE_PROD_' || SUBSTR(p_name, LENGTH('CASHFREE_') + 1);
+    END IF;
+    RETURN p_name;
+  END resolve_name;
+
+  FUNCTION get_secret(p_name VARCHAR2) RETURN VARCHAR2 IS
+    v_name VARCHAR2(128) := resolve_name(p_name);
+    v_val  GCODE_APP_SECRETS.secret_value%TYPE;
+  BEGIN
+    SELECT secret_value INTO v_val FROM GCODE_APP_SECRETS WHERE secret_name = v_name;
+    RETURN v_val;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20030, 'Missing config row ' || v_name || ' in GCODE_APP_SECRETS.');
+  END get_secret;
+
+  FUNCTION get_optional(p_name VARCHAR2) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN read_row(resolve_name(p_name));
   END get_optional;
 
   FUNCTION expiry_minutes RETURN PLS_INTEGER IS

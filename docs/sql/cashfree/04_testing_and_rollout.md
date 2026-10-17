@@ -72,11 +72,15 @@ SELECT * FROM V_GCODE_PAYMENT_CF_NEEDS_ACTION;   -- paid but no ticket: refund t
   it means WhatsApp thank-you messages sent after registration are failing silently.
 
 ## Going to production
-Nothing in code changes. In the **production** database and Cashfree **production** account:
+Production values live in `GCODE_APP_SECRETS` as `CASHFREE_PROD_*` rows beside the sandbox ones, selected by
+the `CASHFREE_ENV` row (`PRODUCTION` / `SANDBOX`). See `05_production_secrets.sql`. The package must be
+recompiled with the `CASHFREE_ENV` support first.
+
+In the database and Cashfree **production** account:
 
 | What | Sandbox | Production |
 |---|---|---|
-| `CASHFREE_BASE_URL` | `https://sandbox.cashfree.com/pg` | `https://api.cashfree.com/pg` |
+| `CASHFREE_BASE_URL` (prod: `CASHFREE_PROD_BASE_URL`) | `https://sandbox.cashfree.com/pg` | `https://api.cashfree.com/pg` |
 | `CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY` | test keys | live keys (never in the frontend) |
 | `CASHFREE_API_VERSION` | `2025-01-01` | same (upgrade deliberately and re-run the matrix) |
 | `CASHFREE_NOTIFY_URL` | dev ORDS webhook URL | **production** ORDS webhook URL, HTTPS only |
