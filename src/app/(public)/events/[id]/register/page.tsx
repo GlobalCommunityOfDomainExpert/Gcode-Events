@@ -47,7 +47,6 @@ import {
   openRazorpayCheckout,
 } from "@/lib/payments/razorpay";
 import {
-  CASHFREE_ENV_OVERRIDE,
   loadCashfreeCheckout,
   openCashfreeCheckout,
 } from "@/lib/payments/cashfree";
@@ -539,7 +538,6 @@ export default function EventRegisterPage() {
       quantity,
       category,
       coupon_code: effectiveCoupon ? couponCode.trim() : undefined,
-      env: CASHFREE_ENV_OVERRIDE,
     });
 
     if ("free" in order) {

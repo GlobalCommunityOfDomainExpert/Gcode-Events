@@ -23,7 +23,8 @@
 -- Config/secret rows read from GCODE_APP_SECRETS:
 --   CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_BASE_URL, CASHFREE_API_VERSION   (required)
 --   CASHFREE_NOTIFY_URL, CASHFREE_RETURN_BASE_URL, CASHFREE_ORDER_EXPIRY_MINUTES    (optional)
---   Environment is chosen per order (p_env, sent by the frontend) and stored in GCODE_PAYMENT_ORDERS_CF.CF_ENV.
+--   Environment = the CF_ENV row ('production' | 'sandbox'), a backend-only switch. Each order stores the
+--   environment it was created in (GCODE_PAYMENT_ORDERS_CF.CF_ENV) so verify/webhook keep using its keys.
 --   Per-environment rows: TEST_CASHFREE_<X> and CASHFREE_PROD_<X> for APP_ID, SECRET_KEY, BASE_URL, RETURN_BASE_URL.
 --   Shared rows: CASHFREE_API_VERSION, CASHFREE_NOTIFY_URL, CASHFREE_ORDER_EXPIRY_MINUTES.
 
@@ -40,7 +41,6 @@ CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
     p_phone              IN  VARCHAR2 DEFAULT NULL,
     p_user_id            IN  NUMBER   DEFAULT NULL,
     p_coupon_code        IN  VARCHAR2 DEFAULT NULL,
-    p_env                IN  VARCHAR2 DEFAULT NULL,     -- optional override 'test'|'prod'; NULL = the CF_ENV row
     p_is_free            OUT BOOLEAN,
     p_participant_id     OUT NUMBER,
     p_order_id           OUT VARCHAR2,
@@ -75,7 +75,7 @@ CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
   PROCEDURE ping(
     p_http_status OUT NUMBER,
     p_result      OUT VARCHAR2,
-    p_env         IN  VARCHAR2 DEFAULT 'TEST'
+    p_env         IN  VARCHAR2 DEFAULT NULL    -- NULL = whatever CF_ENV currently says
   );
 
   -- Housekeeping: flips never-paid orders past their expiry to EXPIRED. Correctness does not
@@ -418,7 +418,6 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     p_phone              IN  VARCHAR2 DEFAULT NULL,
     p_user_id            IN  NUMBER   DEFAULT NULL,
     p_coupon_code        IN  VARCHAR2 DEFAULT NULL,
-    p_env                IN  VARCHAR2 DEFAULT NULL,
     p_is_free            OUT BOOLEAN,
     p_participant_id     OUT NUMBER,
     p_order_id           OUT VARCHAR2,
@@ -481,8 +480,8 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     v_resp              CLOB;
   BEGIN
     p_is_free := FALSE;
-    -- Explicit override (localhost) wins; otherwise the CF_ENV row in GCODE_APP_SECRETS decides.
-    g_env    := norm_env(NVL(p_env, read_row('CF_ENV')));
+    -- The single backend switch: GCODE_APP_SECRETS row CF_ENV = 'production' | 'sandbox'.
+    g_env    := norm_env(read_row('CF_ENV'));
     p_cf_env := g_env;
 
     -- ---- Basic input ---------------------------------------------------
@@ -909,7 +908,7 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
   PROCEDURE ping(
     p_http_status OUT NUMBER,
     p_result      OUT VARCHAR2,
-    p_env         IN  VARCHAR2 DEFAULT 'TEST'
+    p_env         IN  VARCHAR2 DEFAULT NULL    -- NULL = whatever CF_ENV currently says
   ) IS
     C_PROBE CONSTANT VARCHAR2(40) := 'GC_PING_ORDER_THAT_DOES_NOT_EXIST';
     v_base  VARCHAR2(500);
@@ -918,7 +917,7 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     v_msg   VARCHAR2(300);
   BEGIN
     p_http_status := NULL;
-    g_env := norm_env(p_env);
+    g_env := norm_env(NVL(p_env, read_row('CF_ENV')));
 
     -- Reads every required row first so a missing one gets a precise message.
     BEGIN

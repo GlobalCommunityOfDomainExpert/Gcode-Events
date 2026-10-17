@@ -72,7 +72,7 @@ SELECT * FROM V_GCODE_PAYMENT_CF_NEEDS_ACTION;   -- paid but no ticket: refund t
   it means WhatsApp thank-you messages sent after registration are failing silently.
 
 ## Going to production
-Default environment is the `CF_ENV` row (`production`); a request may override it with `env` (`test`/`prod`) and stored on the order (`CF_ENV`). See `05_production_secrets.sql`, `06_env_per_order.sql`, `07_ords_order_handler.md`.
+Environment is one backend switch, the `CF_ENV` row in `GCODE_APP_SECRETS` (`production` or `sandbox`) and stored on the order (`CF_ENV`). See `05_production_secrets.sql`, `06_env_per_order.sql`, `07_ords_order_handler.md`.
 
 In the database and Cashfree **production** account:
 

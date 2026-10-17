@@ -35,20 +35,6 @@ const MODE: CashfreeMode =
     ? "production"
     : "sandbox";
 
-// Optional per-request override of the backend's default environment (the CF_ENV row in
-// GCODE_APP_SECRETS, normally "production"). Only localhost/dev needs it:
-//   NEXT_PUBLIC_CASHFREE_MODE=sandbox     -> "test"
-//   NEXT_PUBLIC_CASHFREE_MODE=production  -> "prod"
-//   unset, `next dev`                     -> "test" (a dev server never charges real cards by accident)
-//   unset, production build               -> undefined: the backend decides, nothing is sent
-export const CASHFREE_ENV_OVERRIDE: "test" | "prod" | undefined =
-  process.env.NEXT_PUBLIC_CASHFREE_MODE === "production"
-    ? "prod"
-    : process.env.NEXT_PUBLIC_CASHFREE_MODE === "sandbox" ||
-        process.env.NODE_ENV !== "production"
-      ? "test"
-      : undefined;
-
 let loadPromise: Promise<void> | undefined;
 
 export function loadCashfreeCheckout(): Promise<void> {
