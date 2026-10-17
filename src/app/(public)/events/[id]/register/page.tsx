@@ -47,7 +47,7 @@ import {
   openRazorpayCheckout,
 } from "@/lib/payments/razorpay";
 import {
-  CASHFREE_ENV,
+  CASHFREE_ENV_OVERRIDE,
   loadCashfreeCheckout,
   openCashfreeCheckout,
 } from "@/lib/payments/cashfree";
@@ -539,7 +539,7 @@ export default function EventRegisterPage() {
       quantity,
       category,
       coupon_code: effectiveCoupon ? couponCode.trim() : undefined,
-      env: CASHFREE_ENV,
+      env: CASHFREE_ENV_OVERRIDE,
     });
 
     if ("free" in order) {
@@ -548,7 +548,10 @@ export default function EventRegisterPage() {
     }
 
     await loadCashfreeCheckout();
-    const result = await openCashfreeCheckout(order.payment_session_id);
+    const result = await openCashfreeCheckout(
+      order.payment_session_id,
+      order.env,
+    );
     // Checkout redirected away (some UPI/bank flows) — the ?cf_order_id return
     // handler finishes the job when the customer comes back.
     if (result.redirect) return;

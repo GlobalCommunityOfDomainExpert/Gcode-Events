@@ -40,13 +40,14 @@ CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
     p_phone              IN  VARCHAR2 DEFAULT NULL,
     p_user_id            IN  NUMBER   DEFAULT NULL,
     p_coupon_code        IN  VARCHAR2 DEFAULT NULL,
-    p_env                IN  VARCHAR2 DEFAULT 'PROD',   -- 'TEST' | 'PROD' (frontend decides); stored on the order
+    p_env                IN  VARCHAR2 DEFAULT NULL,     -- optional override 'test'|'prod'; NULL = the CF_ENV row
     p_is_free            OUT BOOLEAN,
     p_participant_id     OUT NUMBER,
     p_order_id           OUT VARCHAR2,
     p_payment_session_id OUT VARCHAR2,
     p_amount             OUT NUMBER,
-    p_currency           OUT VARCHAR2
+    p_currency           OUT VARCHAR2,
+    p_cf_env             OUT VARCHAR2    -- 'TEST'|'PROD' actually used; checkout must run in the same mode
   );
 
   -- p_status: PAID (p_participant_id set) | PENDING (not paid / still being processed - poll
@@ -417,13 +418,14 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     p_phone              IN  VARCHAR2 DEFAULT NULL,
     p_user_id            IN  NUMBER   DEFAULT NULL,
     p_coupon_code        IN  VARCHAR2 DEFAULT NULL,
-    p_env                IN  VARCHAR2 DEFAULT 'PROD',
+    p_env                IN  VARCHAR2 DEFAULT NULL,
     p_is_free            OUT BOOLEAN,
     p_participant_id     OUT NUMBER,
     p_order_id           OUT VARCHAR2,
     p_payment_session_id OUT VARCHAR2,
     p_amount             OUT NUMBER,
-    p_currency           OUT VARCHAR2
+    p_currency           OUT VARCHAR2,
+    p_cf_env             OUT VARCHAR2    -- 'TEST'|'PROD' actually used; checkout must run in the same mode
   ) IS
     v_category          VARCHAR2(20) := NVL(UPPER(p_category), 'ATTENDEE');
     v_email             gcode_users.email%TYPE     := TRIM(p_email);
@@ -479,7 +481,9 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     v_resp              CLOB;
   BEGIN
     p_is_free := FALSE;
-    g_env := norm_env(p_env);
+    -- Explicit override (localhost) wins; otherwise the CF_ENV row in GCODE_APP_SECRETS decides.
+    g_env    := norm_env(NVL(p_env, read_row('CF_ENV')));
+    p_cf_env := g_env;
 
     -- ---- Basic input ---------------------------------------------------
     IF p_quantity IS NULL OR p_quantity < 1 OR p_quantity <> TRUNC(p_quantity) THEN

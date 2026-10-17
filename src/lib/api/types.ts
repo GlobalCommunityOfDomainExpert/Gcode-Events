@@ -445,9 +445,9 @@ export interface VerifyRazorpayPaymentPayload {
 // shape as Razorpay's, except phone is required for every payer (signed in or
 // not) because Cashfree rejects orders without a valid 10-digit number.
 export type CreateCashfreeOrderPayload = CreateRazorpayOrderPayload & {
-  // Which Cashfree credentials the backend uses for this order (and every later
-  // verify/webhook for it). Comes from NEXT_PUBLIC_CASHFREE_MODE.
-  env: "test" | "prod";
+  // Optional override of the backend's default environment (its CF_ENV row).
+  // Omitted in production builds; see CASHFREE_ENV_OVERRIDE.
+  env?: "test" | "prod";
 };
 
 // payment_session_id is what Cashfree's checkout.js needs — the backend holds
@@ -458,6 +458,8 @@ export interface CashfreeOrderApi {
   payment_session_id: string;
   amount: number;
   currency: string;
+  // Environment the order was created in; open checkout in the matching mode.
+  env?: "test" | "prod";
 }
 
 export type CreateCashfreeOrderResult = CashfreeOrderApi | FreeRegistrationApi;
