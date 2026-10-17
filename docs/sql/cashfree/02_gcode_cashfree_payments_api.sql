@@ -686,9 +686,14 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     -- Cashfree order_id: letters/digits/_/- only, 3-45 chars.
     v_cf_order_id := 'GC' || p_event_id || '_' || LOWER(SUBSTR(RAWTOHEX(SYS_GUID()), 1, 20));
 
+    -- Cashfree customer_id: letters/digits/_/- only. TM9 prints the number in plain notation (never
+    -- scientific, never '#'). A user_id that is not a short whole number gets a stable hash instead.
     v_customer_id := CASE
-      -- USER_ID can be 38 digits; plain TO_CHAR would fall back to scientific notation.
-      WHEN p_user_id IS NOT NULL THEN 'u' || TO_CHAR(p_user_id, 'FM99999999999999999999999999999999999999')
+      WHEN p_user_id IS NOT NULL AND p_user_id = TRUNC(p_user_id) AND p_user_id > 0
+           AND INSTR(TO_CHAR(p_user_id, 'TM9'), 'E') = 0 AND LENGTH(TO_CHAR(p_user_id, 'TM9')) <= 40
+        THEN 'u' || TO_CHAR(p_user_id, 'TM9')
+      WHEN p_user_id IS NOT NULL
+        THEN 'u' || SUBSTR(LOWER(RAWTOHEX(sha256(UTL_RAW.CAST_TO_RAW(TO_CHAR(p_user_id, 'TM9'))))), 1, 32)
       ELSE 'g' || SUBSTR(LOWER(RAWTOHEX(sha256(UTL_RAW.CAST_TO_RAW(LOWER(v_email))))), 1, 32)
     END;
 
