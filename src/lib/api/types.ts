@@ -454,6 +454,8 @@ export interface CashfreeOrderApi {
   payment_session_id: string;
   amount: number;
   currency: string;
+  // Environment the backend (CF_ENV row) created the order in; open checkout in the matching mode.
+  env?: "test" | "prod";
 }
 
 export type CreateCashfreeOrderResult = CashfreeOrderApi | FreeRegistrationApi;

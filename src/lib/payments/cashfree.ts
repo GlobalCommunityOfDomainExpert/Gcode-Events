@@ -61,11 +61,15 @@ export function loadCashfreeCheckout(): Promise<void> {
 // verify with the backend afterward rather than reading the result as truth.
 export async function openCashfreeCheckout(
   paymentSessionId: string,
+  // The environment the backend created the order in; checkout must run in the same mode.
+  env?: "test" | "prod",
 ): Promise<CashfreeCheckoutResult> {
   if (!window.Cashfree) {
     throw new Error("Cashfree checkout script hasn't loaded yet.");
   }
-  const cashfree = window.Cashfree({ mode: MODE });
+  const cashfree = window.Cashfree({
+    mode: env ? (env === "prod" ? "production" : "sandbox") : MODE,
+  });
   const result = await cashfree.checkout({
     paymentSessionId,
     redirectTarget: "_modal",

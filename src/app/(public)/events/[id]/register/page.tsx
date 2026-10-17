@@ -546,7 +546,10 @@ export default function EventRegisterPage() {
     }
 
     await loadCashfreeCheckout();
-    const result = await openCashfreeCheckout(order.payment_session_id);
+    const result = await openCashfreeCheckout(
+      order.payment_session_id,
+      order.env,
+    );
     // Checkout redirected away (some UPI/bank flows) — the ?cf_order_id return
     // handler finishes the job when the customer comes back.
     if (result.redirect) return;
