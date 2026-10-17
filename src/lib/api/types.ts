@@ -444,7 +444,11 @@ export interface VerifyRazorpayPaymentPayload {
 // GCODE_CASHFREE_PAYMENTS_API.create_order (docs/sql/cashfree/). Same request
 // shape as Razorpay's, except phone is required for every payer (signed in or
 // not) because Cashfree rejects orders without a valid 10-digit number.
-export type CreateCashfreeOrderPayload = CreateRazorpayOrderPayload;
+export type CreateCashfreeOrderPayload = CreateRazorpayOrderPayload & {
+  // Which Cashfree credentials the backend uses for this order (and every later
+  // verify/webhook for it). Comes from NEXT_PUBLIC_CASHFREE_MODE.
+  env: "test" | "prod";
+};
 
 // payment_session_id is what Cashfree's checkout.js needs — the backend holds
 // the app id/secret, so (unlike Razorpay) no public key is echoed back.

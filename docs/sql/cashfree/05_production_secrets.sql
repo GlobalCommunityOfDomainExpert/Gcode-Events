@@ -1,24 +1,32 @@
--- Production Cashfree config rows for GCODE_APP_SECRETS.
--- Run in SQL Commands on the database that serves production. Replace every <...> yourself;
--- never commit real keys. Needs the updated 02_gcode_cashfree_payments_api.sql (TEST_/CASHFREE_PROD_ lookup).
+-- Cashfree environment rows for GCODE_APP_SECRETS. Run in SQL Commands. Replace every <...> yourself
+-- and never commit real keys.
 --
--- Test rows are TEST_CASHFREE_*; production lives beside them as CASHFREE_PROD_*.
+-- The FRONTEND picks the environment per order (see 06_env_per_order.sql); there is no global switch.
+-- Per-environment rows (the API uses TEST_ for env=test and CASHFREE_PROD_ for env=prod):
+--   APP_ID, SECRET_KEY, BASE_URL, RETURN_BASE_URL
+-- Shared rows (already present, leave as they are):
+--   CASHFREE_API_VERSION, CASHFREE_NOTIFY_URL, CASHFREE_ORDER_EXPIRY_MINUTES
 
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_APP_ID',               '<live app id>');
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_SECRET_KEY',           '<live secret key>');
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_BASE_URL',             'https://api.cashfree.com/pg');
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_API_VERSION',          '2025-01-01');
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_NOTIFY_URL',           '<production ORDS URL>/webhooks/cashfree');
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_RETURN_BASE_URL',      '<production site, e.g. https://events.gcode.in>');
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_ORDER_EXPIRY_MINUTES', '30');
+-- 1. Production rows (APP_ID / SECRET_KEY / BASE_URL may already exist - skip those)
+INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_APP_ID',          '<live app id>');
+INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_SECRET_KEY',      '<live secret key>');
+INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_BASE_URL',        'https://api.cashfree.com/pg');
+INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_PROD_RETURN_BASE_URL', '<live site, e.g. https://events.gcode.in>');
+
+-- 2. Test return URL: copy what is in the old CASHFREE_RETURN_BASE_URL row (http://localhost:3000)
+INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value)
+SELECT 'TEST_CASHFREE_RETURN_BASE_URL', secret_value FROM GCODE_APP_SECRETS WHERE secret_name = 'CASHFREE_RETURN_BASE_URL';
 COMMIT;
 
--- Verify (names only) -> 7 rows
-SELECT secret_name FROM GCODE_APP_SECRETS WHERE secret_name LIKE 'CASHFREE\_PROD\_%' ESCAPE '\' ORDER BY 1;
+-- 3. Verify (names only). Expect 8 rows: 4 TEST_ + 4 CASHFREE_PROD_
+SELECT secret_name FROM GCODE_APP_SECRETS
+WHERE secret_name LIKE 'TEST\_CASHFREE\_%' ESCAPE '\' OR secret_name LIKE 'CASHFREE\_PROD\_%' ESCAPE '\'
+ORDER BY 1;
 
--- THE SWITCH. Do this last, after the package is recompiled and ping() passes in prod mode.
--- Go live:
-INSERT INTO GCODE_APP_SECRETS (secret_name, secret_value) VALUES ('CASHFREE_ENV', 'PRODUCTION');
-COMMIT;
--- Roll back to sandbox instantly (no redeploy):
--- UPDATE GCODE_APP_SECRETS SET secret_value = 'TEST' WHERE secret_name = 'CASHFREE_ENV'; COMMIT;
+-- 4. After the package is compiled, check each environment (run both):
+DECLARE v_s NUMBER; v_r VARCHAR2(500);
+BEGIN
+  GCODE_CASHFREE_PAYMENTS_API.ping(v_s, v_r, 'TEST'); DBMS_OUTPUT.PUT_LINE('TEST: ' || v_r);
+  GCODE_CASHFREE_PAYMENTS_API.ping(v_s, v_r, 'PROD'); DBMS_OUTPUT.PUT_LINE('PROD: ' || v_r);
+END;
+/

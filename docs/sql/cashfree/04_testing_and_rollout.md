@@ -72,9 +72,7 @@ SELECT * FROM V_GCODE_PAYMENT_CF_NEEDS_ACTION;   -- paid but no ticket: refund t
   it means WhatsApp thank-you messages sent after registration are failing silently.
 
 ## Going to production
-Production values live in `GCODE_APP_SECRETS` as `CASHFREE_PROD_*` rows beside the sandbox ones, selected by
-the `CASHFREE_ENV` row (`PRODUCTION` / `SANDBOX`). See `05_production_secrets.sql`. The package must be
-recompiled with the `CASHFREE_ENV` support first.
+Environment is chosen per order by the frontend (`env`: `test` or `prod`) and stored on the order (`CF_ENV`). See `05_production_secrets.sql`, `06_env_per_order.sql`, `07_ords_order_handler.md`.
 
 In the database and Cashfree **production** account:
 

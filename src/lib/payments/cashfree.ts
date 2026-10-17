@@ -35,6 +35,10 @@ const MODE: CashfreeMode =
     ? "production"
     : "sandbox";
 
+// What the backend calls the same thing: picks the TEST_ or CASHFREE_PROD_ credentials for the order.
+export const CASHFREE_ENV: "test" | "prod" =
+  MODE === "production" ? "prod" : "test";
+
 let loadPromise: Promise<void> | undefined;
 
 export function loadCashfreeCheckout(): Promise<void> {
