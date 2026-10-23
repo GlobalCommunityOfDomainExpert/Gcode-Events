@@ -29,9 +29,16 @@ interface AttendeeColumn {
   render: (row: Attendee) => React.ReactNode;
 }
 
+const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+const priceText = (price: number) =>
+  price > 0 ? `${inr(price)} / ticket` : "Free";
+
 // The shared <Table> wires an onClick onto every row, which can't be rendered
 // from a server component, so this page renders the same markup directly.
-const attendeeColumns: AttendeeColumn[] = [
+const buildColumns = (labels: {
+  Attendee: string;
+  Participant: string;
+}): AttendeeColumn[] => [
   {
     key: "name",
     header: "Name",
@@ -60,7 +67,7 @@ const attendeeColumns: AttendeeColumn[] = [
         tone={row.category === "Participant" ? "primary" : "neutral"}
         size="sm"
       >
-        {row.category}
+        {labels[row.category]}
       </Badge>
     ),
   },
@@ -89,6 +96,13 @@ const attendeeColumns: AttendeeColumn[] = [
       <span className="text-text-secondary">{row.quantity ?? 1}</span>
     ),
   },
+  {
+    key: "amount",
+    header: "Amount",
+    render: (row) => (
+      <span className="text-text-secondary">{inr(row.amountPaid ?? 0)}</span>
+    ),
+  },
 ];
 
 export default async function ClientDashboardPage({
@@ -107,6 +121,11 @@ export default async function ClientDashboardPage({
   const { event, attendees } = data;
 
   const registration = event.attendeeRegistration;
+  const participantReg = event.participantRegistration;
+  const attendeeColumns = buildColumns({
+    Attendee: registration.label,
+    Participant: participantReg.label,
+  });
   const capacityPercent = event.capacity
     ? Math.min(100, Math.round((data.registrations / event.capacity) * 100))
     : null;
@@ -195,20 +214,22 @@ export default async function ClientDashboardPage({
               />
               <StatCard
                 label="Revenue"
-                value={`₹${data.revenueInr.toLocaleString("en-IN")}`}
+                value={inr(data.revenueInr)}
                 sub={
                   data.paidTickets > 0
-                    ? `${data.paidTickets} paid tickets`
+                    ? `Sum of all tickets · ${data.paidTickets} paid registrations`
                     : "Free event"
                 }
               />
               <StatCard
-                label="Attendees"
+                label={registration.label}
                 value={data.attendeeCount.toLocaleString()}
+                sub={priceText(registration.price)}
               />
               <StatCard
-                label="Participants"
+                label={participantReg.label}
                 value={data.participantCount.toLocaleString()}
+                sub={priceText(participantReg.price)}
               />
               <div className="border-border-light bg-surface-light rounded-md border p-4 transition-shadow hover:shadow-md">
                 <p className="text-small text-text-secondary font-medium tracking-wide uppercase">
@@ -238,7 +259,7 @@ export default async function ClientDashboardPage({
           <RegistrationTrendChart attendees={attendees} />
 
           <div>
-            <SectionLabel>Attendees ({attendees.length})</SectionLabel>
+            <SectionLabel>Registrations ({attendees.length})</SectionLabel>
             {attendees.length === 0 ? (
               <EmptyState title="No registrations yet" />
             ) : (
