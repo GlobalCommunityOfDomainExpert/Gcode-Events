@@ -129,10 +129,11 @@ export default async function ClientDashboardPage({
   const capacityPercent = event.capacity
     ? Math.min(100, Math.round((data.registrations / event.capacity) * 100))
     : null;
-  const remainingDays = daysUntilClose(
-    registration.registrationDeadlineIso,
-    event.date,
-  );
+  const daysLeftCards = [registration, participantReg].map((category) => ({
+    label: category.label,
+    days: daysUntilClose(category.registrationDeadlineIso, event.date),
+    closes: category.registrationCloses,
+  }));
 
   return (
     <main className="bg-bg-light min-h-screen px-4 py-8">
@@ -248,11 +249,14 @@ export default async function ClientDashboardPage({
                   />
                 )}
               </div>
-              <StatCard
-                label="Days Left"
-                value={remainingDays !== null ? String(remainingDays) : "—"}
-                sub={`Closes ${registration.registrationCloses}`}
-              />
+              {daysLeftCards.map((card) => (
+                <StatCard
+                  key={card.label}
+                  label={`Days Left · ${card.label}`}
+                  value={card.days !== null ? String(card.days) : "—"}
+                  sub={`Closes ${card.closes}`}
+                />
+              ))}
             </div>
           </div>
 
