@@ -27,6 +27,7 @@ const advisors: TeamMember[] = [
     role: "Ex NielsenIQ",
     photo: "/vishi.jpg",
   },
+  { name: "Nitin Gupta", role: "The Solutions Company", photo: "/nitin.jpg" },
   {
     name: "Gurucharan Singh",
     role: "Group Chief Human Resource Officer & Corporate Relations at Sapthagiri NPS University",
@@ -34,6 +35,7 @@ const advisors: TeamMember[] = [
   },
   { name: "Satish", role: "Ex Birlasoft", photo: "/satish.jpg" },
   { name: "Jeevan", role: "Ex Microsoft", photo: "/Jeevan.jpg" },
+  { name: "Jyotiranjan", role: "Ex Wipro", photo: "/Jyoti.jpg" },
   {
     name: "Avil Rakshith Salins",
     role: "Salins & Co",
@@ -60,6 +62,7 @@ const advisors: TeamMember[] = [
     role: "Co Founder at Excellential Consulting Services",
     photo: "/pooja.jpg",
   },
+  { name: "Debashish Roy", photo: "/deb.jpg" },
 ];
 
 function initialsOf(name: string) {
