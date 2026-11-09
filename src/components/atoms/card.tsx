@@ -21,7 +21,7 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`border-border-light ${!isDark ? "bg-surface-light" : "bg-black"} rounded-md border ${paddingClass[padding]} ${className}`}
+      className={`border-border-light ${!isDark ? "bg-surface-light" : "bg-black"} rounded-md border shadow-sm ${paddingClass[padding]} ${className}`}
       {...props}
     />
   );

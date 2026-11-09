@@ -41,3 +41,4 @@ export * from "./tabbed-form-shell";
 export * from "./tabs";
 export * from "./timeline";
 export * from "./toggle-group";
+export * from "./section-header";

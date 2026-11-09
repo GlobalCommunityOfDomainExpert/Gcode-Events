@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Mail, Phone } from "lucide-react";
-import { Button, Input } from "@/components/atoms";
+import { Mail, MessageCircle, Phone } from "lucide-react";
+import { Button, Icon, Input } from "@/components/atoms";
 import { FormField, Modal } from "@/components/molecules";
 import { submitEventEnquiry } from "@/lib/api/event-enquiries";
 import { ApiError } from "@/lib/api/client";
@@ -17,11 +17,14 @@ function normalizePhone(phone: string): string {
 interface EventEnquiryButtonProps {
   eventId: string;
   eventTitle: string;
+  /** Text-only button with an icon, no border. */
+  plain?: boolean;
 }
 
 export function EventEnquiryButton({
   eventId,
   eventTitle,
+  plain = false,
 }: EventEnquiryButtonProps) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -66,7 +69,17 @@ export function EventEnquiryButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        variant={plain ? "ghost" : "outline"}
+        size="sm"
+        className={
+          plain
+            ? "!text-text-secondary hover:!bg-bg-light hover:!text-text-primary !px-2 font-medium"
+            : ""
+        }
+        onClick={() => setOpen(true)}
+      >
+        {plain && <Icon icon={MessageCircle} size="sm" />}
         Tell me more
       </Button>
       <Modal open={open} onClose={handleClose} title="Tell me more">

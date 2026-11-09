@@ -18,7 +18,7 @@ export function Breadcrumb({ items }: BreadcrumbProps) {
           const isLast = index === items.length - 1;
           return (
             <Fragment key={item.label}>
-              <li className="min-w-0 max-w-[28vw] shrink sm:max-w-48">
+              <li className="max-w-[28vw] min-w-0 shrink sm:max-w-48">
                 {item.href && !isLast ? (
                   <Link href={item.href} variant="secondary" size="sm">
                     <span className="block truncate" title={item.label}>

@@ -254,6 +254,57 @@ export function hasEventEnded(
   return now > new Date(event.endDateIso);
 }
 
+const IST = "Asia/Kolkata";
+
+// "Sunday" — weekday of an ISO timestamp in IST, for the event card's date line.
+export function formatWeekday(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "long",
+    timeZone: IST,
+  }).format(new Date(iso));
+}
+
+// "12:00 PM – 2:00 PM" (IST). Single time when end is missing or equal.
+export function formatTimeRange(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+): string {
+  if (!startIso) return "";
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: IST,
+  });
+  const start = fmt.format(new Date(startIso));
+  if (!endIso) return start;
+  const end = fmt.format(new Date(endIso));
+  return end === start ? start : `${start} – ${end}`;
+}
+
+// Google Calendar "add event" link for an event (UTC, YYYYMMDDTHHMMSSZ).
+// Offered after booking (registered page) — before booking, "I'm interested"
+// covers the remind-me need.
+export function googleCalendarUrl(
+  event: Pick<
+    Event,
+    "title" | "location" | "mode" | "summary" | "startDateIso" | "endDateIso"
+  >,
+): string | undefined {
+  if (!event.startDateIso) return undefined;
+  const stamp = (iso: string) =>
+    new Date(iso).toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: event.title,
+    dates: `${stamp(event.startDateIso)}/${stamp(event.endDateIso ?? event.startDateIso)}`,
+    location: event.mode === "Online" ? "Online" : event.location,
+    details: event.summary ?? "",
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 export interface EventOrganizer {
   name: string; // backed by EventDetail.created_by; falls back to "GCODE Team"
   title: string; // no backend column — adapter hardcodes "Organizer"
@@ -286,6 +337,8 @@ export interface Event {
   registrationDeadlineIso?: string | null; // EventDetail.registration_deadline, raw ISO for computing "days left"
   duration: string; // derived from start_date/end_date span, or the timeline's own span as fallback
   endDateIso?: string | null; // EventListItem.end_date, falls back to start_date — raw ISO for hasEventEnded()
+  startDateIso?: string | null; // EventListItem.start_date — raw ISO for weekday / time-range display
+  summary?: string; // EventDetail.summary — one-line pitch shown on event cards
   durationText?: string; // EventDetail.duration_text — organizer's free-text duration (e.g. "3 hours"), used as a display fallback when time is TBD
   teamSize: string; // no backend column — adapter hardcodes ""
   certificate: boolean; // no backend column — adapter hardcodes false
@@ -293,6 +346,7 @@ export interface Event {
   timeline: EventTimelineItem[]; // EVENT_TIMELINE rows — adapter hardcodes [] for now
   rounds: EventRound[]; // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25, adapter hardcodes [] until the table exists
   organizer: EventOrganizer; // see EventOrganizer — only .name is backed
+  organizerId?: string; // EventDetail.organizer_id — owner check for the manage bar
   terms: string[]; // EventDetail.terms, split on newline — falls back to DEFAULT_TERMS when blank
   eligibility: string[]; // EventDetail.eligibility, split on newline — falls back to DEFAULT_ELIGIBILITY when blank
   tags?: string[]; // EventDetail.categories (detail fetch only)
