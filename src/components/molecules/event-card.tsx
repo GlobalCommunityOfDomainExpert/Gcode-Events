@@ -2,6 +2,7 @@ import {
   ArrowRight,
   Calendar,
   Clock,
+  ExternalLink,
   Image as ImageIcon,
   LucideIcon,
   MapPin,
@@ -38,7 +39,7 @@ export interface EventCardProps {
   attendees?: AvatarGroupItem[];
   attendeesLabel?: string;
   urgencyLabel?: string;
-  /** CTA button label — "featured" variant only, the "default" variant is whole-card clickable instead. */
+  /** CTA button label. Defaults to "Register Now" (featured) / "Reserve Seat" (default). */
   actionLabel?: string;
   onAction?: () => void;
   /** Event type name (e.g. "Webinar", "Hackathon") — picks which extra field below is most relevant. */
@@ -51,13 +52,21 @@ export interface EventCardProps {
   isPast?: boolean;
   /** One-line description under the title — "featured" variant only. */
   subtitle?: string;
-  /** Paragraph description — "featured" variant only. */
+  /** Paragraph description — shown under the title on both variants. */
   description?: string;
   /** Up to 4 icon+stat blocks (e.g. date, participants) — "featured" variant only. */
   stats?: { icon: LucideIcon; primary: string; secondary: string }[];
   /** Shown as a badge next to the action button (not in the top tags row) — "featured" variant only. */
   price?: string;
   priceTone?: BadgeTone;
+  /** Line under the date (e.g. weekday "Sunday") — "default" variant only. */
+  dateDetail?: string;
+  /** Start time (e.g. "12:00 PM") — "default" variant, appended to the date line. */
+  time?: string;
+  /** Primary CTA target (e.g. the register page) — "default" variant; the CTA is hidden when neither this nor onAction is set. */
+  actionHref?: string;
+  /** Label of the secondary button that links to href — "default" variant only. */
+  detailsLabel?: string;
 }
 
 // Different event formats care about different secondary info: a webinar's
@@ -147,7 +156,7 @@ export function EventCard({
   attendees,
   attendeesLabel,
   urgencyLabel,
-  actionLabel = "Register Now",
+  actionLabel,
   onAction,
   eventType,
   durationText,
@@ -158,6 +167,10 @@ export function EventCard({
   stats,
   price,
   priceTone,
+  dateDetail,
+  time,
+  actionHref,
+  detailsLabel = "View Details",
 }: EventCardProps) {
   const secondaryInfo = resolveSecondaryInfo({
     eventType,
@@ -167,6 +180,7 @@ export function EventCard({
   });
 
   if (variant === "featured") {
+    const featuredActionLabel = actionLabel ?? "Register Now";
     const featuredContent = (
       <>
         <div className="relative aspect-video shrink-0 overflow-hidden rounded-t-md sm:aspect-auto sm:w-3/5 sm:rounded-l-md sm:rounded-tr-none">
@@ -259,11 +273,11 @@ export function EventCard({
             <div className="flex flex-wrap items-center gap-3">
               {href ? (
                 <ButtonLink href={href} variant="primary">
-                  {actionLabel} <Icon size="sm" icon={ArrowRight} />
+                  {featuredActionLabel} <Icon size="sm" icon={ArrowRight} />
                 </ButtonLink>
               ) : (
                 <Button variant="primary" onClick={onAction}>
-                  {actionLabel} <Icon size="sm" icon={ArrowRight} />
+                  {featuredActionLabel} <Icon size="sm" icon={ArrowRight} />
                 </Button>
               )}
               {price && (
@@ -293,91 +307,166 @@ export function EventCard({
     );
   }
 
-  const defaultClasses = isPast
-    ? "border-border-light bg-surface-light grayscale flex h-full flex-col overflow-hidden rounded-md border focus-visible:ring-primary focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-    : "border-border-light bg-surface-light group flex h-full flex-col overflow-hidden rounded-md border transition hover:border-border-hover hover:shadow-md focus-visible:ring-primary focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none";
-
   const effectiveHeaderLabel = isPast ? "Event Ended" : headerLabel;
+  const showAction = !isPast && Boolean(actionHref || onAction);
+  const defaultActionLabel = actionLabel ?? "Reserve Seat";
 
-  const defaultContent = (
-    <>
-      <div className="relative aspect-video shrink-0">
+  // Compact card sized for a 3-column grid: cover (with pills + venue chip
+  // overlaid), title, 2-line description, date·time and address lines, then a
+  // single footer row with attendees and one CTA. The whole card is clickable
+  // via the title's stretched link, so "details" only gets its own button when
+  // there's no primary action (past events, organizer view).
+  const footerButton = showAction ? (
+    actionHref ? (
+      <ButtonLink
+        href={actionHref}
+        variant="accent"
+        size="xs"
+        className="whitespace-nowrap"
+      >
+        {defaultActionLabel} <Icon size="sm" icon={ArrowRight} />
+      </ButtonLink>
+    ) : (
+      <Button
+        variant="accent"
+        size="xs"
+        className="whitespace-nowrap"
+        onClick={onAction}
+      >
+        {defaultActionLabel} <Icon size="sm" icon={ArrowRight} />
+      </Button>
+    )
+  ) : href ? (
+    <ButtonLink
+      href={href}
+      variant="secondary"
+      size="xs"
+      className="whitespace-nowrap"
+    >
+      <Icon icon={ExternalLink} size="sm" />
+      {detailsLabel}
+    </ButtonLink>
+  ) : null;
+
+  const dateLine = [
+    dateDetail ? `${dateDetail.slice(0, 3)}, ${date}` : date,
+    time,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <article
+      className={`border-border-light bg-surface-light relative flex h-full flex-col overflow-hidden rounded-xl border shadow-sm ${
+        isPast
+          ? "grayscale"
+          : "group hover:border-border-hover transition duration-300 hover:-translate-y-0.5 hover:shadow-md"
+      }`}
+    >
+      <div className="relative aspect-[16/7] shrink-0 overflow-hidden">
         <EventCardMedia
           src={imageSrc}
           alt={imageAlt ?? title}
           colorSeed={colorSeed}
         />
-        {effectiveHeaderLabel && (
-          <div className="absolute top-3 left-3">
-            <Badge variant="solid" tone="neutral">
-              {effectiveHeaderLabel}
-            </Badge>
+        {(effectiveHeaderLabel || tags.length > 0) && (
+          <div className="absolute top-2.5 left-3 flex flex-wrap gap-1.5">
+            {effectiveHeaderLabel && (
+              <Badge variant="solid" tone="neutral" size="sm">
+                {effectiveHeaderLabel}
+              </Badge>
+            )}
+            {tags.map((tag, index) =>
+              index === 0 ? (
+                <Badge
+                  key={tag.label}
+                  variant="solid"
+                  tone={tag.tone ?? "neutral"}
+                  size="sm"
+                  className="shadow-sm"
+                >
+                  {tag.label}
+                </Badge>
+              ) : (
+                <span
+                  key={tag.label}
+                  className="text-primary text-small inline-flex h-5 items-center rounded-full bg-white/95 px-2 leading-none font-semibold shadow-sm"
+                >
+                  {tag.label}
+                </span>
+              ),
+            )}
           </div>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <Badge
-              key={tag.label}
-              variant="outline"
-              tone={tag.tone ?? "neutral"}
-              size="sm"
+
+      <div className="flex flex-1 flex-col gap-2.5 p-4">
+        <h4 className="text-large text-text-primary group-hover:text-primary line-clamp-2 leading-snug font-bold transition-colors">
+          {href ? (
+            // Stretched link: the whole card stays clickable while the
+            // footer button (z-10) remains its own target.
+            <NextLink
+              href={href}
+              className="focus-visible:ring-primary rounded-sm after:absolute after:inset-0 focus-visible:ring-2 focus-visible:outline-none"
             >
-              {tag.label}
-            </Badge>
-          ))}
-        </div>
-        <h4 className="text-large text-text-primary line-clamp-2 min-h-14 font-semibold transition-colors group-hover:text-primary">
-          {title}
-        </h4>
-        <div className="space-y-1">
-          <p className="text-small text-text-secondary flex items-center gap-2">
-            <Icon icon={Calendar} size="sm" />
-            {date}
-          </p>
-          {location && (
-            <p className="text-small text-text-secondary flex items-center gap-2">
-              <Icon icon={MapPin} size="sm" />
-              {location}
-            </p>
+              {title}
+            </NextLink>
+          ) : (
+            title
           )}
+        </h4>
+
+        <div className="text-small text-text-secondary space-y-1">
+          <EventCardInfo icon={Calendar} text={dateLine} />
+          {location && <EventCardInfo icon={MapPin} text={location} />}
         </div>
 
         {urgencyLabel && (
-          <p className="text-small text-warning mt-auto pt-1 font-medium">
-            {urgencyLabel}
-          </p>
+          <p className="text-small text-warning font-medium">{urgencyLabel}</p>
         )}
-      </div>
-    </>
-  );
 
-  return href ? (
-    <NextLink href={href} className={defaultClasses}>
-      {defaultContent}
-    </NextLink>
-  ) : (
-    <div className={defaultClasses}>{defaultContent}</div>
+        <div className="border-border-light mt-auto flex min-h-11 items-center justify-between gap-3 border-t pt-3">
+          <span className="text-small text-text-secondary truncate">
+            {attendeesLabel ?? secondaryInfo?.text}
+          </span>
+          {footerButton && (
+            <div className="relative z-10 shrink-0">{footerButton}</div>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
-// Mirrors the "default" variant's layout (image, tags, title, two info lines)
-// so the loading state doesn't visually jump once real cards arrive — used
-// by both /events and /my-organized-events while data loads.
+// One quiet icon + text line, e.g. "Sat, 12 Dec 2026 · 7:00 PM".
+function EventCardInfo({ icon, text }: { icon: LucideIcon; text: string }) {
+  return (
+    <p className="flex min-w-0 items-center gap-2">
+      <Icon icon={icon} size="sm" className="shrink-0 opacity-70" />
+      <span className="truncate">{text}</span>
+    </p>
+  );
+}
+
+// Mirrors the "default" variant's layout (cover, pills, title, info lines,
+// footer) so the loading state doesn't visually jump once real cards arrive —
+// used by both /events and /my-organized-events while data loads.
 export function EventCardSkeleton() {
   return (
-    <div className="border-border-light bg-surface-light flex h-full flex-col overflow-hidden rounded-md border">
-      <Skeleton className="aspect-video w-full shrink-0 rounded-none" />
+    <div className="border-border-light bg-surface-light flex h-full flex-col overflow-hidden rounded-xl border">
+      <Skeleton className="aspect-[16/7] w-full shrink-0 rounded-none" />
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex gap-2">
-          <Skeleton className="h-5 w-16 rounded-full" />
-          <Skeleton className="h-5 w-12 rounded-full" />
-        </div>
-        <Skeleton className="h-5 w-3/4" />
         <div className="space-y-2">
-          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+        <div className="space-y-2">
           <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="border-border-light mt-auto flex items-center justify-between border-t pt-3">
+          <Skeleton className="h-8 w-28 rounded-full" />
+          <Skeleton className="h-11 w-32" />
         </div>
       </div>
     </div>
