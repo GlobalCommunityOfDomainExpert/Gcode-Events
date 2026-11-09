@@ -871,7 +871,8 @@ export default function EventsPage() {
           </section>
         )}
 
-        {/* ------------------------------------------------------- host CTA */}
+        {/* ------------------------------------------------------- host CTA
+            Hidden for now (kept for later):
         <section className="bg-primary relative isolate overflow-hidden rounded-lg px-6 py-10 shadow-lg sm:px-10 sm:py-12">
           <div className="bg-secondary/20 absolute -top-24 -right-16 -z-10 size-72 rounded-full blur-3xl" />
           <div className="absolute -bottom-28 left-1/3 -z-10 size-72 rounded-full bg-sky-400/10 blur-3xl" />
@@ -898,6 +899,7 @@ export default function EventsPage() {
             </ButtonLink>
           </div>
         </section>
+        */}
       </div>
     </div>
   );
