@@ -2,7 +2,6 @@ import {
   ArrowRight,
   Calendar,
   Clock,
-  ExternalLink,
   Image as ImageIcon,
   LucideIcon,
   MapPin,
@@ -313,10 +312,11 @@ export function EventCard({
 
   // Compact card sized for a 3-column grid: cover (with pills + venue chip
   // overlaid), title, 2-line description, date·time and address lines, then a
-  // single footer row with attendees and one CTA. The whole card is clickable
-  // via the title's stretched link, so "details" only gets its own button when
-  // there's no primary action (past events, organizer view).
-  const footerButton = showAction ? (
+  // single footer row with attendees and the actions. The whole card is
+  // clickable via the title's stretched link, but "View Details" also gets its
+  // own quiet text button on every card so users never have to choose between
+  // the CTA and clicking the card.
+  const primaryButton = showAction ? (
     actionHref ? (
       <ButtonLink
         href={actionHref}
@@ -336,17 +336,26 @@ export function EventCard({
         {defaultActionLabel} <Icon size="sm" icon={ArrowRight} />
       </Button>
     )
-  ) : href ? (
+  ) : null;
+
+  const detailsButton = href ? (
     <ButtonLink
       href={href}
-      variant="secondary"
+      variant="ghost"
       size="xs"
       className="whitespace-nowrap"
     >
-      <Icon icon={ExternalLink} size="sm" />
       {detailsLabel}
     </ButtonLink>
   ) : null;
+
+  const footerButton =
+    primaryButton || detailsButton ? (
+      <div className="flex items-center gap-1">
+        {detailsButton}
+        {primaryButton}
+      </div>
+    ) : null;
 
   const dateLine = [
     dateDetail ? `${dateDetail.slice(0, 3)}, ${date}` : date,
