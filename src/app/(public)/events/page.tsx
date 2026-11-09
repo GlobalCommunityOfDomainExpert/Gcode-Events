@@ -214,12 +214,28 @@ export default function EventsPage() {
     let compact: boolean | null = null;
     let chipTimer = 0;
     let lastBarW = 0;
+    // Right-edge fade on the clipped tab row while more tabs remain.
+    let fadeActive = false;
+    function updateFade() {
+      const tabs = filterTabsRef.current;
+      if (!tabs) return;
+      const more =
+        fadeActive && tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 2;
+      tabs.style.maskImage = more
+        ? "linear-gradient(to right, #000 calc(100% - 28px), transparent)"
+        : "none";
+    }
     let metrics: {
       barW: number;
       tabsH: number;
       chipsW: number;
       chipsH: number;
-      inline: boolean;
+      tabsNaturalW: number;
+      // Compact is always ONE row. Tabs are clipped to `compactTabsW` and
+      // scroll sideways to reveal the rest; chips sit at the right when
+      // there is room for them, otherwise they are hidden while compact.
+      compactChips: boolean;
+      compactTabsW: number;
     } | null = null;
 
     function measure() {
@@ -234,18 +250,20 @@ export default function EventsPage() {
         chipEls.reduce((sum, el) => sum + el.offsetWidth, 0) +
         8 * Math.max(chipEls.length - 1, 0) +
         2;
-      const tabsW = Math.min(tabs.scrollWidth, barW - 32);
-      const inline = tabsW + 24 + naturalChipsW <= barW - 16;
-      const chipsW = inline ? naturalChipsW : barW - 32;
-      // Chips never wrap: one row, swipeable when it can't fit (phones).
-      chipsRow.style.width = `${chipsW}px`;
-      chipsRow.style.overflowX = inline ? "visible" : "auto";
+      const tabsNaturalW = tabs.scrollWidth;
+      const MIN_TABS_W = 200;
+      const compactChips = barW - 16 - 12 - naturalChipsW >= MIN_TABS_W;
+      const compactTabsW = compactChips
+        ? barW - 16 - 12 - naturalChipsW
+        : barW - 16;
       return {
         barW,
         tabsH: tabs.offsetHeight,
-        chipsW,
+        chipsW: naturalChipsW,
         chipsH: chipsRow.offsetHeight,
-        inline,
+        tabsNaturalW,
+        compactChips,
+        compactTabsW,
       };
     }
 
@@ -255,21 +273,54 @@ export default function EventsPage() {
       const chipsY = filterChipsYRef.current;
       const divider = filterDividerRef.current;
       if (!bar || !chipsX || !chipsY || !divider || !metrics) return;
-      const { barW, tabsH, chipsW, chipsH, inline } = metrics;
+      const {
+        barW,
+        tabsH,
+        chipsW,
+        chipsH,
+        tabsNaturalW,
+        compactChips,
+        compactTabsW,
+      } = metrics;
+      const tabsEl = filterTabsRef.current;
 
       const pad = next ? 8 : 16;
       const h0 = 16 + tabsH + 16 + chipsH + 16;
-      const x = next && inline ? barW - 8 - chipsW : pad;
-      const y = next
-        ? inline
-          ? 8 + (tabsH - chipsH) / 2
-          : 8 + tabsH + 8
-        : 16 + tabsH + 16;
+      const showChips = !next || compactChips;
+      const x = next ? barW - 8 - chipsW : pad;
+      const y = next ? 8 + (tabsH - chipsH) / 2 : 16 + tabsH + 16;
       const h = next
-        ? inline
-          ? 16 + Math.max(tabsH, chipsH)
-          : 8 + tabsH + 8 + chipsH + 8
+        ? 16 + (compactChips ? Math.max(tabsH, chipsH) : tabsH)
         : h0;
+
+      // Chips never wrap: natural width beside the tabs when compact, full
+      // bar width (swipeable on phones) when expanded.
+      const chipsRowEl = filterChipsYRef.current;
+      if (chipsRowEl) {
+        chipsRowEl.style.width = next ? `${chipsW}px` : `${barW - 32}px`;
+        chipsRowEl.style.overflowX = next ? "visible" : "auto";
+      }
+      // Tabs: clipped to one row while compact (scroll to reveal more, with
+      // a fade on the clipped edge), natural width when expanded.
+      if (tabsEl) {
+        const w = next ? compactTabsW : Math.min(tabsNaturalW, barW - 32);
+        tabsEl.style.width = `${w}px`;
+        fadeActive = next && tabsNaturalW > compactTabsW;
+        updateFade();
+        if (next) {
+          const activeEl = tabsEl.querySelector<HTMLElement>(
+            '[aria-selected="true"]',
+          );
+          if (activeEl) {
+            tabsEl.scrollTo({
+              left: Math.max(activeEl.offsetLeft - 8, 0),
+              behavior: animate ? "smooth" : "auto",
+            });
+          }
+        } else {
+          tabsEl.scrollTo({ left: 0, behavior: animate ? "smooth" : "auto" });
+        }
+      }
 
       const ms = animate ? DURATION : 0;
       const t = (props: string, dur: number, delay = 0) =>
@@ -280,6 +331,7 @@ export default function EventsPage() {
 
       bar.style.transition = t("height, padding, margin-bottom, --p", ms);
       divider.style.transition = t("top, opacity", ms);
+      if (tabsEl) tabsEl.style.transition = t("width", ms);
 
       bar.style.setProperty("--p", next ? "1" : "0");
       bar.style.padding = `${pad}px`;
@@ -299,8 +351,11 @@ export default function EventsPage() {
         chipsX.style.transform = `translate(${x}px, ${y + dy}px)`;
         chipsX.style.opacity = String(opacity);
       };
+      chipsX.style.pointerEvents = showChips ? "auto" : "none";
+      chipsX.toggleAttribute("inert", !showChips);
+      const finalOpacity = showChips ? 1 : 0;
       if (!ms) {
-        place(0, 1, 0);
+        place(0, finalOpacity, 0);
         return;
       }
       const OUT = Math.round(ms * 0.35); // sink + fade out in place
@@ -312,7 +367,7 @@ export default function EventsPage() {
       chipTimer = window.setTimeout(() => {
         place(16, 0, 0); // jump (invisible) to just below the target
         void chipsX.offsetWidth; // commit before animating back in
-        place(0, 1, IN);
+        place(0, finalOpacity, IN);
       }, ms - IN);
     }
 
@@ -357,8 +412,22 @@ export default function EventsPage() {
       }
     });
     if (filterBarRef.current) observer.observe(filterBarRef.current);
-    const tabsObserver = new ResizeObserver(remeasure);
-    if (filterTabsRef.current) tabsObserver.observe(filterTabsRef.current);
+    // The tabs box is sized explicitly (and animates), so only a change in
+    // the tabs' natural content width (e.g. categories loading) matters.
+    const tabsObserver = new ResizeObserver(() => {
+      const tabs = filterTabsRef.current;
+      if (tabs && metrics && tabs.scrollWidth !== metrics.tabsNaturalW) {
+        remeasure();
+      }
+    });
+    if (filterTabsRef.current) {
+      tabsObserver.observe(filterTabsRef.current);
+      Array.from(filterTabsRef.current.children).forEach((c) =>
+        tabsObserver.observe(c),
+      );
+    }
+    const tabsEl = filterTabsRef.current;
+    tabsEl?.addEventListener("scroll", updateFade, { passive: true });
     update();
     document.fonts?.ready.then(remeasure);
     region.addEventListener("scroll", schedule, { passive: true });
@@ -368,10 +437,12 @@ export default function EventsPage() {
       window.clearTimeout(chipTimer);
       observer.disconnect();
       tabsObserver.disconnect();
+      tabsEl?.removeEventListener("scroll", updateFade);
       region.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", remeasure);
     };
-  }, []);
+    // Re-run when categories load so the tabs are re-measured.
+  }, [categoryTabs.length]);
 
   const activeFeaturedIndex =
     featured.length === 0 ? 0 : featuredIndex % featured.length;
