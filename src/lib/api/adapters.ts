@@ -34,11 +34,16 @@ import {
 } from "./types";
 import { API_BASE_URL } from "./client";
 
-// Cover/banner URLs may be stored as an API-relative path (DB-hosted image) or
-// an absolute URL. Resolve relative ones against the API base.
+// Cover/banner URLs may be stored as an API-relative path (DB-hosted image),
+// a local /images/ static path, or an absolute URL. Resolve relative ones against the API base.
 export function resolveImageUrl(url: string | null): string | undefined {
   if (!url) return undefined;
-  return url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+  if (url.startsWith("http")) return url;
+  // Local previews (editor cover picker) — already loadable as-is.
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+  // Static assets bundled in /public (e.g. mock event covers) are same-origin.
+  if (url.startsWith("/images/")) return url;
+  return `${API_BASE_URL}${url}`;
 }
 
 // Shown when an organizer hasn't set custom terms/eligibility for an event.
@@ -268,6 +273,128 @@ function toIsoTimestamp(date: string, time?: string): string | undefined {
   return `${date}T${time && time !== "" ? time : "00:00"}:00+05:30`;
 }
 
+// Stand-in saved row for a brand-new event, so the editor's preview has
+// server-owned values (no registrations yet) to overlay the draft onto.
+export function blankEventDetail(organizerName = "You"): EventDetail {
+  return {
+    id: 0,
+    event_type_id: 0,
+    event_name: "",
+    mode_of_event_id: 1,
+    max_attendees: null,
+    city: "",
+    address: null,
+    status_id: 0,
+    start_date: null,
+    end_date: null,
+    ticket_price: 0,
+    is_featured: 0,
+    cover_image_url: null,
+    banner_image_url: null,
+    participation_link: null,
+    registered_count: 0,
+    registration_start: null,
+    registration_deadline: null,
+    participant_registration_start: null,
+    participant_registration_deadline: null,
+    description: null,
+    summary: null,
+    certificate_offered: 0,
+    created_by: null,
+    created_on: new Date().toISOString(),
+    updated_by: null,
+    updated_on: null,
+    organizer_id: null,
+    organizer_name: organizerName,
+    organizer_email: null,
+    max_tickets_per_registration: null,
+    participant_max_tickets_per_registration: null,
+    category_ids: null,
+    category_names: null,
+    terms: null,
+    eligibility: null,
+    duration_text: null,
+    attendee_registration_enabled: 1,
+    participant_registration_enabled: 0,
+    participant_price: null,
+    participant_capacity: null,
+    participant_registered_count: 0,
+    interested_count: 0,
+    attendee_label: null,
+    attendee_description: null,
+    participant_label: null,
+    participant_description: null,
+  };
+}
+
+// Live preview for the event editor: overlays the unsaved draft onto the
+// event's saved EventDetail row, so adaptApiEvent() can render it with the
+// exact same fallbacks the public page uses. Registered/interested counts
+// and other server-owned columns stay as saved.
+export function draftToPreviewDetail(
+  base: EventDetail,
+  data: EventDetailData,
+): EventDetail {
+  const start = toIsoTimestamp(data.date, data.time) ?? null;
+  // The draft has no end date — keep the saved event's length and move it
+  // with the start, so a multi-day event stays multi-day in the preview.
+  let end = base.end_date;
+  if (start && base.start_date && base.end_date) {
+    const span =
+      new Date(base.end_date).getTime() - new Date(base.start_date).getTime();
+    end = new Date(new Date(start).getTime() + span).toISOString();
+  } else if (!start) {
+    end = null;
+  }
+  const participant = data.participantRegistrationEnabled;
+  return {
+    ...base,
+    event_name: data.title,
+    event_type_id: data.type ?? base.event_type_id,
+    mode_of_event_id: data.mode,
+    summary: data.summary.trim() || null,
+    description: data.description || null,
+    start_date: start,
+    end_date: end,
+    city: data.city,
+    address: data.location || null,
+    participation_link: data.participationLink || null,
+    max_attendees: data.capacity || null,
+    ticket_price: data.priceAmount,
+    cover_image_url: data.coverImageUrl || null,
+    registration_start: data.attendeeRegistrationOpens
+      ? (toIsoTimestamp(data.attendeeRegistrationOpens) ?? null)
+      : null,
+    registration_deadline: data.attendeeRegistrationCloses
+      ? (toIsoTimestamp(data.attendeeRegistrationCloses) ?? null)
+      : null,
+    participant_registration_start:
+      participant && data.participantRegistrationOpens
+        ? (toIsoTimestamp(data.participantRegistrationOpens) ?? null)
+        : null,
+    participant_registration_deadline:
+      participant && data.participantRegistrationCloses
+        ? (toIsoTimestamp(data.participantRegistrationCloses) ?? null)
+        : null,
+    terms: data.terms.trim() || null,
+    eligibility: data.eligibility.trim() || null,
+    duration_text: data.duration.trim() || null,
+    certificate_offered: data.certificate ? 1 : 0,
+    attendee_label: data.attendeeLabel.trim() || null,
+    attendee_description: data.attendeeDescription.trim() || null,
+    attendee_registration_enabled: data.attendeeRegistrationEnabled ? 1 : 0,
+    max_tickets_per_registration:
+      data.attendeeMaxTicketsPerRegistration || null,
+    participant_registration_enabled: participant ? 1 : 0,
+    participant_label: data.participantLabel.trim() || null,
+    participant_description: data.participantDescription.trim() || null,
+    participant_price: data.participantPriceAmount,
+    participant_capacity: data.participantCapacity || null,
+    participant_max_tickets_per_registration:
+      data.participantMaxTicketsPerRegistration || null,
+  };
+}
+
 // Maps the wizard's EventDetailData onto the ORDS create payload. Only fields
 // with a real backing column are sent; timeline/cover-upload handled separately.
 export function toCreatePayload(
@@ -282,6 +409,7 @@ export function toCreatePayload(
     title: data.title,
     event_type_id: data.type,
     mode_of_event_id: data.mode,
+    summary: data.summary.trim() || undefined,
     description: data.description || undefined,
     // null (not undefined) when blank — an omitted key gets dropped by
     // JSON.stringify and the PUT handler leaves the existing column alone,
@@ -420,11 +548,14 @@ export function toEventDraft(
   timeline: EventTimelineApi[] = [],
   rounds: EventRoundApi[] = [],
   questions: EventQuestionApi[] = [],
+  socialLinks: { platform: string; url: string }[] = [],
+  media: { url: string }[] = [],
 ): EventDetailData {
   return {
     id: detail.id,
     type: detail.event_type_id,
     title: detail.event_name,
+    summary: detail.summary ?? "",
     description: detail.description ?? "",
     priceAmount: detail.ticket_price ?? 0,
     capacity: detail.max_attendees ?? 0,
@@ -463,8 +594,13 @@ export function toEventDraft(
       : "",
     duration: detail.duration_text ?? "",
     coverImageUrl: resolveImageUrl(detail.cover_image_url) ?? "",
-    mediaUrls: detail.banner_image_url ? [detail.banner_image_url] : [],
-    socialLinks: [],
+    mediaUrls:
+      media.length > 0
+        ? media.map((m) => m.url)
+        : detail.banner_image_url
+          ? [detail.banner_image_url]
+          : [],
+    socialLinks: socialLinks.map(({ platform, url }) => ({ platform, url })),
     timeline: timeline.map((row) => {
       const item = adaptTimelineItem(row);
       return {
@@ -826,6 +962,8 @@ export function adaptApiEvent(
     registrationDeadlineIso: detail?.registration_deadline ?? null,
     duration: formatDuration(event.start_date, event.end_date),
     endDateIso: event.end_date ?? event.start_date ?? null,
+    startDateIso: event.start_date ?? null,
+    summary: (event as Partial<EventDetail>).summary || undefined,
     durationText: detail?.duration_text ?? undefined,
     // No team-size columns yet — default to individual attendance.
     teamSize: "Individual",
@@ -835,6 +973,7 @@ export function adaptApiEvent(
       : [],
     timeline: [],
     rounds: [],
+    organizerId: detail?.organizer_id ?? undefined,
     organizer: {
       name: detail?.organizer_name || detail?.created_by || "GCODE Team",
       title: "Organizer",

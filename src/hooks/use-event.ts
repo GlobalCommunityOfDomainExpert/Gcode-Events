@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getEvent,
+  listEventMedia,
+  listEventSocialLinks,
   listEventTimeline,
   listEventQuestions,
 } from "@/lib/api/events";
@@ -32,16 +34,27 @@ export function useEvent(id: string | undefined) {
       if (!id) return;
       if (!silent) setStatus("loading");
       try {
-        const [detail, timeline, rounds, questions, types, modes, statuses] =
-          await Promise.all([
-            getEvent(id),
-            listEventTimeline(id),
-            listEventRounds(id),
-            listEventQuestions(id),
-            getEventTypes(),
-            getModes(),
-            getStatuses(),
-          ]);
+        const [
+          detail,
+          timeline,
+          rounds,
+          questions,
+          links,
+          media,
+          types,
+          modes,
+          statuses,
+        ] = await Promise.all([
+          getEvent(id),
+          listEventTimeline(id),
+          listEventRounds(id),
+          listEventQuestions(id),
+          listEventSocialLinks(id),
+          listEventMedia(id),
+          getEventTypes(),
+          getModes(),
+          getStatuses(),
+        ]);
         const typeNames = Object.fromEntries(types.map((t) => [t.id, t.name]));
         const modeNames = Object.fromEntries(
           modes.map((m) => [m.id, m.mode_name]),
@@ -76,6 +89,9 @@ export function useEvent(id: string | undefined) {
           ...adapted,
           timeline: timeline.map(adaptTimelineItem),
           rounds: rounds.map(adaptEventRound),
+          socialLinks: links.map(({ platform, url }) => ({ platform, url })),
+          mediaUrls:
+            media.length > 0 ? media.map((m) => m.url) : adapted.mediaUrls,
           duration,
         });
         setStatus("ready");
