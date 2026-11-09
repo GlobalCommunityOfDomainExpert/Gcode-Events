@@ -34,12 +34,55 @@ const QUESTION_TYPE_OPTIONS: { value: EventQuestionData["type"]; label: string }
 ];
 
 function emptyQuestion(appliesTo: "ATTENDEE" | "PARTICIPANT"): EventQuestionData {
-  return { id: null, prompt: "", type: "TEXT", required: false, appliesTo, options: [] };
+  return { id: null, prompt: "", type: "TEXT", required: false, allowOther: false, appliesTo, options: [] };
 }
 
 function emptyOption() {
-  return { id: null, label: "" };
+  return { id: null, settingId: null, label: "", advancedEnabled: false, advancedRequired: false, advancedOptions: [] };
 }
+function updateTreeOption(
+  options: EventQuestionData["options"], path: number[], patch: Partial<EventQuestionData["options"][number]>,
+): EventQuestionData["options"] {
+  if (!path.length) return options;
+  const [index, ...rest] = path;
+  return options.map((option, i) => i !== index ? option : rest.length
+    ? { ...option, advancedOptions: updateTreeOption(option.advancedOptions, rest, patch) }
+    : { ...option, ...patch });
+}
+
+function FollowupOptionEditor({
+  options, path, onChange,
+}: {
+  options: EventQuestionData["options"][number][];
+  path: number[];
+  onChange: (path: number[], patch: Partial<EventQuestionData["options"][number]>) => void;
+}) {
+  return <div className="ml-4 space-y-2 border-l-2 pl-3">
+    {options.map((option, index) => {
+      const optionPath = [...path, index];
+      return <div key={option.id ?? optionPath.join("-")} className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Input size="sm" placeholder={`Follow-up choice ${index + 1}`} value={option.label}
+            onChange={(e) => onChange(optionPath, { label: e.target.value })} className="flex-1" />
+          <RemoveIconButton ariaLabel="Remove follow-up choice"
+            onClick={() => onChange(path, { advancedOptions: options.filter((_, i) => i !== index) })} />
+          <Checkbox label="Ask a follow-up" checked={option.advancedEnabled}
+            onChange={(e) => onChange(optionPath, { advancedEnabled: e.target.checked })} />
+        </div>
+        {option.advancedEnabled && <>
+          <Checkbox label="Require at least one follow-up choice" checked={option.advancedRequired}
+            onChange={(e) => onChange(optionPath, { advancedRequired: e.target.checked })} />
+          {option.advancedOptions.filter((child) => child.label.trim()).length === 0 && <p className="text-small text-danger">Add at least one choice for this follow-up.</p>}
+          <FollowupOptionEditor options={option.advancedOptions} path={optionPath} onChange={onChange} />
+        </>}
+      </div>;
+    })}
+    <Button variant="secondary" size="xs" onClick={() => onChange(path, {
+      advancedOptions: [...options, { id: null, settingId: null, label: "", advancedEnabled: false, advancedRequired: false, advancedOptions: [] }],
+    })}>+ Add follow-up choice</Button>
+  </div>;
+}
+const isOtherChoice = (label: string) => /^(other|others|other \(please specify\))$/i.test(label.trim());
 
 export interface StepAdditionalInfoProps {
   data: EventDetailData;
@@ -104,6 +147,11 @@ function CategoryQuestions({
         i === optionIndex ? { ...o, label: value } : o,
       ),
     });
+  }
+
+  function updateFollowup(questionIndex: number, path: number[], patch: Partial<EventQuestionData["options"][number]>) {
+    const question = data.questions[questionIndex];
+    updateQuestion(questionIndex, { options: updateTreeOption(question.options, path, patch) });
   }
 
   function addOption(questionIndex: number) {
@@ -181,7 +229,8 @@ function CategoryQuestions({
               {question.type !== "TEXT" && (
                 <div className="space-y-2 pl-4">
                   {question.options.map((option, optionIndex) => (
-                    <div key={optionIndex} className="flex items-center gap-2">
+                    <div key={option.id ?? optionIndex} className="space-y-2">
+                    <div className="flex items-center gap-2">
                       <Input
                         size="sm"
                         placeholder={`Option ${optionIndex + 1}`}
@@ -195,8 +244,34 @@ function CategoryQuestions({
                         onClick={() => removeOption(questionIndex, optionIndex)}
                         ariaLabel="Remove option"
                       />
+                      {data.advancedAdditionalQuestionsEnabled && question.type === "CHECKBOX" && !isOtherChoice(option.label) && (
+                        <Checkbox
+                          label="Ask a follow-up"
+                          checked={question.options[optionIndex].advancedEnabled}
+                          onChange={(e) => updateQuestion(questionIndex, { options: question.options.map((o, i) => i === optionIndex ? { ...o, advancedEnabled: e.target.checked } : o) })}
+                        />
+                      )}
+                    </div>
+                    {data.advancedAdditionalQuestionsEnabled && question.type === "CHECKBOX" && option.advancedEnabled && !isOtherChoice(option.label) && (
+                      <div className="ml-4"><Checkbox label="Require at least one follow-up choice" checked={option.advancedRequired}
+                        onChange={(e) => updateQuestion(questionIndex, { options: question.options.map((o, i) => i === optionIndex ? { ...o, advancedRequired: e.target.checked } : o) })} /></div>
+                    )}
+                    {data.advancedAdditionalQuestionsEnabled && question.type === "CHECKBOX" && option.advancedEnabled && !isOtherChoice(option.label) && option.advancedOptions.filter((child) => child.label.trim()).length === 0 && (
+                      <p className="text-small text-danger ml-4">Add at least one choice for this follow-up.</p>
+                    )}
+                    {data.advancedAdditionalQuestionsEnabled && question.type === "CHECKBOX" && option.advancedEnabled && !isOtherChoice(option.label) && (
+                      <FollowupOptionEditor options={option.advancedOptions} path={[optionIndex]} onChange={(path, patch) => updateFollowup(questionIndex, path, patch)} />
+                    )}
                     </div>
                   ))}
+                  {data.advancedAdditionalQuestionsEnabled && question.type === "CHECKBOX" && (
+                    <Checkbox label="Include Other (please specify)" checked={question.allowOther}
+                      onChange={(e) => {
+                        const options = [...question.options];
+                        if (e.target.checked && !options.some((o) => isOtherChoice(o.label))) options.push({ ...emptyOption(), label: "Other (please specify)" });
+                        updateQuestion(questionIndex, { allowOther: e.target.checked, options: e.target.checked ? options : options.filter((o) => !isOtherChoice(o.label)) });
+                      }} />
+                  )}
                   <Button
                     variant="secondary"
                     size="xs"
@@ -232,6 +307,12 @@ export function StepAdditionalInfo({
           curated separately — turn either on to build its own set.
         </p>
       </div>
+
+      <Card padding="md" className="space-y-3">
+        <Checkbox label="Advanced Additional Questions" checked={data.advancedAdditionalQuestionsEnabled}
+          onChange={(e) => onChange("advancedAdditionalQuestionsEnabled", e.target.checked)} />
+        <p className="text-small text-text-secondary pl-7">Adds checkbox follow-ups that can open further levels, plus an optional Other (please specify) field. Existing simple questions stay on their current flow when this is off.</p>
+      </Card>
 
       <Card padding="md" className="space-y-3">
         <Checkbox

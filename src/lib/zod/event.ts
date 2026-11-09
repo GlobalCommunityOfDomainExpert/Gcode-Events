@@ -14,15 +14,23 @@ const eventSocialLinkSchema = z.object({
   url: z.string(),
 });
 
-const eventQuestionOptionSchema = z.object({
+type EventQuestionOptionInput = {
+  id: number | null; settingId?: number | null; label: string; advancedEnabled: boolean; advancedRequired: boolean;
+  advancedOptions: EventQuestionOptionInput[];
+};
+const eventQuestionOptionSchema: z.ZodType<EventQuestionOptionInput> = z.lazy(() => z.object({
   // Existing GCODE_EVENT_QUESTION_OPTIONS.ID, null for an option added in
   // this edit session — id isn't actually used on save (replace_questions
   // is a full delete-then-reinsert, so it never updates in place like
   // rounds/rubric aspire to), kept only so an existing option can be
   // matched back up after a save+refetch round-trip.
   id: z.number().nullable().default(null),
+  settingId: z.number().nullable().default(null),
   label: z.string().default(""),
-});
+  advancedEnabled: z.boolean().default(false),
+  advancedRequired: z.boolean().default(false),
+  advancedOptions: z.array(eventQuestionOptionSchema).default([]),
+}));
 
 const eventQuestionSchema = z.object({
   // Existing GCODE_EVENT_QUESTIONS.ID, null for a question added in this
@@ -31,6 +39,7 @@ const eventQuestionSchema = z.object({
   prompt: z.string().default(""),
   type: z.enum(["TEXT", "RADIO", "CHECKBOX"]).default("TEXT"),
   required: z.boolean().default(false),
+  allowOther: z.boolean().default(false),
   // Which registration category this individual question is asked of —
   // picked per question, not one shared page-wide setting.
   appliesTo: z.enum(["ATTENDEE", "PARTICIPANT"]).default("PARTICIPANT"),
@@ -144,6 +153,7 @@ export const eventDetailDataSchema = z.object({
   // surfaced here); an organizer who wants that today builds an equivalent
   // question. Brand-new opt-in feature, default empty.
   questions: z.array(eventQuestionSchema).default([]),
+  advancedAdditionalQuestionsEnabled: z.boolean().default(false),
 });
 
 export type EventDetailData = z.infer<typeof eventDetailDataSchema>;

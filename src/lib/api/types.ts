@@ -131,6 +131,16 @@ export interface ParticipantAnswerApi {
   answer_text: string | null;
 }
 
+export interface ParticipantAdvancedAnswerApi {
+  question_id: number;
+  setting_id: number;
+  source_option_id: number | null;
+  parent_advanced_option_id: number | null;
+  advanced_option_id: number | null;
+  is_other: number;
+  answer_text: string | null;
+}
+
 export interface ApiListResponse<T> {
   items: T[];
   hasMore: boolean;
@@ -444,6 +454,8 @@ export interface CashfreeOrderApi {
   payment_session_id: string;
   amount: number;
   currency: string;
+  // Environment the backend (CF_ENV row) created the order in; open checkout in the matching mode.
+  env?: "test" | "prod";
 }
 
 export type CreateCashfreeOrderResult = CashfreeOrderApi | FreeRegistrationApi;

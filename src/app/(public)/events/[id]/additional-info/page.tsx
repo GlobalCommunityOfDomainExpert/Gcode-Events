@@ -34,6 +34,8 @@ import {
   getParticipant,
   listParticipantAnswers,
   replaceParticipantAnswers,
+  listParticipantAdvancedAnswers,
+  replaceParticipantAdvancedAnswers,
   submitParticipantAudio,
   uploadParticipantAudio,
 } from "@/lib/api/participants";
@@ -52,6 +54,7 @@ const SUBMISSION_MODE_OPTIONS: { value: SubmissionMode; label: string }[] = [
 ];
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const isOtherChoice = (label: string) => /^(other|others|other \(please specify\))$/i.test(label.trim());
 
 function formatCountdown(ms: number): string {
   const totalMinutes = Math.max(0, Math.floor(ms / 60000));
@@ -127,6 +130,8 @@ export default function AdditionalInfoPage() {
   const [optionAnswers, setOptionAnswers] = useState<
     Record<string, Set<string>>
   >({});
+  const [followupAnswers, setFollowupAnswers] = useState<Record<string, Set<string>>>({});
+  const [otherAnswers, setOtherAnswers] = useState<Record<string, string>>({});
   const [attemptedConfirm, setAttemptedConfirm] = useState(false);
   // Re-renders every 30s so the countdown/disqualification state stays live
   // without the participant having to refresh the page.
@@ -166,6 +171,20 @@ export default function AdditionalInfoPage() {
         }
         setTextAnswers(initialText);
         setOptionAnswers(initialOptions);
+        const advancedRows = await listParticipantAdvancedAnswers(row.id).catch(() => []);
+        if (cancelled) return;
+        const initialFollowups: Record<string, Set<string>> = {};
+        const initialOthers: Record<string, string> = {};
+        for (const answer of advancedRows) {
+          if (Number(answer.is_other) === 1) initialOthers[String(answer.question_id)] = answer.answer_text ?? "";
+          else if (answer.source_option_id !== null && answer.advanced_option_id !== null) {
+            const key = String(answer.setting_id);
+            const selected = initialFollowups[key] ?? new Set<string>();
+            selected.add(String(answer.advanced_option_id)); initialFollowups[key] = selected;
+          }
+        }
+        setFollowupAnswers(initialFollowups);
+        setOtherAnswers(initialOthers);
       } catch {
         if (!cancelled) setParticipantStatus("error");
       }
@@ -278,14 +297,47 @@ export default function AdditionalInfoPage() {
   function requiredQuestionErrors() {
     const errors: Record<string, string> = {};
     for (const question of applicableQuestions) {
-      if (!question.required) continue;
-      const answered =
-        question.type === "TEXT"
+      if (question.required) {
+        const answered = question.type === "TEXT"
           ? !!textAnswers[question.id]?.trim()
           : !!optionAnswers[question.id]?.size;
-      if (!answered) errors[question.id] = "This field is required.";
+        if (!answered) errors[question.id] = "This field is required.";
+      }
+      const otherOption = question.options.find((o) => isOtherChoice(o.label));
+      if (question.allowOther && otherOption && optionAnswers[question.id]?.has(otherOption.id) && !otherAnswers[question.id]?.trim()) {
+        errors[`${question.id}-other`] = "Please specify your answer.";
+      }
+      if (question.type === "CHECKBOX") for (const option of question.options) {
+        if (optionAnswers[question.id]?.has(option.id)) validateFollowup(option, errors);
+      }
     }
     return errors;
+  }
+
+  function validateFollowup(parent: EventQuestion["options"][number], errors: Record<string, string>) {
+    if (!parent.advancedEnabled || !parent.settingId) return;
+    const key = String(parent.settingId);
+    const selected = followupAnswers[key] ?? new Set<string>();
+    if (parent.advancedRequired && selected.size === 0) errors[key] = "Select at least one follow-up choice.";
+    for (const child of parent.advancedOptions) if (selected.has(child.id)) validateFollowup(child, errors);
+  }
+
+  function renderFollowup(parent: EventQuestion["options"][number]): ReactNode {
+    if (!parent.advancedEnabled || !parent.settingId || parent.advancedOptions.length === 0) return null;
+    const key = String(parent.settingId);
+    return <div className="ml-4 space-y-2 border-l-2 pl-4">
+      <p className="text-small text-text-secondary">{parent.label} — select applicable options{parent.advancedRequired ? " (required)" : ""}</p>
+      {parent.advancedOptions.map((choice) => <div key={choice.id} className="space-y-2">
+        <Checkbox label={choice.label} checked={followupAnswers[key]?.has(choice.id) ?? false}
+          onChange={() => setFollowupAnswers((prev) => {
+            const next = new Set(prev[key] ?? []);
+            if (next.has(choice.id)) next.delete(choice.id); else next.add(choice.id);
+            return { ...prev, [key]: next };
+          })} />
+        {followupAnswers[key]?.has(choice.id) && renderFollowup(choice)}
+      </div>)}
+      {questionErrors[key] && <p className="text-small text-danger">{questionErrors[key]}</p>}
+    </div>;
   }
 
   function handleModeChange(value: SubmissionMode) {
@@ -332,12 +384,34 @@ export default function AdditionalInfoPage() {
           if (value) items.push({ questionId: Number(question.id), answerText: value });
         } else {
           for (const optionId of optionAnswers[question.id] ?? []) {
+            if (optionId === "__other__") continue;
             items.push({ questionId: Number(question.id), optionId: Number(optionId) });
           }
         }
       }
       if (applicableQuestions.length) {
         await replaceParticipantAnswers(participant!.id, items);
+      }
+      if (event?.advancedAdditionalQuestionsEnabled) {
+        const advancedItems: { questionId: number; settingId: number; sourceOptionId?: number; parentAdvancedOptionId?: number; advancedOptionId?: number; isOther: 1 | 0; answerText?: string }[] = [];
+        for (const question of applicableQuestions) {
+          const otherOption = question.options.find((o) => isOtherChoice(o.label));
+          if (question.allowOther && otherOption && optionAnswers[question.id]?.has(otherOption.id)) {
+            if (otherOption.settingId) advancedItems.push({ questionId: Number(question.id), settingId: otherOption.settingId,
+              sourceOptionId: Number(otherOption.id), isOther: 1, answerText: otherAnswers[question.id]?.trim() });
+          }
+          const collect = (parent: EventQuestion["options"][number], sourceOptionId: number, parentAdvancedOptionId: number | undefined) => {
+            if (!parent.advancedEnabled || !parent.settingId) return;
+            for (const advancedOptionId of followupAnswers[String(parent.settingId)] ?? []) {
+              advancedItems.push({ questionId: Number(question.id), settingId: parent.settingId, sourceOptionId,
+                parentAdvancedOptionId, advancedOptionId: Number(advancedOptionId), isOther: 0 });
+              const child = parent.advancedOptions.find((option) => Number(option.id) === Number(advancedOptionId));
+              if (child) collect(child, sourceOptionId, Number(advancedOptionId));
+            }
+          };
+          for (const option of question.options) if (optionAnswers[question.id]?.has(option.id)) collect(option, Number(option.id), undefined);
+        }
+        await replaceParticipantAdvancedAnswers(participant!.id, advancedItems);
       }
       if (audioAppliesToMe && !isPastDeadline && hasAudioReplacement) {
         const { audio_submission_url } = audioBlob
@@ -457,21 +531,25 @@ export default function AdditionalInfoPage() {
                 </div>
               )}
               {question.type === "CHECKBOX" && (
-                <div className="flex flex-wrap gap-4">
+                <div className="space-y-3">
                   {question.options.map((option) => (
-                    <Checkbox
-                      key={option.id}
-                      id={`question-${question.id}-${option.id}`}
-                      label={option.label}
-                      error={!!questionErrors[question.id]}
-                      aria-describedby={questionErrors[question.id] ? `question-${question.id}-error` : undefined}
-                      checked={
-                        optionAnswers[question.id]?.has(option.id) ?? false
-                      }
-                      onChange={() =>
-                        toggleCheckboxOption(question.id, option.id)
-                      }
-                    />
+                    <div key={option.id} className="space-y-2">
+                      <Checkbox
+                        id={`question-${question.id}-${option.id}`}
+                        label={option.label}
+                        error={!!questionErrors[question.id]}
+                        aria-describedby={questionErrors[question.id] ? `question-${question.id}-error` : undefined}
+                        checked={optionAnswers[question.id]?.has(option.id) ?? false}
+                        onChange={() => toggleCheckboxOption(question.id, option.id)}
+                      />
+                      {question.allowOther && isOtherChoice(option.label) && optionAnswers[question.id]?.has(option.id) && (
+                        <FormField label="Please specify" htmlFor={`question-${question.id}-other-text`} required error={questionErrors[`${question.id}-other`]}>
+                          <Input id={`question-${question.id}-other-text`} maxLength={1000} value={otherAnswers[question.id] ?? ""}
+                            error={!!questionErrors[`${question.id}-other`]} onChange={(e) => setOtherAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))} />
+                        </FormField>
+                      )}
+                      {option.advancedEnabled && !isOtherChoice(option.label) && optionAnswers[question.id]?.has(option.id) && option.advancedOptions.length > 0 && renderFollowup(option)}
+                    </div>
                   ))}
                 </div>
               )}

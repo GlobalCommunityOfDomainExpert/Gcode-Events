@@ -5,6 +5,7 @@ import {
   MyParticipationApi,
   ParticipantApi,
   ParticipantAnswerApi,
+  ParticipantAdvancedAnswerApi,
 } from "./types";
 
 // Guest registration: no sign-in required. Server finds-or-creates the
@@ -165,6 +166,17 @@ export function replaceParticipantAnswers(
     method: "POST",
     body: items,
   });
+}
+
+export async function listParticipantAdvancedAnswers(id: number | string) {
+  const { items } = await apiRequest<ApiListResponse<ParticipantAdvancedAnswerApi>>(`/participants/${id}/advanced-question-tree-answers`);
+  return items;
+}
+export function replaceParticipantAdvancedAnswers(id: number | string, items: {
+  questionId: number; settingId: number; sourceOptionId?: number; parentAdvancedOptionId?: number;
+  advancedOptionId?: number; isOther: 1 | 0; answerText?: string;
+}[]) {
+  return apiRequest(`/participants/${id}/advanced-question-tree-answers`, { method: "POST", body: items });
 }
 
 // Stays clear of Vercel's ~4.5MB serverless function body cap. Blobs at or

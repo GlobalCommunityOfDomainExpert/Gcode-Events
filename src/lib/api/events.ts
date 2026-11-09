@@ -179,6 +179,93 @@ export function replaceEventQuestions(
   });
 }
 
+export interface AdvancedOptionSettingApi {
+  setting_id: number;
+  question_id: number;
+  source_option_id: number;
+  parent_adv_option_id?: number | null;
+  is_enabled: number;
+  is_required: number;
+  allow_other: number;
+  parent_advanced_option_id: number | null;
+}
+export interface AdvancedOptionApi {
+  id: number;
+  question_id: number;
+  source_option_id: number;
+  setting_id: number;
+  option_label: string;
+  sort_order: number;
+}
+export function saveAdvancedQuestionConfiguration(id: number | string, items: unknown[]) {
+  return apiRequest(`/events/${id}/advanced-question-tree`, { method: "POST", body: items });
+}
+export async function getEventAdvancedEnabled(id: number | string): Promise<boolean> {
+  const { items } = await apiRequest<{ items: { advanced_enabled: number }[] }>(
+    `/events/${id}/advanced-question-flag`,
+    { cache: "no-store" },
+  );
+  return Number(items[0]?.advanced_enabled ?? 0) === 1;
+}
+export function setEventAdvancedEnabled(id: number | string, enabled: boolean) {
+  return apiRequest(`/events/${id}/advanced-question-flag`, {
+    method: "PUT", body: { advancedEnabled: enabled ? 1 : 0 },
+  });
+}
+
+export async function listAdvancedOptionSettings(id: number | string) {
+  // ORDS paginates this query endpoint too. If only the first page is read,
+  // settings for later categories are missing and their follow-ups won't be
+  // attached to the event question tree.
+  const path = `/events/${id}/advanced-question-tree-settings`;
+  const items: AdvancedOptionSettingApi[] = [];
+  let pageNumber: number | undefined;
+
+  while (true) {
+    const page = await apiRequest<{
+      items: AdvancedOptionSettingApi[];
+      next?: { $ref: string };
+    }>(path, {
+      query: pageNumber === undefined ? undefined : { page: pageNumber },
+      cache: "no-store",
+    });
+    items.push(...page.items);
+
+    if (!page.next?.$ref) return items;
+
+    const nextPage = new URL(page.next.$ref, API_BASE_URL).searchParams.get("page");
+    const parsedPageNumber = nextPage === null ? NaN : Number(nextPage);
+    if (!Number.isInteger(parsedPageNumber) || parsedPageNumber <= (pageNumber ?? 0)) {
+      throw new Error("Advanced question settings returned an invalid ORDS next-page link.");
+    }
+    pageNumber = parsedPageNumber;
+  }
+}
+
+export function listAdvancedOptions(id: number | string) {
+  // The event editor needs the complete choice set at once. In particular,
+  // it should not lose the first page of choices if a later ORDS page request
+  // is rejected or served from a stale conditional cache entry.
+  const path = `/events/${id}/advanced-question-tree-options`;
+  return apiRequest<ApiListResponse<AdvancedOptionApi>>(path, {
+    query: { limit: 100 },
+    cache: "no-store",
+  }).then(async (page) => {
+    if (!page.hasMore) return page.items;
+
+    const items = [...page.items];
+    let offset = page.items.length;
+    while (true) {
+      const next = await apiRequest<ApiListResponse<AdvancedOptionApi>>(path, {
+        query: { limit: 100, offset },
+        cache: "no-store",
+      });
+      items.push(...next.items);
+      if (!next.hasMore || next.items.length === 0) return items;
+      offset += next.items.length;
+    }
+  });
+}
 export function deleteEvent(id: number | string): Promise<void> {
   return apiRequest<void>(`/events/${id}`, { method: "DELETE" });
 }

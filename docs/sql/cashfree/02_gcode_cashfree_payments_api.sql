@@ -23,6 +23,10 @@
 -- Config/secret rows read from GCODE_APP_SECRETS:
 --   CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_BASE_URL, CASHFREE_API_VERSION   (required)
 --   CASHFREE_NOTIFY_URL, CASHFREE_RETURN_BASE_URL, CASHFREE_ORDER_EXPIRY_MINUTES    (optional)
+--   Environment = the CF_ENV row ('production' | 'sandbox'), a backend-only switch. Each order stores the
+--   environment it was created in (GCODE_PAYMENT_ORDERS_CF.CF_ENV) so verify/webhook keep using its keys.
+--   Per-environment rows: TEST_CASHFREE_<X> and CASHFREE_PROD_<X> for APP_ID, SECRET_KEY, BASE_URL, RETURN_BASE_URL.
+--   Shared rows: CASHFREE_API_VERSION, CASHFREE_NOTIFY_URL, CASHFREE_ORDER_EXPIRY_MINUTES.
 
 CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
 
@@ -42,7 +46,8 @@ CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
     p_order_id           OUT VARCHAR2,
     p_payment_session_id OUT VARCHAR2,
     p_amount             OUT NUMBER,
-    p_currency           OUT VARCHAR2
+    p_currency           OUT VARCHAR2,
+    p_cf_env             OUT VARCHAR2    -- 'TEST'|'PROD' actually used; checkout must run in the same mode
   );
 
   -- p_status: PAID (p_participant_id set) | PENDING (not paid / still being processed - poll
@@ -69,7 +74,8 @@ CREATE OR REPLACE PACKAGE GCODE_CASHFREE_PAYMENTS_API AS
   --   NO NETWORK .. the database could not reach CASHFREE_BASE_URL (outbound/ACL/certificate problem)
   PROCEDURE ping(
     p_http_status OUT NUMBER,
-    p_result      OUT VARCHAR2
+    p_result      OUT VARCHAR2,
+    p_env         IN  VARCHAR2 DEFAULT NULL    -- NULL = whatever CF_ENV currently says
   );
 
   -- Housekeeping: flips never-paid orders past their expiry to EXPIRED. Correctness does not
@@ -87,23 +93,62 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
   ---------------------------------------------------------------------------
   -- Config / secrets
   ---------------------------------------------------------------------------
-  FUNCTION get_secret(p_name VARCHAR2) RETURN VARCHAR2 IS
-    v_val GCODE_APP_SECRETS.secret_value%TYPE;
-  BEGIN
-    SELECT secret_value INTO v_val FROM GCODE_APP_SECRETS WHERE secret_name = p_name;
-    RETURN v_val;
-  EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-      RAISE_APPLICATION_ERROR(-20030, 'Missing config row ' || p_name || ' in GCODE_APP_SECRETS.');
-  END get_secret;
+  -- Environment of the request being served: 'TEST' or 'PROD'. Every entry point (create_order,
+  -- verify_order, process_webhook, ping) sets it before any lookup, because pooled ORDS sessions keep
+  -- package state between requests.
+  g_env VARCHAR2(4) := 'TEST';
 
-  FUNCTION get_optional(p_name VARCHAR2) RETURN VARCHAR2 IS
+  -- Raw single-row lookup; NULL when the row is absent.
+  FUNCTION read_row(p_name VARCHAR2) RETURN VARCHAR2 IS
     v_val GCODE_APP_SECRETS.secret_value%TYPE;
   BEGIN
     SELECT secret_value INTO v_val FROM GCODE_APP_SECRETS WHERE secret_name = p_name;
     RETURN v_val;
   EXCEPTION
     WHEN NO_DATA_FOUND THEN RETURN NULL;
+  END read_row;
+
+  -- 'PROD'/'PRODUCTION' -> PROD, 'TEST'/'SANDBOX' -> TEST, missing -> PROD (never fall into sandbox
+  -- by accident), anything else is rejected.
+  FUNCTION norm_env(p_env VARCHAR2) RETURN VARCHAR2 IS
+    v VARCHAR2(20) := UPPER(NVL(TRIM(p_env), 'PROD'));
+  BEGIN
+    IF v IN ('PROD', 'PRODUCTION') THEN RETURN 'PROD'; END IF;
+    IF v IN ('TEST', 'SANDBOX')    THEN RETURN 'TEST'; END IF;
+    RAISE_APPLICATION_ERROR(-20032, 'Unknown payment environment.');
+  END norm_env;
+
+  -- Rows that differ per environment: TEST_CASHFREE_<X> / CASHFREE_PROD_<X>. Everything else
+  -- (CASHFREE_API_VERSION, CASHFREE_NOTIFY_URL, CASHFREE_ORDER_EXPIRY_MINUTES) is shared.
+  FUNCTION resolve_name(p_name VARCHAR2, p_env VARCHAR2) RETURN VARCHAR2 IS
+  BEGIN
+    IF p_name IN ('CASHFREE_APP_ID', 'CASHFREE_SECRET_KEY', 'CASHFREE_BASE_URL', 'CASHFREE_RETURN_BASE_URL') THEN
+      RETURN CASE WHEN p_env = 'PROD'
+                  THEN 'CASHFREE_PROD_' || SUBSTR(p_name, LENGTH('CASHFREE_') + 1)
+                  ELSE 'TEST_' || p_name END;
+    END IF;
+    RETURN p_name;
+  END resolve_name;
+
+  FUNCTION get_secret_for(p_env VARCHAR2, p_name VARCHAR2) RETURN VARCHAR2 IS
+    v_name VARCHAR2(128) := resolve_name(p_name, p_env);
+    v_val  GCODE_APP_SECRETS.secret_value%TYPE;
+  BEGIN
+    SELECT secret_value INTO v_val FROM GCODE_APP_SECRETS WHERE secret_name = v_name;
+    RETURN v_val;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20030, 'Missing config row ' || v_name || ' in GCODE_APP_SECRETS.');
+  END get_secret_for;
+
+  FUNCTION get_secret(p_name VARCHAR2) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN get_secret_for(g_env, p_name);
+  END get_secret;
+
+  FUNCTION get_optional(p_name VARCHAR2) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN read_row(resolve_name(p_name, g_env));
   END get_optional;
 
   FUNCTION expiry_minutes RETURN PLS_INTEGER IS
@@ -378,7 +423,8 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     p_order_id           OUT VARCHAR2,
     p_payment_session_id OUT VARCHAR2,
     p_amount             OUT NUMBER,
-    p_currency           OUT VARCHAR2
+    p_currency           OUT VARCHAR2,
+    p_cf_env             OUT VARCHAR2    -- 'TEST'|'PROD' actually used; checkout must run in the same mode
   ) IS
     v_category          VARCHAR2(20) := NVL(UPPER(p_category), 'ATTENDEE');
     v_email             gcode_users.email%TYPE     := TRIM(p_email);
@@ -434,6 +480,9 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     v_resp              CLOB;
   BEGIN
     p_is_free := FALSE;
+    -- The single backend switch: GCODE_APP_SECRETS row CF_ENV = 'production' | 'sandbox'.
+    g_env    := norm_env(read_row('CF_ENV'));
+    p_cf_env := g_env;
 
     -- ---- Basic input ---------------------------------------------------
     IF p_quantity IS NULL OR p_quantity < 1 OR p_quantity <> TRUNC(p_quantity) THEN
@@ -620,6 +669,7 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
          AND amount = ROUND(v_amount * 100)
          AND NVL(coupon_id, -1) = NVL(v_coupon_id, -1)
          AND status = 'CREATED'
+         AND cf_env = g_env
          AND expires_on > SYSTIMESTAMP + INTERVAL '5' MINUTE
          AND payment_session_id IS NOT NULL
        ORDER BY created_on DESC
@@ -636,9 +686,14 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     -- Cashfree order_id: letters/digits/_/- only, 3-45 chars.
     v_cf_order_id := 'GC' || p_event_id || '_' || LOWER(SUBSTR(RAWTOHEX(SYS_GUID()), 1, 20));
 
+    -- Cashfree customer_id: letters/digits/_/- only. TM9 prints the number in plain notation (never
+    -- scientific, never '#'). A user_id that is not a short whole number gets a stable hash instead.
     v_customer_id := CASE
-      -- USER_ID can be 38 digits; plain TO_CHAR would fall back to scientific notation.
-      WHEN p_user_id IS NOT NULL THEN 'u' || TO_CHAR(p_user_id, 'FM99999999999999999999999999999999999999')
+      WHEN p_user_id IS NOT NULL AND p_user_id = TRUNC(p_user_id) AND p_user_id > 0
+           AND INSTR(TO_CHAR(p_user_id, 'TM9'), 'E') = 0 AND LENGTH(TO_CHAR(p_user_id, 'TM9')) <= 40
+        THEN 'u' || TO_CHAR(p_user_id, 'TM9')
+      WHEN p_user_id IS NOT NULL
+        THEN 'u' || SUBSTR(LOWER(RAWTOHEX(sha256(UTL_RAW.CAST_TO_RAW(TO_CHAR(p_user_id, 'TM9'))))), 1, 32)
       ELSE 'g' || SUBSTR(LOWER(RAWTOHEX(sha256(UTL_RAW.CAST_TO_RAW(LOWER(v_email))))), 1, 32)
     END;
 
@@ -694,11 +749,11 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     -- still completes normally, so a row inserted first would be left behind on a failed call).
     INSERT INTO GCODE_PAYMENT_ORDERS_CF (
       event_id, cf_order_id, payment_session_id, user_id, quantity, original_amount, amount,
-      currency, status, email, full_name, phone, category, coupon_id, expires_on
+      currency, status, email, full_name, phone, category, coupon_id, expires_on, cf_env
     ) VALUES (
       p_event_id, v_cf_order_id, p_payment_session_id, p_user_id, p_quantity,
       ROUND(v_original_amount * 100), ROUND(v_amount * 100),
-      'INR', 'CREATED', v_email, v_full_name, v_phone, v_category, v_coupon_id, v_expires_on
+      'INR', 'CREATED', v_email, v_full_name, v_phone, v_category, v_coupon_id, v_expires_on, g_env
     );
     COMMIT;
 
@@ -728,6 +783,9 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
       WHEN NO_DATA_FOUND THEN
         RAISE_APPLICATION_ERROR(-20001, 'Payment order not found.');
     END;
+
+    -- The order was created in one environment; it is always checked with that one's keys.
+    g_env := v_row.cf_env;
 
     -- Terminal states we already know: no need to bother Cashfree.
     IF v_row.status IN ('PAID', 'PAID_UNREGISTERED') THEN
@@ -810,8 +868,19 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
       RAISE_APPLICATION_ERROR(-20020, 'Webhook signature verification failed.');
     END IF;
 
-    v_expected := to_base64(hmac_sha256(p_timestamp || v_body, get_secret('CASHFREE_SECRET_KEY')));
-    IF v_expected <> p_signature THEN
+    -- Test and live orders share this URL, so try each environment's secret. Whichever matches only
+    -- proves the call came from Cashfree; verify_order below still re-reads the order itself.
+    FOR e IN (SELECT 'PROD' AS env FROM DUAL UNION ALL SELECT 'TEST' FROM DUAL) LOOP
+      v_expected := NULL;
+      BEGIN
+        v_expected := to_base64(hmac_sha256(p_timestamp || v_body, get_secret_for(e.env, 'CASHFREE_SECRET_KEY')));
+      EXCEPTION
+        WHEN OTHERS THEN NULL; -- that environment has no secret configured
+      END;
+      EXIT WHEN v_expected = p_signature;
+      v_expected := NULL;
+    END LOOP;
+    IF v_expected IS NULL THEN
       log_webhook(NULL, NULL, p_idempotency_key, 'N', 'N', 'Signature mismatch', p_payload);
       RAISE_APPLICATION_ERROR(-20020, 'Webhook signature verification failed.');
     END IF;
@@ -843,7 +912,8 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
   ---------------------------------------------------------------------------
   PROCEDURE ping(
     p_http_status OUT NUMBER,
-    p_result      OUT VARCHAR2
+    p_result      OUT VARCHAR2,
+    p_env         IN  VARCHAR2 DEFAULT NULL    -- NULL = whatever CF_ENV currently says
   ) IS
     C_PROBE CONSTANT VARCHAR2(40) := 'GC_PING_ORDER_THAT_DOES_NOT_EXIST';
     v_base  VARCHAR2(500);
@@ -852,6 +922,7 @@ CREATE OR REPLACE PACKAGE BODY GCODE_CASHFREE_PAYMENTS_API AS
     v_msg   VARCHAR2(300);
   BEGIN
     p_http_status := NULL;
+    g_env := norm_env(NVL(p_env, read_row('CF_ENV')));
 
     -- Reads every required row first so a missing one gets a precise message.
     BEGIN

@@ -85,7 +85,10 @@ export function Footer() {
             />
             <FooterLinkGroup
               title="Company"
-              links={[{ label: "Contact Us", href: "/contact-us" }]}
+              links={[
+                { label: "About Us", href: "/about-us" },
+                { label: "Contact Us", href: "/contact-us" },
+              ]}
             />
             <FooterLinkGroup
               title="Legal"

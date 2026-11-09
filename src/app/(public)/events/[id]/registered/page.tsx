@@ -30,6 +30,7 @@ import { useEvent } from "@/hooks/use-event";
 import { getParticipant } from "@/lib/api/participants";
 import { ParticipantApi } from "@/lib/api/types";
 import { getSession } from "@/lib/auth/session";
+import { renderTicketPng } from "@/lib/ticket-image";
 import { RegisteredSkeleton } from "./_components/registered-skeleton";
 
 export default function EventRegisteredPage() {
@@ -46,6 +47,7 @@ export default function EventRegisteredPage() {
     "loading" | "error" | "ready"
   >("loading");
   const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,12 +78,12 @@ export default function EventRegisteredPage() {
   // ticket in this registration's quantity. Encodes an opaque reference the
   // check-in flow can look up server-side; nothing sensitive.
   useEffect(() => {
-    if (!participant || params.id === "481") return;
+    if (!participant) return;
     const payload = `GCODE-PARTICIPANT-${participant.id}`;
     void QRCode.toDataURL(payload, { width: 200, margin: 1 }).then(
       setQrDataUrl,
     );
-  }, [params.id, participant]);
+  }, [participant]);
 
   const category = participant?.category ?? "ATTENDEE";
   const needsAdditionalInfo =
@@ -138,6 +140,30 @@ export default function EventRegisteredPage() {
 
   if (needsAdditionalInfo) return <RegisteredSkeleton />;
 
+  async function downloadTicket() {
+    if (!qrDataUrl || !event) return;
+    setDownloading(true);
+    try {
+      const blob = await renderTicketPng({
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        location: event.location,
+        badge: "Partner",
+        bookingRef,
+        qrDataUrl,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${bookingRef}-ticket.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -174,19 +200,12 @@ export default function EventRegisteredPage() {
             {quantity} ticket{quantity === 1 ? "" : "s"} confirmed
           </p>
           {isBsssPartnerEvent && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <p className="text-small text-text-primary">
-                Want to become a GCODE Business Partner? Register as a Service
-                Partner or Investor to access startup collaboration and
-                investment opportunities:
-              </p>
-              <a
-                href="https://gcode.in/ords/r/gcode2/gcode/sign-up"
-                className="bg-primary hover:bg-primary-hover text-small inline-flex min-h-10 shrink-0 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
-              >
-                Register as a GCODE Business Partner
-              </a>
-            </div>
+            <a
+              href="https://gcode.in/ords/r/gcode2/gcode/sign-up"
+              className="bg-primary hover:bg-primary-hover text-small mt-4 inline-flex min-h-10 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
+            >
+              Join Gcode partner ecosystem
+            </a>
           )}
           {event.id === "422" && (
             <p className="text-small text-text-primary mt-2">
@@ -237,22 +256,30 @@ export default function EventRegisteredPage() {
         </div>
       </div>
 
-      {!isBsssPartnerEvent && (
-        <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
-          <SectionLabel>Your Ticket</SectionLabel>
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
-            <div className="space-y-2">
-              <p className="text-small text-text-secondary">
-                Booking Reference
-              </p>
-              <BookingRef>{bookingRef}</BookingRef>
-              <p className="text-small text-text-secondary">
-                {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code
-                covers this whole booking — present it once at check-in.
-              </p>
-              {qrDataUrl && (
-                <div className="flex flex-wrap gap-2 pt-1">
+      <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
+        <SectionLabel>Your Ticket</SectionLabel>
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+          <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
+          <div className="space-y-2">
+            <p className="text-small text-text-secondary">Booking Reference</p>
+            <BookingRef>{bookingRef}</BookingRef>
+            <p className="text-small text-text-secondary">
+              {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code covers
+              this whole booking — present it once at check-in.
+            </p>
+            {qrDataUrl && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {isBsssPartnerEvent ? (
+                  <button
+                    type="button"
+                    disabled={downloading}
+                    onClick={() => void downloadTicket()}
+                    className="border-border-light text-text-primary text-small hover:bg-bg-light inline-flex h-9 items-center gap-2 rounded-sm border px-3 font-medium disabled:opacity-60"
+                  >
+                    <Icon icon={Download} size="sm" />{" "}
+                    {downloading ? "Preparing…" : "Download Ticket"}
+                  </button>
+                ) : (
                   <a
                     href={qrDataUrl}
                     download={`${bookingRef}.png`}
@@ -260,12 +287,12 @@ export default function EventRegisteredPage() {
                   >
                     <Icon icon={Download} size="sm" /> Download PNG
                   </a>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {session && (
         <div className="flex flex-col gap-3 sm:flex-row">
