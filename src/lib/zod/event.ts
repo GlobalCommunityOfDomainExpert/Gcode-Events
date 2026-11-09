@@ -47,7 +47,6 @@ const eventQuestionSchema = z.object({
   options: z.array(eventQuestionOptionSchema).default([]),
 });
 
-
 const eventRoundRubricCriterionSchema = z.object({
   // Existing GCODE_EVENT_ROUND_RUBRICS.ID, null for a criterion added in
   // this edit session — lets the backend UPDATE in place instead of
@@ -92,6 +91,7 @@ export const eventDetailDataSchema = z.object({
   id: z.number().default(0),
   type: z.number().nullable().default(null), // FK -> EVENT_TYPE_ID
   title: z.string().default(""),
+  summary: z.string().default(""), // one-line pitch under the title + on cards
   description: z.string().default(""),
   priceAmount: z.number().default(0),
   capacity: z.number().default(0),

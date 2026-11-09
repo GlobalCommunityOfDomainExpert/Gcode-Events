@@ -1,4 +1,5 @@
-export type ProgressTone = "primary" | "success" | "warning" | "danger";
+export type ProgressTone =
+  "primary" | "secondary" | "success" | "warning" | "danger";
 
 export interface ProgressProps {
   value: number;
@@ -10,6 +11,7 @@ export interface ProgressProps {
 
 const toneClasses: Record<ProgressTone, string> = {
   primary: "bg-primary",
+  secondary: "bg-secondary",
   success: "bg-success",
   warning: "bg-warning",
   danger: "bg-danger",

@@ -41,11 +41,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           // Lower-opacity than body text so a placeholder never reads as an
           // already-filled value at a glance.
           `placeholder:text-text-secondary/60 transition-colors ` +
-          `focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none ` +
+          `focus-visible:ring-4 focus-visible:outline-none ` +
           `disabled:bg-bg-light disabled:cursor-not-allowed disabled:opacity-50 ` +
           (error
-            ? "border-danger focus-visible:ring-danger "
-            : "border-border-light hover:border-border-hover focus-visible:border-primary focus-visible:ring-primary ") +
+            ? "border-danger focus-visible:ring-danger/15 "
+            : "border-border-light hover:border-border-hover focus-visible:border-primary focus-visible:ring-primary/10 ") +
           `${sizeClasses[size]} ${icon ? iconPaddingClasses[size] : ""} ${className}`
         }
         {...props}

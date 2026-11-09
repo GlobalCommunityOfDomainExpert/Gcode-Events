@@ -3,7 +3,14 @@
 import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronDown, Menu, X } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+} from "lucide-react";
 import { Button, Icon } from "@/components/atoms";
 import { Dropdown, DropdownItem } from "@/components/molecules";
 import Image from "next/image";
@@ -29,6 +36,8 @@ export interface NavbarProps {
   mobileFooter?: ReactNode;
   /** Right-aligned desktop slot (e.g. a profile dropdown) that replaces the CTA buttons when provided. Also suppresses the mobile collapsed-bar CTA. */
   accountMenu?: ReactNode;
+  /** Desktop (lg+) button that shrinks the sidebar to a rail / expands it. `open` = full width. Omit when there is no sidebar. */
+  sidebarToggle?: { open: boolean; onToggle: () => void };
   /** Renders transparent-over-content and floats above the page, picking up the solid background once the page scrolls. */
   transparent?: boolean;
 }
@@ -44,7 +53,9 @@ const HEADER_HEIGHT_REM = 5; // matches h-20 (5rem)
 
 function navLinkClass(isActive: boolean) {
   return `text-body focus-visible:ring-offset-primary font-medium transition-colors focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:outline-none ${
-    isActive ? "text-white" : "text-white/70 hover:text-white"
+    isActive
+      ? "text-white relative after:absolute after:inset-x-0 after:-bottom-1.5 after:h-0.5 after:rounded-full after:bg-secondary"
+      : "text-white/70 hover:text-white"
   }`;
 }
 
@@ -81,7 +92,7 @@ interface DesktopNavLinksProps {
 /** The left-side primary links — sits next to the logo, inside the left flex group. */
 function DesktopNavLinks({ links, pathname }: DesktopNavLinksProps) {
   return (
-    <nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
+    <nav aria-label="Primary" className="hidden items-center gap-6 lg:flex">
       {links.map((link) => {
         if (link.children) {
           const hasActiveChild = link.children.some(
@@ -180,13 +191,13 @@ function MobileMenuPanel({
   return (
     <>
       <div
-        className={`bg-primary/40 fixed inset-x-0 bottom-0 z-30 md:hidden`}
+        className={`bg-primary/40 fixed inset-x-0 bottom-0 z-30 lg:hidden`}
         style={{ top: `${HEADER_HEIGHT_REM}rem` }}
         onClick={onClose}
         aria-hidden="true"
       />
       <div
-        className="bg-primary absolute inset-x-0 top-full z-40 overflow-y-auto border-t border-white/10 shadow-lg md:hidden"
+        className="bg-primary absolute inset-x-0 top-full z-40 overflow-y-auto border-t border-white/10 shadow-lg lg:hidden"
         style={{ maxHeight: `calc(100vh - ${HEADER_HEIGHT_REM}rem)` }}
       >
         <nav aria-label="Primary" className="space-y-1 px-4 py-3">
@@ -276,6 +287,7 @@ export function Navbar({
   onNotificationClick,
   mobileFooter,
   accountMenu,
+  sidebarToggle,
   transparent = false,
 }: NavbarProps) {
   const pathname = usePathname();
@@ -283,7 +295,7 @@ export function Navbar({
   const scrolled = useScrolledPast("app-scroll-region", 8, transparent);
 
   const headerClass = transparent
-    ? `fixed inset-x-0 top-0 ${scrolled ? "bg-primary shadow-sm" : "bg-transparent shadow-none"}`
+    ? `fixed inset-x-0 top-0 ${scrolled ? "bg-primary/85 shadow-md backdrop-blur-xl backdrop-saturate-150" : "bg-transparent shadow-none"}`
     : "bg-primary relative shadow-sm";
 
   return (
@@ -292,6 +304,22 @@ export function Navbar({
         className={`mx-4 flex items-center justify-between gap-4 ${HEADER_HEIGHT_CLASS}`}
       >
         <div className="flex items-center gap-8">
+          {sidebarToggle && (
+            <button
+              type="button"
+              onClick={sidebarToggle.onToggle}
+              aria-label={
+                sidebarToggle.open ? "Collapse sidebar" : "Expand sidebar"
+              }
+              aria-expanded={sidebarToggle.open}
+              className="focus-visible:ring-offset-primary -mr-4 hidden rounded-sm p-2 text-white/80 transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:outline-none lg:block"
+            >
+              <Icon
+                icon={sidebarToggle.open ? PanelLeftClose : PanelLeftOpen}
+                size="md"
+              />
+            </button>
+          )}
           <Link href="/">{logo}</Link>
           <DesktopNavLinks links={links} pathname={pathname} />
         </div>
@@ -304,7 +332,7 @@ export function Navbar({
           onCtaClick={onCtaClick}
         /> */}
 
-        <div className="flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
           {/* <button
             type="button"
             onClick={onNotificationClick}

@@ -34,11 +34,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         className={
           `text-body text-text-primary w-full rounded-sm border px-4 py-2 shadow-inner ` +
           `placeholder:text-text-secondary transition-colors ` +
-          `focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none ` +
+          `focus-visible:ring-4 focus-visible:outline-none ` +
           `disabled:bg-bg-light disabled:cursor-not-allowed disabled:opacity-50 ` +
           (error
-            ? "border-danger focus-visible:ring-danger "
-            : `${variantClasses[variant]} focus-visible:border-primary focus-visible:ring-primary `) +
+            ? "border-danger focus-visible:ring-danger/15 "
+            : `${variantClasses[variant]} focus-visible:border-primary focus-visible:ring-primary/10 `) +
           className
         }
         {...props}

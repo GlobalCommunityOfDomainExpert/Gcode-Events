@@ -77,6 +77,45 @@ export function replaceEventMedia(
   return apiRequest(`/events/${id}/media`, { method: "POST", body: items });
 }
 
+export interface EventSocialLinkApi {
+  platform: string;
+  url: string;
+  sort_order?: number;
+}
+
+export interface EventMediaApi {
+  url: string;
+  sort_order: number;
+}
+
+// Reads for the two collections above. The live ORDS module may not expose
+// a GET for them yet — treat a failure as "none" so the page still loads.
+export async function listEventSocialLinks(
+  id: number | string,
+): Promise<EventSocialLinkApi[]> {
+  try {
+    const { items } = await apiRequest<ApiListResponse<EventSocialLinkApi>>(
+      `/events/${id}/social-links`,
+    );
+    return items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listEventMedia(
+  id: number | string,
+): Promise<EventMediaApi[]> {
+  try {
+    const { items } = await apiRequest<ApiListResponse<EventMediaApi>>(
+      `/events/${id}/media`,
+    );
+    return [...(items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  } catch {
+    return [];
+  }
+}
+
 export interface EventTimelineApi {
   title: string;
   description: string | null;
