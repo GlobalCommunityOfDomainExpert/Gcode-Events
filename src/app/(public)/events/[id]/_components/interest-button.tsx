@@ -79,6 +79,8 @@ export interface InterestButtonProps {
   interestedCount?: number;
   // Called after a successful submit so the page can re-fetch the count.
   onInterested?: () => void;
+  /** Text-only button (heart + count), no border. */
+  plain?: boolean;
 }
 
 // Icon-only heart button, meant to sit next to the Share button. Signed in
@@ -89,6 +91,7 @@ export function InterestButton({
   eventId,
   interestedCount = 0,
   onInterested,
+  plain = false,
 }: InterestButtonProps) {
   const interested = useInterested(eventId);
   const [submitting, setSubmitting] = useState(false);
@@ -146,9 +149,13 @@ export function InterestButton({
   return (
     <div className="flex items-center gap-2">
       <Button
-        variant={interested ? "secondary" : "outline"}
-        size="xs"
-        className="aspect-square !px-0"
+        variant={plain ? "ghost" : interested ? "secondary" : "outline"}
+        size={plain ? "sm" : "xs"}
+        className={
+          plain
+            ? "!text-text-secondary hover:!bg-bg-light hover:!text-text-primary !px-2 font-medium"
+            : "aspect-square !px-0"
+        }
         loading={submitting}
         disabled={interested}
         onClick={handleClick}
@@ -160,8 +167,14 @@ export function InterestButton({
           size="sm"
           className={interested ? "fill-danger text-danger" : ""}
         />
+        {plain && (interested ? "Interested" : "I'm interested")}
+        {plain && interestedCount > 0 && (
+          <span className="text-text-secondary/70 tabular-nums">
+            · {interestedCount}
+          </span>
+        )}
       </Button>
-      {interestedCount > 0 && (
+      {!plain && interestedCount > 0 && (
         <span className="text-small text-text-secondary">
           {interestedCount}
         </span>
