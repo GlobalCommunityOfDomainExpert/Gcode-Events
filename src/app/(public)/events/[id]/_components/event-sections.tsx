@@ -115,7 +115,8 @@ export function getEventState(event: Event, now: Date) {
     formatDateRange(event.startDateIso, event.endDateIso) ??
     (weekday ? `${weekday}, ${event.date}` : event.date);
   // "Pinnacle School…, 36/3 & 36/6, …, Bengaluru" → bold name + lighter rest.
-  const [venueName, ...venueRest] = event.location
+  // Drafts / events without a venue have no location at all.
+  const [venueName, ...venueRest] = (event.location ?? "")
     .split(",")
     .map((x) => x.trim());
 
@@ -378,6 +379,21 @@ export function LocationSection({
       {event.mode === "Hybrid" && <OnlineInfoCard />}
       {event.mode === "Online" ? (
         <OnlineInfoCard />
+      ) : !event.location?.trim() ? (
+        // No venue set (draft or not announced yet): no map, no directions.
+        <div className="border-border-light bg-surface-light flex items-start gap-3 rounded-lg border p-5 shadow-sm">
+          <span className="bg-secondary-light text-secondary flex size-10 shrink-0 items-center justify-center rounded-md">
+            <Icon icon={MapPin} size="sm" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-text-primary font-semibold">
+              Venue to be announced
+            </p>
+            <p className="text-small text-text-secondary mt-0.5">
+              The location will be shared closer to the event.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="border-border-light bg-surface-light @container overflow-hidden rounded-lg border shadow-sm">
           <div className="bg-bg-light relative aspect-[16/7] w-full">
@@ -493,7 +509,10 @@ export function TicketsCard({
 }) {
   const { isLive, enabledPasses, selectedPass, ctaDisabledLabel } = state;
   return (
-    <div id="tickets" className="border-border-light bg-surface-light scroll-mt-24 rounded-lg border p-6 shadow-md">
+    <div
+      id="tickets"
+      className="border-border-light bg-surface-light scroll-mt-24 rounded-lg border p-6 shadow-md"
+    >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-text-primary flex items-center gap-2 text-lg font-bold">
           <Icon icon={Ticket} size="sm" className="text-secondary" />
