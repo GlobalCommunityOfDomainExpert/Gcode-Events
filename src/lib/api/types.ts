@@ -211,7 +211,7 @@ export interface CreateEventPayload {
   terms?: string;
   eligibility?: string;
   duration_text?: string;
-  // JSON string of EventStageApi[]; null clears it.
+  // JSON string of EventStageApi[]; "[]" clears it (null cannot, see stagesJson).
   stages_json?: string | null;
   attendee_registration_enabled?: number;
   participant_registration_enabled?: number;

@@ -631,14 +631,16 @@ export function parseStages(raw: string | null | undefined): EventStageData[] {
 }
 
 // D6: only Hybrid events with stages write the column. `undefined` leaves it
-// untouched (so a backend without STAGES_JSON never sees the key); `null`
-// clears stages that were saved earlier.
+// untouched (so a backend without STAGES_JSON never sees the key). To clear
+// stages saved earlier it returns "[]": a JSON null binds exactly like an
+// absent key in ORDS and update_event uses NVL(param, column), so null could
+// never clear the column. The backend turns "[]" into NULL.
 export function stagesJson(
   data: EventDetailData,
   hadStages = false,
   isHybrid = true,
 ): string | null | undefined {
-  if (!isHybrid || data.stages.length === 0) return hadStages ? null : undefined;
+  if (!isHybrid || data.stages.length === 0) return hadStages ? "[]" : undefined;
   const rows: EventStageApi[] = data.stages.map((s, i) => ({
     label: s.label.trim() || `Day ${i + 1}`,
     date: s.date,
