@@ -1,5 +1,5 @@
-import { EventWizard } from "@/app/(app)/(events)/my-organized-events/_components/event-wizard";
+import { EventEditor } from "@/app/(app)/(events)/my-organized-events/_components/event-editor";
 
 export default function NewOrganizedEventPage() {
-  return <EventWizard mode="create" />;
+  return <EventEditor mode="create" />;
 }
