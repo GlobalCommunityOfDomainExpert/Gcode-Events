@@ -17,6 +17,8 @@ import {
   EventHeading,
   EventPills,
   HostCard,
+  EthosSection,
+  FaqSection,
   LocationSection,
   MediaSection,
   PrimaryCta,
@@ -67,7 +69,12 @@ export default function EventDetailPage() {
     />
   ) : undefined;
   const tellMeMoreButtonNode = isLive ? (
-    <EventEnquiryButton eventId={event.id} eventTitle={event.title} plain />
+    <EventEnquiryButton
+      eventId={event.id}
+      eventTitle={event.title}
+      faqs={event.faqs}
+      plain
+    />
   ) : undefined;
 
   function goBack() {
@@ -134,47 +141,13 @@ export default function EventDetailPage() {
           <LocationSection event={event} state={state} />
           <WhoSection event={event} />
           <TermsSection event={event} />
+          <FaqSection event={event} />
 
           {event.socialLinks && event.socialLinks.length > 0 && (
             <EventLinksCard links={event.socialLinks} />
           )}
 
-          <section className="bg-primary relative isolate overflow-hidden rounded-lg p-6 sm:p-8">
-            <div className="bg-secondary/15 absolute -top-20 -right-16 -z-10 size-64 rounded-full blur-3xl" />
-            <div className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/app-logo.png"
-                alt="GCODE"
-                className="h-8 w-auto object-contain"
-              />
-              <span className="text-xs font-semibold tracking-widest text-white/60 uppercase">
-                The GCODE Talent Ethos
-              </span>
-            </div>
-            <p className="mt-4 text-lg font-bold text-white">
-              Discover. Perform. Connect. Grow.
-            </p>
-            <div className="text-small mt-3 space-y-3 leading-relaxed text-white/70">
-              <p>
-                At GCODE, we believe talent is just the beginning. Every
-                performance is an opportunity to build confidence, every
-                interaction is a chance to create meaningful connections, and
-                every event opens doors to new opportunities.
-              </p>
-              <p>
-                We provide a professional platform where individuals can
-                showcase their talent, receive valuable recognition, learn from
-                experienced mentors, connect with like-minded people, and become
-                part of a thriving ecosystem that celebrates passion, creativity
-                and continuous growth.
-              </p>
-              <p>
-                Because at GCODE, talent doesn&apos;t end with applause—it
-                begins with opportunity.
-              </p>
-            </div>
-          </section>
+          <EthosSection event={event} />
         </main>
 
         {/* --------------------------------------------------------- sidebar */}

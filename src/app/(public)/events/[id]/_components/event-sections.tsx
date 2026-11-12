@@ -11,15 +11,15 @@ import {
   Calendar,
   Check,
   ChevronDown,
-  Globe,
   Clock,
   Lock,
   MapPin,
-  Navigation,
   ScrollText,
   Ticket,
 } from "lucide-react";
 import { Badge, Button, ButtonLink, Icon } from "@/components/atoms";
+import { RichText } from "@/components/molecules/rich-text";
+import { hasLiveRoom } from "@/lib/live-room";
 import { getEventColor } from "@/lib/event-color";
 import {
   Event,
@@ -31,6 +31,12 @@ import {
 import { groupByDay, resolveDisplayTime, to12Hour, daysUntil } from "./format";
 
 export { MediaSection } from "./event-media";
+import { OnlineInfoCard } from "./online-info-card";
+import { HybridStagesPanel } from "./hybrid-stages-panel";
+import { AgendaTimeline } from "./agenda-timeline";
+import { FaqAccordion } from "./faq-accordion";
+import { ethosFor } from "@/lib/event-ethos";
+import { VenueMap } from "./venue-map";
 
 // ------------------------------------------------------------- passes state
 
@@ -304,9 +310,7 @@ export function AboutSection({ event }: { event: Event }) {
           ref={bodyRef}
           className={`text-body text-text-secondary space-y-4 leading-relaxed ${collapsed ? "max-h-44 overflow-hidden" : ""}`}
         >
-          {paragraphs.map((paragraph, index) => (
-            <p key={index}>{paragraph}</p>
-          ))}
+          <RichText value={paragraphs} className="space-y-4" />
         </div>
         {collapsed && overflows && (
           <div
@@ -338,6 +342,8 @@ export function AboutSection({ event }: { event: Event }) {
 // count, a one-line preview); open a day to see its full timeline.
 // Single-day agendas show the timeline.
 export function ScheduleSection({ event }: { event: Event }) {
+  // Hybrid split into stages: the agenda is merged into "Schedule & venue".
+  if (event.mode === "Hybrid" && event.stages.length > 0) return null;
   const days = groupByDay(event.timeline);
   return (
     <Section title="Schedule">
@@ -357,6 +363,7 @@ export function ScheduleSection({ event }: { event: Event }) {
                   ? days.filter((d) => d.day && d.day <= group.day).length
                   : undefined
               }
+              title={group.title}
               day={group.day}
               items={group.items}
             />
@@ -374,9 +381,20 @@ export function LocationSection({
   event: Event;
   state: EventState;
 }) {
+  // Hybrid split into days/stages: one stage at a time, never link + map
+  // stacked together.
+  if (event.mode === "Hybrid" && event.stages.length > 0) {
+    return (
+      <Section title="Schedule & venue">
+        <HybridStagesPanel event={event} registerHref={state.registerHref} />
+      </Section>
+    );
+  }
   return (
     <Section title={event.mode === "Online" ? "How to join" : "Location"}>
-      {event.mode === "Hybrid" && <OnlineInfoCard />}
+      {event.mode === "Hybrid" && hasLiveRoom(event) && (
+        <OnlineInfoCard />
+      )}
       {event.mode === "Online" ? (
         <OnlineInfoCard />
       ) : !event.location?.trim() ? (
@@ -395,43 +413,7 @@ export function LocationSection({
           </div>
         </div>
       ) : (
-        <div className="border-border-light bg-surface-light @container overflow-hidden rounded-lg border shadow-sm">
-          <div className="bg-bg-light relative aspect-[16/7] w-full">
-            <iframe
-              title={`Map showing ${state.venueName}`}
-              src={`https://maps.google.com/maps?q=${encodeURIComponent(event.location)}&z=15&output=embed`}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              className="absolute inset-0 h-full w-full border-0"
-            />
-          </div>
-          <div className="flex flex-col gap-4 p-5 @sm:flex-row @sm:items-center @sm:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="bg-secondary-light text-secondary flex size-10 shrink-0 items-center justify-center rounded-md">
-                <Icon icon={MapPin} size="sm" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-text-primary font-semibold">
-                  {state.venueName || "Venue to be announced"}
-                </p>
-                {state.venueAddress && (
-                  <p className="text-small text-text-secondary mt-0.5">
-                    {state.venueAddress}
-                  </p>
-                )}
-              </div>
-            </div>
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(event.location)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-primary hover:bg-primary-hover text-small inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-sm px-4 font-semibold text-white shadow-sm transition-colors"
-            >
-              <Icon icon={Navigation} size="sm" />
-              Get directions
-            </a>
-          </div>
-        </div>
+        <VenueMap location={event.location} />
       )}
     </Section>
   );
@@ -441,16 +423,6 @@ export function WhoSection({ event }: { event: Event }) {
   if (event.eligibility.length === 0) return null;
   return (
     <Section title="Who it's for">
-      <div className="flex flex-wrap gap-2">
-        {[event.type, event.mode, event.teamSize].filter(Boolean).map((tag) => (
-          <span
-            key={tag}
-            className="bg-bg-light text-text-primary text-small rounded-full px-3 py-1 font-medium"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
       <ul className="space-y-3">
         {event.eligibility.map((item) => (
           <li key={item} className="flex items-start gap-3">
@@ -465,37 +437,84 @@ export function WhoSection({ event }: { event: Event }) {
   );
 }
 
-// Fine print — rarely read, so collapsed by default.
-export function TermsSection({
+// Organizer-written Q&A. Each answer folds open on its own; the first one
+// starts open so the section never reads as a wall of closed rows.
+export function FaqSection({
   event,
-  defaultOpen = false,
+  openFirst = true,
 }: {
   event: Event;
-  defaultOpen?: boolean;
+  openFirst?: boolean;
 }) {
+  const faqs = (event.faqs ?? []).filter(
+    (f) => f.question.trim() && f.answer.trim(),
+  );
+  if (faqs.length === 0) return null;
+  return (
+    <section className="space-y-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-text-primary text-xl font-bold">
+          Frequently asked
+        </h2>
+        <span className="text-small text-text-secondary">
+          {faqs.length} {faqs.length === 1 ? "question" : "questions"}
+        </span>
+      </div>
+      <FaqAccordion faqs={faqs} defaultOpen={openFirst ? 0 : null} />
+    </section>
+  );
+}
+
+// GCODE's closing statement, worded for the event's type (talent shows get
+// the talent ethos, hackathons the builder one, and so on).
+export function EthosSection({ event }: { event: Event }) {
+  const ethos = ethosFor(event.type);
+  return (
+    <section className="bg-primary relative isolate overflow-hidden rounded-lg p-6 sm:p-8">
+      <div className="bg-secondary/15 absolute -top-20 -right-16 -z-10 size-64 rounded-full blur-3xl" />
+      <div className="flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/app-logo.png"
+          alt="GCODE"
+          className="h-8 w-auto object-contain"
+        />
+        <span className="text-xs font-semibold tracking-widest text-white/60 uppercase">
+          {ethos.label}
+        </span>
+      </div>
+      <p className="mt-4 text-lg font-bold text-white">{ethos.motto}</p>
+      <div className="text-small mt-3 space-y-3 leading-relaxed text-white/70">
+        {ethos.paragraphs.map((p) => (
+          <p key={p}>{p}</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Terms are always visible under their own heading — never folded away or
+// styled like an FAQ row, so nobody books without seeing the fine print
+// (refund rules especially).
+export function TermsSection({ event }: { event: Event }) {
   if (event.terms.length === 0) return null;
   return (
-    <details
-      open={defaultOpen}
-      className="group border-border-light bg-surface-light rounded-lg border shadow-sm [&_summary::-webkit-details-marker]:hidden"
-    >
-      <summary className="text-text-primary flex cursor-pointer list-none items-center justify-between gap-4 p-5 font-semibold">
-        <span className="flex items-center gap-3">
-          <Icon icon={ScrollText} size="sm" className="text-text-secondary" />
-          Terms &amp; conditions
-        </span>
-        <Icon
-          icon={ChevronDown}
-          size="sm"
-          className="text-text-secondary transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <ol className="text-small text-text-secondary border-border-light list-decimal space-y-2 border-t px-5 py-4 pl-10">
+    <section className="space-y-4">
+      <h2 className="text-text-primary flex items-center gap-2 text-xl font-bold">
+        <Icon icon={ScrollText} size="sm" className="text-text-secondary" />
+        Terms &amp; conditions
+      </h2>
+      <ol className="text-body text-text-secondary marker:text-text-secondary/70 list-decimal space-y-2 pl-6 marker:font-semibold">
         {event.terms.map((item) => (
-          <li key={item}>{item}</li>
+          <li key={item} className="pl-1">
+            {item}
+          </li>
         ))}
       </ol>
-    </details>
+      <p className="text-small text-text-secondary">
+        Registering means you agree to these terms.
+      </p>
+    </section>
   );
 }
 
@@ -757,11 +776,14 @@ function formatDateRange(
 // One collapsible day: summary row (date, hours, count, preview) → timeline.
 function AgendaDay({
   dayNumber,
+  title,
   day,
   items,
 }: {
   /** Undefined for the "date to be announced" group. */
   dayNumber?: number;
+  /** Organizer's own name for the day — replaces "Day N". */
+  title?: string;
   day: string;
   items: EventTimelineItem[];
 }) {
@@ -808,7 +830,7 @@ function AgendaDay({
           <span className="text-text-primary block font-semibold">
             {date ? (
               <>
-                Day {dayNumber}
+                {title || `Day ${dayNumber}`}
                 <span className="text-text-secondary font-normal">
                   {" "}
                   · {f({ weekday: "long", day: "numeric", month: "short" })}
@@ -848,73 +870,5 @@ function AgendaDay({
         <AgendaTimeline items={items} />
       </div>
     </details>
-  );
-}
-
-// Times on the left, a connecting rail, sessions on the right.
-function AgendaTimeline({ items }: { items: EventTimelineItem[] }) {
-  return (
-    <ol>
-      {items.map((item, index) => {
-        const last = index === items.length - 1;
-        return (
-          <li
-            key={`${item.title}-${index}`}
-            className="grid grid-cols-[4.75rem_1.25rem_minmax(0,1fr)] gap-x-3"
-          >
-            <div className="pt-0.5 text-right">
-              <p className="text-small text-text-primary font-semibold tabular-nums">
-                {to12Hour(item.time)}
-              </p>
-              {item.endTime && (
-                <p className="text-text-secondary text-xs tabular-nums">
-                  {to12Hour(item.endTime)}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col items-center">
-              <span
-                className={`mt-1.5 size-2.5 shrink-0 rounded-full ${index === 0 ? "bg-secondary ring-secondary-light ring-4" : "bg-border-hover"}`}
-              />
-              {!last && <span className="bg-border-light mt-1 w-px flex-1" />}
-            </div>
-            <div className={last ? "" : "pb-6"}>
-              <p className="text-body text-text-primary font-semibold">
-                {item.title}
-              </p>
-              {item.description && (
-                <p className="text-small text-text-secondary mt-0.5">
-                  {item.description}
-                </p>
-              )}
-              {item.location && (
-                <p className="text-text-secondary mt-1.5 inline-flex items-center gap-1 text-xs font-medium">
-                  <Icon icon={MapPin} size="sm" className="size-3.5" />
-                  {item.location}
-                </p>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-// Port stand-in for the wireframe's OnlineJoinPanel (webinar flow is out of
-// scope): a static card; joining details come with registration.
-function OnlineInfoCard() {
-  return (
-    <div className="border-border-light bg-surface-light flex items-start gap-3 rounded-lg border p-5 shadow-sm">
-      <span className="bg-secondary-light text-secondary flex size-10 shrink-0 items-center justify-center rounded-md">
-        <Icon icon={Globe} size="sm" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-text-primary font-semibold">Online event</p>
-        <p className="text-small text-text-secondary mt-0.5">
-          Joining details are shared with registered attendees.
-        </p>
-      </div>
-    </div>
   );
 }

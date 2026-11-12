@@ -133,7 +133,8 @@ export function InterestButton({
     event.preventDefault();
     const normalizedPhone = normalizePhone(phone);
     const validEmail = EMAIL_PATTERN.test(email.trim());
-    const validPhone = PHONE_PATTERN.test(normalizedPhone);
+    // phone is optional here — interest is about reminders, not a call
+    const validPhone = !normalizedPhone || PHONE_PATTERN.test(normalizedPhone);
     setEmailError(validEmail ? null : "Enter a valid email address");
     setPhoneError(validPhone ? null : "Enter a valid phone number");
     if (!validEmail || !validPhone) return;
@@ -160,7 +161,11 @@ export function InterestButton({
         disabled={interested}
         onClick={handleClick}
         aria-label={interested ? "You're interested" : "I'm Interested"}
-        title={interested ? "You're interested" : "I'm Interested"}
+        title={
+          interested
+            ? "Saved — we'll remind you before registration closes"
+            : "Save this event and get reminders"
+        }
       >
         <Icon
           icon={Heart}
@@ -188,7 +193,7 @@ export function InterestButton({
       <Modal
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
-        title="Show your interest"
+        title="Keep me posted"
       >
         <form
           className="flex flex-col gap-4"
@@ -196,8 +201,9 @@ export function InterestButton({
           onSubmit={handleDetailsSubmit}
         >
           <p className="text-body text-text-secondary">
-            Enter your email and phone number. We&apos;ll send a code to verify
-            your email. The organizer only sees how many people are interested.
+            Save this event and we&apos;ll remind you before registration closes
+            and when the organizer shares news. One quick code confirms your
+            email — the organizer only sees how many people are interested.
           </p>
           <FormField
             label="Email"
@@ -217,7 +223,7 @@ export function InterestButton({
             />
           </FormField>
           <FormField
-            label="Phone Number"
+            label="Phone (optional)"
             htmlFor="interest-phone"
             error={phoneError ?? undefined}
           >
@@ -233,7 +239,7 @@ export function InterestButton({
             />
           </FormField>
           <Button type="submit" variant="primary" className="w-full">
-            Send Code
+            Confirm my email
           </Button>
         </form>
       </Modal>
