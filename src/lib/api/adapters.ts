@@ -382,6 +382,8 @@ export function draftToPreviewDetail(
     terms: data.terms.trim() || null,
     eligibility: data.eligibility.trim() || null,
     duration_text: data.duration.trim() || null,
+    // Preview only — the draft's stages, whatever was saved (null = none).
+    stages_json: stagesJson(data) ?? null,
     certificate_offered: data.certificate ? 1 : 0,
     attendee_label: data.attendeeLabel.trim() || null,
     attendee_description: data.attendeeDescription.trim() || null,
