@@ -57,8 +57,7 @@ async function stagesField(
   let isHybrid = false;
   try {
     const modes = await getModes();
-    isHybrid =
-      modes.find((m) => m.id === data.mode)?.mode_name === "HYBRID";
+    isHybrid = modes.find((m) => m.id === data.mode)?.mode_name === "HYBRID";
   } catch {
     return {}; // can't tell the mode — leave stages alone
   }

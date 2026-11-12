@@ -31,7 +31,7 @@ export function FaqAccordion({
             key={`${i}-${faq.question}`}
             className={`rounded-lg border transition-colors ${
               isOpen
-                ? "border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] bg-surface-light shadow-sm"
+                ? "bg-surface-light border-[color-mix(in_srgb,var(--color-primary)_35%,transparent)] shadow-sm"
                 : "border-border-light bg-surface-light hover:border-border-hover"
             }`}
           >

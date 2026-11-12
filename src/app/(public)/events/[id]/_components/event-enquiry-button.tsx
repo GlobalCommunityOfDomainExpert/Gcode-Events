@@ -2,13 +2,7 @@
 
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { FaqAccordion } from "./faq-accordion";
-import {
-  ImagePlus,
-  Mail,
-  MessageCircle,
-  Phone,
-  X,
-} from "lucide-react";
+import { ImagePlus, Mail, MessageCircle, Phone, X } from "lucide-react";
 import { Button, Icon, Input, Textarea } from "@/components/atoms";
 import { FormField, Modal } from "@/components/molecules";
 import { submitEventEnquiry } from "@/lib/api/event-enquiries";

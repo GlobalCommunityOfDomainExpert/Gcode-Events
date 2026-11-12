@@ -432,19 +432,17 @@ export function EventEditor(props: EventEditorProps) {
       let id = eventId;
       let result: SaveResult;
       if (isEdit && eventId) {
-        result = await updateEventFromDraft(
-          eventId,
-          data,
-          status,
-          initialData,
-        );
+        result = await updateEventFromDraft(eventId, data, status, initialData);
       } else {
         result = await createEventFromDraft(data, status);
       }
       id = String(result.id);
       if (result.warnings.length > 0) {
         // The event is saved; stay put so the warning can be read first.
-        setSaveWarning({ text: result.warnings.join(" · "), href: `/my-organized-events/${id}` });
+        setSaveWarning({
+          text: result.warnings.join(" · "),
+          href: `/my-organized-events/${id}`,
+        });
         setSaving(null);
         return;
       }

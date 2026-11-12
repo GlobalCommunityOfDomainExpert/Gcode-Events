@@ -49,9 +49,9 @@ export function StepFaqs({ data, onChange }: StepFaqsProps) {
       <div>
         <h2 className="text-large text-text-primary font-semibold">FAQs</h2>
         <p className="text-body text-text-secondary">
-          Answer the questions people ask before booking. They show on the
-          event page and above the &ldquo;Ask a question&rdquo; form, so fewer
-          people need to write in.
+          Answer the questions people ask before booking. They show on the event
+          page and above the &ldquo;Ask a question&rdquo; form, so fewer people
+          need to write in.
         </p>
       </div>
 

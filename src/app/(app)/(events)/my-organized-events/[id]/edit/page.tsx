@@ -16,7 +16,10 @@ import {
   listAdvancedOptions,
 } from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
-import { toEventDraft, attachAdvancedQuestionConfiguration } from "@/lib/api/adapters";
+import {
+  toEventDraft,
+  attachAdvancedQuestionConfiguration,
+} from "@/lib/api/adapters";
 import { EventEditor } from "@/app/(app)/(events)/my-organized-events/_components/event-editor";
 import type { EventDetail } from "@/lib/api/types";
 import { EventDetailData } from "@/lib/zod/event";
@@ -34,7 +37,16 @@ export default function EditOrganizedEventPage() {
     void (async () => {
       setStatus("loading");
       try {
-        const [detail, timeline, rounds, questions, links, media, faqs, advancedEnabled] = await Promise.all([
+        const [
+          detail,
+          timeline,
+          rounds,
+          questions,
+          links,
+          media,
+          faqs,
+          advancedEnabled,
+        ] = await Promise.all([
           getEvent(params.id),
           listEventTimeline(params.id),
           listEventRounds(params.id),
@@ -44,8 +56,11 @@ export default function EditOrganizedEventPage() {
           listEventFaqs(params.id),
           getEventAdvancedEnabled(params.id).catch(() => false),
         ]);
-        let optionSettings: Awaited<ReturnType<typeof listAdvancedOptionSettings>> = [];
-        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> = [];
+        let optionSettings: Awaited<
+          ReturnType<typeof listAdvancedOptionSettings>
+        > = [];
+        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> =
+          [];
         if (advancedEnabled) {
           [optionSettings, advancedOptions] = await Promise.all([
             listAdvancedOptionSettings(params.id),
@@ -53,9 +68,21 @@ export default function EditOrganizedEventPage() {
           ]);
         }
         if (cancelled) return;
-        const draft = toEventDraft(detail, timeline, rounds, questions, links, media, faqs);
+        const draft = toEventDraft(
+          detail,
+          timeline,
+          rounds,
+          questions,
+          links,
+          media,
+          faqs,
+        );
         draft.advancedAdditionalQuestionsEnabled = advancedEnabled;
-        draft.questions = attachAdvancedQuestionConfiguration(draft.questions, optionSettings, advancedOptions);
+        draft.questions = attachAdvancedQuestionConfiguration(
+          draft.questions,
+          optionSettings,
+          advancedOptions,
+        );
         setDetail(detail);
         setDraft(draft);
         setStatus("ready");

@@ -392,9 +392,7 @@ export function LocationSection({
   }
   return (
     <Section title={event.mode === "Online" ? "How to join" : "Location"}>
-      {event.mode === "Hybrid" && hasLiveRoom(event) && (
-        <OnlineInfoCard />
-      )}
+      {event.mode === "Hybrid" && hasLiveRoom(event) && <OnlineInfoCard />}
       {event.mode === "Online" ? (
         <OnlineInfoCard />
       ) : !event.location?.trim() ? (
