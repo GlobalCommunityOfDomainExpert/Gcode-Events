@@ -70,6 +70,14 @@ export function replaceEventSocialLinks(
   });
 }
 
+// GCODE_EVENT_FAQS — contract-only full-replace, same shape as social links.
+export function replaceEventFaqs(
+  id: number | string,
+  items: { question: string; answer: string }[],
+): Promise<unknown> {
+  return apiRequest(`/events/${id}/faqs`, { method: "POST", body: items });
+}
+
 export function replaceEventMedia(
   id: number | string,
   items: { url: string; sortOrder: number }[],
@@ -80,6 +88,12 @@ export function replaceEventMedia(
 export interface EventSocialLinkApi {
   platform: string;
   url: string;
+  sort_order?: number;
+}
+
+export interface EventFaqApi {
+  question: string;
+  answer: string;
   sort_order?: number;
 }
 
@@ -96,6 +110,19 @@ export async function listEventSocialLinks(
   try {
     const { items } = await apiRequest<ApiListResponse<EventSocialLinkApi>>(
       `/events/${id}/social-links`,
+    );
+    return items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listEventFaqs(
+  id: number | string,
+): Promise<EventFaqApi[]> {
+  try {
+    const { items } = await apiRequest<ApiListResponse<EventFaqApi>>(
+      `/events/${id}/faqs`,
     );
     return items ?? [];
   } catch {
@@ -122,6 +149,9 @@ export interface EventTimelineApi {
   start_time: string | null;
   end_time: string | null;
   location: string | null;
+  // Contract-only — EVENT_TIMELINE.DAY_LABEL, the organizer's name for this
+  // row's day. Missing/null -> "Day N".
+  day_label?: string | null;
   sort_order: number;
 }
 
@@ -142,6 +172,7 @@ export function replaceEventTimeline(
     startTime: string | null;
     endTime: string | null;
     location: string | null;
+    dayLabel?: string;
     sortOrder: number;
   }[],
 ): Promise<unknown> {

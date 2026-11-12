@@ -7,6 +7,29 @@ const eventTimelineItemSchema = z.object({
   title: z.string(),
   description: z.string(),
   location: z.string().default(""),
+  // Organizer's name for this item's day ("Build day", "Finals") — shared by
+  // every item on the same date; blank -> "Day N".
+  dayLabel: z.string().default(""),
+});
+
+// A day/stage of a hybrid event — see EventStageApi.
+const eventStageSchema = z.object({
+  label: z.string().default(""),
+  date: z.string().default(""),
+  time: z.string().default(""),
+  mode: z.enum(["ONLINE", "OFFLINE", "BOTH"]).default("ONLINE"),
+  link: z.string().default(""),
+  venue: z.string().default(""),
+  // The stage's button: AUTO = follows the format (join / directions),
+  // SUBMIT = the entry page (clip + answers), LINK = organizer's own.
+  cta: z.enum(["AUTO", "SUBMIT", "LINK"]).default("AUTO"),
+  ctaLabel: z.string().default(""),
+  ctaUrl: z.string().default(""),
+});
+
+const eventFaqSchema = z.object({
+  question: z.string(),
+  answer: z.string(),
 });
 
 const eventSocialLinkSchema = z.object({
@@ -132,6 +155,9 @@ export const eventDetailDataSchema = z.object({
   mediaUrls: z.array(z.string()).default([]), // no backend column yet
   socialLinks: z.array(eventSocialLinkSchema).default([]), // no backend column yet
   timeline: z.array(eventTimelineItemSchema).default([]), // EVENT_TIMELINE rows
+  // Hybrid only — which days/stages are online vs in person (STAGES_JSON).
+  stages: z.array(eventStageSchema).default([]),
+  faqs: z.array(eventFaqSchema).default([]), // GCODE_EVENT_FAQS — contract-only
   rounds: z.array(eventRoundItemSchema).default([]), // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25
   certificate: z.boolean().default(false), // no backend column yet
   // EVENTS.AUDIO_RECORDING_ENABLED — gates the audio section on the public
@@ -156,6 +182,7 @@ export const eventDetailDataSchema = z.object({
   advancedAdditionalQuestionsEnabled: z.boolean().default(false),
 });
 
+export type EventStageData = z.infer<typeof eventStageSchema>;
 export type EventDetailData = z.infer<typeof eventDetailDataSchema>;
 export type EventQuestionData = z.infer<typeof eventQuestionSchema>;
 export type EventQuestionOptionData = z.infer<typeof eventQuestionOptionSchema>;

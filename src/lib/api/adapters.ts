@@ -10,9 +10,10 @@ import {
   UpiClaim,
   MyTicket,
   RegistrationCategory,
+  EventStage,
 } from "@/lib/event";
 import { RoundDecision, RoundScore } from "@/lib/rounds";
-import { EventDetailData } from "@/lib/zod/event";
+import { EventDetailData, EventStageData } from "@/lib/zod/event";
 import { EventTimelineApi } from "./events";
 import { Attendee, AttendeeRole } from "@/lib/attendees";
 import {
@@ -31,6 +32,7 @@ import {
   UpiClaimApi,
   EventQuestionApi,
   EventQuestionOptionApi,
+  EventStageApi,
 } from "./types";
 import { API_BASE_URL } from "./client";
 
@@ -76,6 +78,7 @@ export function adaptTimelineItem(row: EventTimelineApi): EventTimelineItem {
     title: row.title,
     description: row.description ?? "",
     location: row.location ?? undefined,
+    dayLabel: row.day_label?.trim() || undefined,
   };
 }
 
@@ -602,6 +605,53 @@ function parseJsonArray<T>(raw: string | null): T[] {
   }
 }
 
+// STAGES_JSON <-> wizard stages. Blank labels fall back to "Day N" so a
+// stage is never nameless.
+export function parseStages(raw: string | null | undefined): EventStageData[] {
+  if (!raw) return [];
+  try {
+    const rows = JSON.parse(raw) as Partial<EventStageApi>[];
+    if (!Array.isArray(rows)) return [];
+    return rows.map((r, i) => ({
+      label: r.label?.trim() || `Day ${i + 1}`,
+      date: r.date ?? "",
+      time: r.time ?? "",
+      mode: r.mode === "OFFLINE" || r.mode === "BOTH" ? r.mode : "ONLINE",
+      link: r.link ?? "",
+      venue: r.venue ?? "",
+      cta: r.cta === "SUBMIT" || r.cta === "LINK" ? r.cta : "AUTO",
+      ctaLabel: r.cta_label ?? "",
+      ctaUrl: r.cta_url ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// D6: only Hybrid events with stages write the column. `undefined` leaves it
+// untouched (so a backend without STAGES_JSON never sees the key); `null`
+// clears stages that were saved earlier.
+export function stagesJson(
+  data: EventDetailData,
+  hadStages = false,
+  isHybrid = true,
+): string | null | undefined {
+  if (!isHybrid || data.stages.length === 0) return hadStages ? null : undefined;
+  const rows: EventStageApi[] = data.stages.map((s, i) => ({
+    label: s.label.trim() || `Day ${i + 1}`,
+    date: s.date,
+    time: s.time,
+    mode: s.mode,
+    link: s.mode !== "OFFLINE" ? s.link.trim() : "",
+    venue: s.mode !== "ONLINE" ? s.venue.trim() : "",
+    cta: s.cta,
+    // Any button can be relabelled; blank = the default wording.
+    cta_label: s.ctaLabel.trim(),
+    cta_url: s.cta === "LINK" ? s.ctaUrl.trim() : "",
+  }));
+  return JSON.stringify(rows);
+}
+
 // Raw event detail + timeline -> wizard EventDetailData (with FK ids
 // intact), for prefilling the edit wizard.
 export function toEventDraft(
@@ -611,6 +661,7 @@ export function toEventDraft(
   questions: EventQuestionApi[] = [],
   socialLinks: { platform: string; url: string }[] = [],
   media: { url: string }[] = [],
+  faqs: { question: string; answer: string }[] = [],
 ): EventDetailData {
   return {
     id: detail.id,
@@ -662,6 +713,8 @@ export function toEventDraft(
           ? [detail.banner_image_url]
           : [],
     socialLinks: socialLinks.map(({ platform, url }) => ({ platform, url })),
+    stages: parseStages(detail.stages_json),
+    faqs: faqs.map(({ question, answer }) => ({ question, answer })),
     timeline: timeline.map((row) => {
       const item = adaptTimelineItem(row);
       return {
@@ -671,6 +724,7 @@ export function toEventDraft(
         title: item.title,
         description: item.description,
         location: item.location ?? "",
+        dayLabel: item.dayLabel ?? "",
       };
     }),
     rounds: rounds.map((row) => {
@@ -722,6 +776,7 @@ export interface TimelinePayloadItem {
   startTime: string | null;
   endTime: string | null;
   location: string | null;
+  dayLabel?: string; // D8: omitted unless the organizer filled one in
   sortOrder: number;
 }
 
@@ -745,6 +800,8 @@ export function toTimelinePayload(
             ? (toIsoTimestamp(day, item.endTime) ?? null)
             : null,
         location: item.location || null,
+        // D8: only send when set, so a backend without the column is untouched.
+        ...(item.dayLabel?.trim() && day ? { dayLabel: item.dayLabel.trim() } : {}),
         sortOrder: index,
       };
     });
@@ -1038,6 +1095,28 @@ export function adaptApiEvent(
       ? detail.description.split("\n").filter((line) => line.trim() !== "")
       : [],
     timeline: [],
+    stages: parseStages(detail?.stages_json).map((s): EventStage => ({
+      label: s.label,
+      date: s.date,
+      time: s.time,
+      mode:
+        s.mode === "ONLINE"
+          ? "Online"
+          : s.mode === "BOTH"
+            ? "Both"
+            : "In-Person",
+      link: s.mode !== "OFFLINE" ? s.link || undefined : undefined,
+      venue: s.mode !== "ONLINE" ? s.venue || undefined : undefined,
+      // A custom link needs both parts; half-filled falls back to auto.
+      cta:
+        s.cta === "SUBMIT"
+          ? "submit"
+          : s.cta === "LINK" && s.ctaUrl
+            ? "link"
+            : "auto",
+      ctaLabel: s.ctaLabel || undefined,
+      ctaUrl: s.ctaUrl || undefined,
+    })),
     rounds: [],
     organizerId: detail?.organizer_id ?? undefined,
     organizer: {

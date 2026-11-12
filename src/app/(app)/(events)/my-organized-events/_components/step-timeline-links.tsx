@@ -73,6 +73,7 @@ export function StepTimelineLinks({ data, onChange }: StepTimelineLinksProps) {
         title: "",
         description: "",
         location: "",
+        dayLabel: "",
       }),
     );
   }
