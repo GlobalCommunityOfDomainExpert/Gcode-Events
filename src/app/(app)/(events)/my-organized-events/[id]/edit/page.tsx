@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PencilOff } from "lucide-react";
-import { NotFoundState } from "@/components/molecules";
+import { EditorSkeleton, NotFoundState } from "@/components/molecules";
 import {
   getEvent,
   listEventFaqs,
@@ -95,18 +95,16 @@ export default function EditOrganizedEventPage() {
     };
   }, [params.id]);
 
+  if (!draft && !detail && status === "loading") {
+    return <EditorSkeleton />;
+  }
+
   if (!draft || !detail) {
     return (
       <NotFoundState
         icon={PencilOff}
-        title={
-          status === "loading" ? "Loading event…" : "Can't edit this event"
-        }
-        description={
-          status === "loading"
-            ? "Fetching the event to edit."
-            : "This event may not exist, or it couldn't be loaded."
-        }
+        title="Can't edit this event"
+        description="This event may not exist, or it couldn't be loaded."
         actionHref="/my-organized-events"
         actionLabel="Back to Organizing"
       />

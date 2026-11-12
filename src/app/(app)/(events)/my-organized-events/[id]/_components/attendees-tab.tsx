@@ -10,6 +10,7 @@ import {
   Pagination,
   SearchBar,
   Table,
+  TableSkeleton,
   TableColumn,
   Tabs,
 } from "@/components/molecules";
@@ -51,6 +52,8 @@ export type AttendeesCategoryFilterValue = "all" | "Attendee" | "Participant";
 export interface AttendeesTabProps {
   event: Event;
   attendees: Attendee[];
+  /** True until the first attendee fetch resolves — shows a table skeleton. */
+  loading?: boolean;
   selectedIds: Set<string>;
   onSelectedIdsChange: (ids: Set<string>) => void;
   onNavigateToCommunication: () => void;
@@ -68,6 +71,7 @@ function exportCsv(filename: string, attendees: Attendee[]) {
 export function AttendeesTab({
   event,
   attendees,
+  loading = false,
   selectedIds,
   onSelectedIdsChange,
   onNavigateToCommunication,
@@ -480,23 +484,31 @@ export function AttendeesTab({
         ]}
       />
 
-      <Table
-        columns={columns}
-        rows={pageRows}
-        rowKey={(row) => row.id}
-        selectable
-        selectedKeys={selectedIds}
-        onToggleRow={toggleRow}
-        onToggleAll={toggleAll}
-        onRowClick={setViewingAttendee}
-        emptyState={
-          <div className="border-border-light bg-surface-light rounded-md border p-8 text-center">
-            <p className="text-body text-text-secondary">
-              No attendees match these filters.
-            </p>
-          </div>
-        }
-      />
+      {loading ? (
+        <TableSkeleton
+          rows={6}
+          cols={columns.length}
+          label="Loading attendees…"
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={pageRows}
+          rowKey={(row) => row.id}
+          selectable
+          selectedKeys={selectedIds}
+          onToggleRow={toggleRow}
+          onToggleAll={toggleAll}
+          onRowClick={setViewingAttendee}
+          emptyState={
+            <div className="border-border-light bg-surface-light rounded-md border p-8 text-center">
+              <p className="text-body text-text-secondary">
+                No attendees match these filters.
+              </p>
+            </div>
+          }
+        />
+      )}
 
       {filtered.length > 0 && (
         <div className="flex items-center justify-between">

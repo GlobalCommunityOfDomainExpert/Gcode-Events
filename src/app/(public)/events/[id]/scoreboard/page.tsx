@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Compass, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
 import { Card, Icon, Progress } from "@/components/atoms";
-import { NotFoundState } from "@/components/molecules";
+import { ScoreboardSkeleton } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { LivePerformer } from "@/lib/api/ratings";
 import Image from "next/image";
@@ -96,15 +96,7 @@ export default function ScoreboardPage() {
   }, [event?.ratingMode, live?.participant_id, params.id]);
 
   if (!event) {
-    return (
-      <NotFoundState
-        icon={Compass}
-        title="Loading…"
-        description="Fetching this event."
-        actionHref="/events"
-        actionLabel="Browse Events"
-      />
-    );
+    return <ScoreboardSkeleton />;
   }
 
   // Intermission — organizer-triggered break. Shows only the logo, nothing

@@ -5,7 +5,11 @@ import { useParams } from "next/navigation";
 import NextLink from "next/link";
 import { Compass } from "lucide-react";
 import { Button, Card } from "@/components/atoms";
-import { Banner, NotFoundState } from "@/components/molecules";
+import {
+  Banner,
+  CenteredCardSkeleton,
+  NotFoundState,
+} from "@/components/molecules";
 import { useSession } from "@/hooks/use-session";
 import {
   getPanelistInvite,
@@ -60,15 +64,7 @@ export default function PanelistInvitePage() {
   }
 
   if (status === "loading") {
-    return (
-      <NotFoundState
-        icon={Compass}
-        title="Loading…"
-        description="Fetching your invite."
-        actionHref="/"
-        actionLabel="Home"
-      />
-    );
+    return <CenteredCardSkeleton label="Fetching your invite…" />;
   }
 
   if (status === "error" || !invite) {

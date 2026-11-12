@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Input, RemoveIconButton } from "@/components/atoms";
-import { Banner, FormField, Table, TableColumn } from "@/components/molecules";
+import {
+  Banner,
+  FormField,
+  Table,
+  TableColumn,
+  TableSkeleton,
+} from "@/components/molecules";
 import { EventPanelist } from "@/lib/event";
 import {
   invitePanelist,
@@ -19,6 +25,7 @@ export interface PanelistsTabProps {
 
 export function PanelistsTab({ eventId }: PanelistsTabProps) {
   const [panelists, setPanelists] = useState<EventPanelist[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [email, setEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -42,6 +49,7 @@ export function PanelistsTab({ eventId }: PanelistsTabProps) {
       } catch {
         // best-effort — list just won't show if this fails
       }
+      if (!cancelled) setLoaded(true);
     })();
     return () => {
       cancelled = true;
@@ -136,9 +144,9 @@ export function PanelistsTab({ eventId }: PanelistsTabProps) {
           Panelists
         </h2>
         <p className="text-body text-text-secondary">
-          Invite anyone to judge this event as a panelist — they don&apos;t
-          need any particular account type, just an email. Once accepted,
-          they can score participants the same way you do in the Rounds tab.
+          Invite anyone to judge this event as a panelist — they don&apos;t need
+          any particular account type, just an email. Once accepted, they can
+          score participants the same way you do in the Rounds tab.
         </p>
       </div>
 
@@ -166,16 +174,24 @@ export function PanelistsTab({ eventId }: PanelistsTabProps) {
         </Button>
       </div>
 
-      <Table
-        columns={columns}
-        rows={panelists}
-        rowKey={(row) => row.id}
-        emptyState={
-          <p className="text-body text-text-secondary p-6 text-center">
-            No panelists invited yet.
-          </p>
-        }
-      />
+      {!loaded ? (
+        <TableSkeleton
+          rows={3}
+          cols={columns.length}
+          label="Loading panelists…"
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={panelists}
+          rowKey={(row) => row.id}
+          emptyState={
+            <p className="text-body text-text-secondary p-6 text-center">
+              No panelists invited yet.
+            </p>
+          }
+        />
+      )}
     </div>
   );
 }

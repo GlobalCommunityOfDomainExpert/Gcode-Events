@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import NextLink from "next/link";
 import { Compass } from "lucide-react";
 import { Button, Card } from "@/components/atoms";
-import { NotFoundState } from "@/components/molecules";
+import { CenteredCardSkeleton, NotFoundState } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { useAttendees } from "@/hooks/use-attendees";
 import { useSession } from "@/hooks/use-session";
@@ -75,15 +75,7 @@ export default function JudgeEventPage() {
   }
 
   if (!event || eventStatus === "loading" || accessStatus === "loading") {
-    return (
-      <NotFoundState
-        icon={Compass}
-        title="Loading…"
-        description="Checking your access."
-        actionHref="/"
-        actionLabel="Home"
-      />
-    );
+    return <CenteredCardSkeleton label="Checking your access…" />;
   }
 
   if (!isAcceptedPanelist) {

@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Badge, Button, Icon, Input, Select } from "@/components/atoms";
-import { Banner, FormField, Table, TableColumn } from "@/components/molecules";
+import {
+  Banner,
+  FormField,
+  Table,
+  TableColumn,
+  TableSkeleton,
+} from "@/components/molecules";
 import { Coupon } from "@/lib/event";
 import { generateCouponCode } from "@/lib/coupon-code";
-import {
-  createCoupon,
-  deactivateCoupon,
-  listCoupons,
-} from "@/lib/api/coupons";
+import { createCoupon, deactivateCoupon, listCoupons } from "@/lib/api/coupons";
 import { adaptCoupon } from "@/lib/api/adapters";
 import { ApiError } from "@/lib/api/client";
 
@@ -18,7 +20,10 @@ export interface CouponsTabProps {
   eventId: string;
 }
 
-const statusTone: Record<Coupon["computedStatus"], "success" | "warning" | "danger" | "neutral"> = {
+const statusTone: Record<
+  Coupon["computedStatus"],
+  "success" | "warning" | "danger" | "neutral"
+> = {
   ACTIVE: "success",
   SCHEDULED: "warning",
   EXHAUSTED: "warning",
@@ -28,6 +33,7 @@ const statusTone: Record<Coupon["computedStatus"], "success" | "warning" | "dang
 
 export function CouponsTab({ eventId }: CouponsTabProps) {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [code, setCode] = useState("");
   const [discountType, setDiscountType] = useState<"PERCENT" | "FIXED">(
     "PERCENT",
@@ -58,6 +64,7 @@ export function CouponsTab({ eventId }: CouponsTabProps) {
       } catch {
         // best-effort — list just won't show if this fails
       }
+      if (!cancelled) setLoaded(true);
     })();
     return () => {
       cancelled = true;
@@ -178,13 +185,11 @@ export function CouponsTab({ eventId }: CouponsTabProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-large text-text-primary font-semibold">
-          Coupons
-        </h2>
+        <h2 className="text-large text-text-primary font-semibold">Coupons</h2>
         <p className="text-body text-text-secondary">
           Create discount codes attendees can apply at checkout. A code that
-          fully covers the price registers them for free without going
-          through payment.
+          fully covers the price registers them for free without going through
+          payment.
         </p>
       </div>
 
@@ -270,16 +275,24 @@ export function CouponsTab({ eventId }: CouponsTabProps) {
         {creating ? "Creating…" : "Create Coupon"}
       </Button>
 
-      <Table
-        columns={columns}
-        rows={coupons}
-        rowKey={(row) => row.id}
-        emptyState={
-          <p className="text-body text-text-secondary p-6 text-center">
-            No coupons created yet.
-          </p>
-        }
-      />
+      {!loaded ? (
+        <TableSkeleton
+          rows={3}
+          cols={columns.length}
+          label="Loading coupons…"
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={coupons}
+          rowKey={(row) => row.id}
+          emptyState={
+            <p className="text-body text-text-secondary p-6 text-center">
+              No coupons created yet.
+            </p>
+          }
+        />
+      )}
     </div>
   );
 }

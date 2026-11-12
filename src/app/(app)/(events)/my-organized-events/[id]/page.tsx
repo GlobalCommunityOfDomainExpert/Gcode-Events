@@ -7,6 +7,7 @@ import { Badge, Button, ButtonLink } from "@/components/atoms";
 import {
   Banner,
   Breadcrumb,
+  ManageEventSkeleton,
   Modal,
   NotFoundState,
   Tabs,
@@ -29,7 +30,11 @@ export default function OrganizedEventDetailPage() {
     status: eventStatus,
     refresh: refreshEvent,
   } = useEvent(params.id);
-  const { attendees, refresh: refreshAttendees } = useAttendees(params.id, {
+  const {
+    attendees,
+    status: attendeesStatus,
+    refresh: refreshAttendees,
+  } = useAttendees(params.id, {
     attendee: event?.attendeeRegistration.price ?? 0,
     participant: event?.participantRegistration?.price ?? 0,
   });
@@ -40,16 +45,16 @@ export default function OrganizedEventDetailPage() {
   );
   const [showCancelModal, setShowCancelModal] = useState(false);
 
+  if (!event && eventStatus === "loading") {
+    return <ManageEventSkeleton />;
+  }
+
   if (!event) {
     return (
       <NotFoundState
         icon={Compass}
-        title={eventStatus === "loading" ? "Loading event…" : "Event not found"}
-        description={
-          eventStatus === "loading"
-            ? "Fetching this event from the server."
-            : "This event may not exist, or it couldn't be loaded."
-        }
+        title="Event not found"
+        description="This event may not exist, or it couldn't be loaded."
         actionHref="/my-organized-events"
         actionLabel="Back to Organizing"
       />
@@ -203,6 +208,7 @@ export default function OrganizedEventDetailPage() {
               <AttendeesTab
                 event={event}
                 attendees={attendees}
+                loading={attendeesStatus === "loading"}
                 selectedIds={selectedAttendeeIds}
                 onSelectedIdsChange={setSelectedAttendeeIds}
                 onNavigateToCommunication={() => setActiveTab("communication")}

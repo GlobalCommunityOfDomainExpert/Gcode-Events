@@ -26,6 +26,7 @@ import {
   Banner,
   Breadcrumb,
   FormField,
+  FormPageSkeleton,
   NotFoundState,
   ToggleGroup,
 } from "@/components/molecules";
@@ -200,15 +201,7 @@ export default function AdditionalInfoPage() {
   }, []);
 
   if (!event || participantStatus === "loading") {
-    return (
-      <NotFoundState
-        icon={Compass}
-        title="Loading your registration…"
-        description="Fetching your additional info."
-        actionHref="/events"
-        actionLabel="Browse Events"
-      />
-    );
+    return <FormPageSkeleton label="Loading your registration…" />;
   }
 
   if (participantStatus === "error" || !participant) {
