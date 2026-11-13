@@ -656,6 +656,41 @@ export function stagesJson(
   return JSON.stringify(rows);
 }
 
+// GCODE_EVENT_ROUNDS rows -> the editable round form shape (RoundsEditor).
+// Used by the dashboard's Rounds page, which owns round configuration. Same
+// mapping toEventDraft applies to its `rounds` argument, except that a round
+// with only an end (e.g. "results by 26 Nov") still gets a day.
+export function toRoundsDraft(
+  rounds: EventRoundApi[],
+): EventDetailData["rounds"] {
+  return rounds.map((row) => {
+    const item = adaptEventRound(row);
+    return {
+      id: row.id,
+      name: item.name,
+      description: item.description,
+      mode: row.mode,
+      rubric: item.rubric.map((c) => ({
+        id: Number(c.id),
+        label: c.label,
+        maxScore: c.maxScore,
+      })),
+      shortlistCount: item.shortlistCount ?? 0,
+      date: item.startTime
+        ? istDate(item.startTime)
+        : item.endTime
+          ? istDate(item.endTime)
+          : "",
+      startTime: item.startTime ? istTime(item.startTime) : "",
+      endTime: item.endTime ? istTime(item.endTime) : "",
+      judgeWeight: item.judgeWeight,
+      audienceWeight: item.audienceWeight,
+      judgeScoringEnabled: item.judgeScoringEnabled,
+      audienceScoringEnabled: item.audienceScoringEnabled,
+    };
+  });
+}
+
 // Raw event detail + timeline -> wizard EventDetailData (with FK ids
 // intact), for prefilling the edit wizard.
 export function toEventDraft(
