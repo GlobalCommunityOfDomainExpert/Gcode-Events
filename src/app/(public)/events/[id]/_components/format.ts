@@ -23,9 +23,13 @@ export function groupByDay(items: EventTimelineItem[]) {
     buckets.get(key)!.push(item);
   }
   const multiDay = order.filter((d) => d).length > 1;
-  return order.map((day) => ({
-    day,
-    label:
+  return order.map((day) => {
+    const items = buckets.get(day)!;
+    // Organizer's own day name, from whichever item on that day carries it.
+    const title = day
+      ? (items.find((i) => i.dayLabel?.trim())?.dayLabel?.trim() ?? "")
+      : "";
+    const date =
       multiDay && day
         ? new Intl.DateTimeFormat("en-IN", {
             weekday: "short",
@@ -33,9 +37,14 @@ export function groupByDay(items: EventTimelineItem[]) {
             month: "short",
             timeZone: "UTC",
           }).format(new Date(day))
-        : "",
-    items: buckets.get(day)!,
-  }));
+        : "";
+    return {
+      day,
+      title,
+      label: title && date ? `${title} · ${date}` : date,
+      items,
+    };
+  });
 }
 
 // Whole days between now and an ISO deadline. Null if no deadline is set.

@@ -6,6 +6,7 @@ import { Badge, ButtonLink, Icon } from "@/components/atoms";
 import {
   EmptyState,
   EventBadgeRow,
+  MyEventsSkeleton,
   Tabs,
   ToggleGroup,
 } from "@/components/molecules";
@@ -42,7 +43,7 @@ function isSameMonth(date: Date, today: Date): boolean {
 export default function MyEventsPage() {
   const [activeTab, setActiveTab] = useState("upcoming");
   const [range, setRange] = useState("all");
-  const { tickets } = useMyTickets();
+  const { tickets, status } = useMyTickets();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -57,6 +58,8 @@ export default function MyEventsPage() {
     });
 
   const past = tickets.filter((ticket) => new Date(ticket.date) < today);
+
+  if (status === "loading") return <MyEventsSkeleton />;
 
   return (
     <div className="mt-10 space-y-6">

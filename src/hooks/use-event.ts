@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getEvent,
+  listEventFaqs,
   listEventMedia,
   listEventSocialLinks,
   listEventTimeline,
@@ -45,6 +46,7 @@ export function useEvent(id: string | undefined) {
           questions,
           links,
           media,
+          faqs,
           types,
           modes,
           statuses,
@@ -55,6 +57,7 @@ export function useEvent(id: string | undefined) {
           listEventQuestions(id),
           listEventSocialLinks(id),
           listEventMedia(id),
+          listEventFaqs(id),
           getEventTypes(),
           getModes(),
           getStatuses(),
@@ -114,6 +117,7 @@ export function useEvent(id: string | undefined) {
           timeline: timeline.map(adaptTimelineItem),
           rounds: rounds.map(adaptEventRound),
           socialLinks: links.map(({ platform, url }) => ({ platform, url })),
+          faqs: faqs.map(({ question, answer }) => ({ question, answer })),
           mediaUrls:
             media.length > 0 ? media.map((m) => m.url) : adapted.mediaUrls,
           duration,

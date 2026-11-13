@@ -46,6 +46,10 @@ export interface EventDetail extends EventListItem {
   terms: string | null;
   eligibility: string | null;
   duration_text: string | null;
+  // Contract-only — EVENTS.STAGES_JSON. Hybrid events split by day/stage,
+  // each Online or In-person: JSON array of EventStageApi as a string.
+  // Missing/null -> no stages, the page falls back to venue + live room.
+  stages_json?: string | null;
   // Second registration category ("Participant" — people who perform an
   // activity in the event, e.g. hackathon builders), independent price +
   // capacity from the Attendee columns above. Not yet backed by the live
@@ -207,6 +211,8 @@ export interface CreateEventPayload {
   terms?: string;
   eligibility?: string;
   duration_text?: string;
+  // JSON string of EventStageApi[]; "[]" clears it (null cannot, see stagesJson).
+  stages_json?: string | null;
   attendee_registration_enabled?: number;
   participant_registration_enabled?: number;
   participant_price?: number;
@@ -221,6 +227,19 @@ export interface CreateEventPayload {
   track_submission_enabled?: number;
   member_names_enabled?: number;
   audio_recording_applies_to?: "ATTENDEE" | "PARTICIPANT";
+}
+
+// One day/stage of a hybrid event, as stored in EVENTS.STAGES_JSON.
+export interface EventStageApi {
+  label: string; // organizer's own text — "Day 1", "Round 1 – Online Screening"
+  date: string; // yyyy-mm-dd, "" = to be announced
+  time: string; // HH:mm, "" = TBD
+  mode: "ONLINE" | "OFFLINE" | "BOTH"; // BOTH = same day, online and at the venue
+  link: string; // ONLINE/BOTH — "" = nothing to join (e.g. video screening)
+  venue: string; // OFFLINE/BOTH — "" = the event's own venue
+  cta: "AUTO" | "SUBMIT" | "LINK";
+  cta_label: string; // LINK only
+  cta_url: string; // LINK only
 }
 
 export type UpdateEventPayload = Partial<CreateEventPayload>;

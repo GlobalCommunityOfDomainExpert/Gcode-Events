@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { AlertTriangle, Check, Compass, Mic } from "lucide-react";
 import { Button, Card, Icon } from "@/components/atoms";
-import { Banner, NotFoundState } from "@/components/molecules";
+import {
+  Banner,
+  CenteredCardSkeleton,
+  NotFoundState,
+} from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { getParticipant } from "@/lib/api/participants";
 import {
@@ -97,15 +101,7 @@ export default function RateEventPage() {
   }, []);
 
   if (!event || (requiresAttendee && attendeeStatus === "loading")) {
-    return (
-      <NotFoundState
-        icon={Compass}
-        title="Loading…"
-        description="Fetching your rating link."
-        actionHref="/events"
-        actionLabel="Browse Events"
-      />
-    );
+    return <CenteredCardSkeleton label="Fetching your rating link…" />;
   }
 
   if (requiresAttendee && (attendeeStatus === "error" || !attendee)) {

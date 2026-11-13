@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button } from "@/components/atoms";
-import { Banner, Table, TableColumn } from "@/components/molecules";
+import {
+  Banner,
+  Table,
+  TableColumn,
+  TableSkeleton,
+} from "@/components/molecules";
 import { UpiClaim } from "@/lib/event";
 import {
   confirmUpiClaim,
@@ -16,14 +21,16 @@ export interface UpiClaimsTabProps {
   eventId: string;
 }
 
-const statusTone: Record<UpiClaim["status"], "success" | "warning" | "danger"> = {
-  CONFIRMED: "success",
-  PENDING: "warning",
-  REJECTED: "danger",
-};
+const statusTone: Record<UpiClaim["status"], "success" | "warning" | "danger"> =
+  {
+    CONFIRMED: "success",
+    PENDING: "warning",
+    REJECTED: "danger",
+  };
 
 export function UpiClaimsTab({ eventId }: UpiClaimsTabProps) {
   const [claims, setClaims] = useState<UpiClaim[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -45,6 +52,7 @@ export function UpiClaimsTab({ eventId }: UpiClaimsTabProps) {
       } catch {
         // best-effort — list just won't show if this fails
       }
+      if (!cancelled) setLoaded(true);
     })();
     return () => {
       cancelled = true;
@@ -154,24 +162,32 @@ export function UpiClaimsTab({ eventId }: UpiClaimsTabProps) {
         </h2>
         <p className="text-body text-text-secondary">
           Attendees who paid via the offline UPI QR at the venue self-report
-          their transaction reference (UTR) here. Confirming a claim
-          registers them for free — check the UTR against your own bank
-          statement first, this system can&apos;t verify it for you.
+          their transaction reference (UTR) here. Confirming a claim registers
+          them for free — check the UTR against your own bank statement first,
+          this system can&apos;t verify it for you.
         </p>
       </div>
 
       {error && <Banner tone="danger">{error}</Banner>}
 
-      <Table
-        columns={columns}
-        rows={claims}
-        rowKey={(row) => row.id}
-        emptyState={
-          <p className="text-body text-text-secondary p-6 text-center">
-            No UPI claims submitted yet.
-          </p>
-        }
-      />
+      {!loaded ? (
+        <TableSkeleton
+          rows={3}
+          cols={columns.length}
+          label="Loading UPI claims…"
+        />
+      ) : (
+        <Table
+          columns={columns}
+          rows={claims}
+          rowKey={(row) => row.id}
+          emptyState={
+            <p className="text-body text-text-secondary p-6 text-center">
+              No UPI claims submitted yet.
+            </p>
+          }
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ProfileSkeleton } from "@/components/molecules";
 import { useSession } from "@/hooks/use-session";
 import { ExpertProfileView } from "./_components/expert-profile-view";
 import { FresherProfileView } from "./_components/fresher-profile-view";
@@ -25,7 +26,8 @@ export default function ProfilePage() {
     }
   }, [session, isValidRole, router]);
 
-  if (!isValidRole) return null;
+  // Waiting on the session / redirecting away: hold the page's shape.
+  if (!isValidRole) return <ProfileSkeleton />;
 
   return (
     <div className="mx-auto max-w-3xl">

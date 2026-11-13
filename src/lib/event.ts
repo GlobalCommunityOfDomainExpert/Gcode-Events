@@ -50,6 +50,14 @@ export interface EventTimelineItem {
   title: string;
   description: string;
   location?: string;
+  dayLabel?: string; // EVENT_TIMELINE.DAY_LABEL — custom day name, blank = "Day N"
+}
+
+// GCODE_EVENT_FAQS (contract-only) — organizer-written question + answer,
+// shown on the public page and offered in "Ask a question" before sending.
+export interface EventFaq {
+  question: string;
+  answer: string;
 }
 
 // No backend table for social links yet — adapter never sets this.
@@ -305,6 +313,20 @@ export function googleCalendarUrl(
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+// One day/stage of a hybrid event (Day 1 online, Day 2 at the venue…).
+export interface EventStage {
+  label: string;
+  date: string; // yyyy-mm-dd, "" = to be announced
+  time: string; // HH:mm, "" = TBD
+  mode: "Online" | "In-Person" | "Both";
+  link?: string; // online/both — absent = nothing to join live
+  venue?: string; // in person only — absent = the event's venue
+  /** auto = join/directions from the format, submit = entry page, link = own URL. */
+  cta: "auto" | "submit" | "link";
+  ctaLabel?: string; // organizer wording for the day's main button
+  ctaUrl?: string;
+}
+
 export interface EventOrganizer {
   name: string; // backed by EventDetail.created_by; falls back to "GCODE Team"
   title: string; // no backend column — adapter hardcodes "Organizer"
@@ -344,12 +366,14 @@ export interface Event {
   certificate: boolean; // no backend column — adapter hardcodes false
   description: string[]; // EventDetail.description (detail fetch only), wrapped in array
   timeline: EventTimelineItem[]; // EVENT_TIMELINE rows — adapter hardcodes [] for now
+  stages: EventStage[]; // EVENTS.STAGES_JSON — hybrid days/stages, [] when unset
   rounds: EventRound[]; // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25, adapter hardcodes [] until the table exists
   organizer: EventOrganizer; // see EventOrganizer — only .name is backed
   organizerId?: string; // EventDetail.organizer_id — owner check for the manage bar
   terms: string[]; // EventDetail.terms, split on newline — falls back to DEFAULT_TERMS when blank
   eligibility: string[]; // EventDetail.eligibility, split on newline — falls back to DEFAULT_ELIGIBILITY when blank
   tags?: string[]; // EventDetail.categories (detail fetch only)
+  faqs?: EventFaq[]; // GCODE_EVENT_FAQS — contract-only, served at /events/:id/faqs
   socialLinks?: EventSocialLink[]; // no backend column — adapter never sets this
   coverImageUrl?: string; // EventListItem.cover_image_url
   mediaUrls?: string[]; // EventListItem.banner_image_url, wrapped in array

@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PencilOff } from "lucide-react";
-import { NotFoundState } from "@/components/molecules";
+import { EditorSkeleton, NotFoundState } from "@/components/molecules";
 import {
   getEvent,
+  listEventFaqs,
+  listEventMedia,
+  listEventSocialLinks,
   listEventTimeline,
   listEventQuestions,
   getEventAdvancedEnabled,
@@ -13,8 +16,12 @@ import {
   listAdvancedOptions,
 } from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
-import { toEventDraft, attachAdvancedQuestionConfiguration } from "@/lib/api/adapters";
-import { EventWizard } from "@/app/(app)/(events)/my-organized-events/_components/event-wizard";
+import {
+  toEventDraft,
+  attachAdvancedQuestionConfiguration,
+} from "@/lib/api/adapters";
+import { EventEditor } from "@/app/(app)/(events)/my-organized-events/_components/event-editor";
+import type { EventDetail } from "@/lib/api/types";
 import { EventDetailData } from "@/lib/zod/event";
 
 type LoadStatus = "loading" | "error" | "ready";
@@ -22,6 +29,7 @@ type LoadStatus = "loading" | "error" | "ready";
 export default function EditOrganizedEventPage() {
   const params = useParams<{ id: string }>();
   const [draft, setDraft] = useState<EventDetailData | undefined>(undefined);
+  const [detail, setDetail] = useState<EventDetail | undefined>(undefined);
   const [status, setStatus] = useState<LoadStatus>("loading");
 
   useEffect(() => {
@@ -29,15 +37,30 @@ export default function EditOrganizedEventPage() {
     void (async () => {
       setStatus("loading");
       try {
-        const [detail, timeline, rounds, questions, advancedEnabled] = await Promise.all([
+        const [
+          detail,
+          timeline,
+          rounds,
+          questions,
+          links,
+          media,
+          faqs,
+          advancedEnabled,
+        ] = await Promise.all([
           getEvent(params.id),
           listEventTimeline(params.id),
           listEventRounds(params.id),
           listEventQuestions(params.id),
+          listEventSocialLinks(params.id),
+          listEventMedia(params.id),
+          listEventFaqs(params.id),
           getEventAdvancedEnabled(params.id).catch(() => false),
         ]);
-        let optionSettings: Awaited<ReturnType<typeof listAdvancedOptionSettings>> = [];
-        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> = [];
+        let optionSettings: Awaited<
+          ReturnType<typeof listAdvancedOptionSettings>
+        > = [];
+        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> =
+          [];
         if (advancedEnabled) {
           [optionSettings, advancedOptions] = await Promise.all([
             listAdvancedOptionSettings(params.id),
@@ -45,9 +68,22 @@ export default function EditOrganizedEventPage() {
           ]);
         }
         if (cancelled) return;
-        const draft = toEventDraft(detail, timeline, rounds, questions);
+        const draft = toEventDraft(
+          detail,
+          timeline,
+          rounds,
+          questions,
+          links,
+          media,
+          faqs,
+        );
         draft.advancedAdditionalQuestionsEnabled = advancedEnabled;
-        draft.questions = attachAdvancedQuestionConfiguration(draft.questions, optionSettings, advancedOptions);
+        draft.questions = attachAdvancedQuestionConfiguration(
+          draft.questions,
+          optionSettings,
+          advancedOptions,
+        );
+        setDetail(detail);
         setDraft(draft);
         setStatus("ready");
       } catch {
@@ -59,23 +95,28 @@ export default function EditOrganizedEventPage() {
     };
   }, [params.id]);
 
-  if (!draft) {
+  if (!draft && !detail && status === "loading") {
+    return <EditorSkeleton />;
+  }
+
+  if (!draft || !detail) {
     return (
       <NotFoundState
         icon={PencilOff}
-        title={
-          status === "loading" ? "Loading event…" : "Can't edit this event"
-        }
-        description={
-          status === "loading"
-            ? "Fetching the event to edit."
-            : "This event may not exist, or it couldn't be loaded."
-        }
+        title="Can't edit this event"
+        description="This event may not exist, or it couldn't be loaded."
         actionHref="/my-organized-events"
         actionLabel="Back to Organizing"
       />
     );
   }
 
-  return <EventWizard mode="edit" eventId={params.id} initialData={draft} />;
+  return (
+    <EventEditor
+      mode="edit"
+      eventId={params.id}
+      initialData={draft}
+      baseDetail={detail}
+    />
+  );
 }
