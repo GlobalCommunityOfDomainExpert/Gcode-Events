@@ -530,7 +530,10 @@ function EventRow({ event, now }: { event: Event; now: Date }) {
       </div>
 
       {/* actions */}
-      <div className="relative z-10 flex items-center justify-end gap-1">
+      {/* z-10 makes this its own stacking context, so the open menu (z-30
+          inside it) would still paint under the next row's actions. Lift the
+          row whose menu is open above its siblings. */}
+      <div className="relative z-10 flex items-center justify-end gap-1 has-[[aria-expanded=true]]:z-30">
         <ButtonLink
           href={bucket === "draft" ? `${base}/edit` : base}
           variant="secondary"
