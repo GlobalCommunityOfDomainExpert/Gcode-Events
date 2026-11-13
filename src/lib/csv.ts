@@ -5,8 +5,13 @@ import { triggerDownload } from "./download";
 // the organizer's machine. A leading apostrophe makes Excel show it as text.
 const FORMULA_START = /^[=+\-@\t\r]/;
 
+// A phone number prefixed with a tab (see phoneCell) is plain digits, so it
+// can't be a formula and doesn't need the apostrophe.
+const TEXT_PHONE = /^\t\+?\d{6,15}$/;
+
 export function csvCell(cell: string): string {
-  const safe = FORMULA_START.test(cell) ? `'${cell}` : cell;
+  const safe =
+    FORMULA_START.test(cell) && !TEXT_PHONE.test(cell) ? `'${cell}` : cell;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
@@ -28,4 +33,26 @@ export function downloadCsv(
     type: "text/csv;charset=utf-8;",
   });
   triggerDownload(blob, filename);
+}
+
+// Excel turns a bare digit string into a number (12 digits show as 9.19877E+11
+// and leading zeros vanish). A leading tab keeps it as text, invisibly. Only
+// plain "+" and digits get this; anything else goes through the formula guard.
+export function phoneCell(phone: string | null | undefined): string {
+  const value = (phone ?? "").replace(/[\s()-]/g, "");
+  return /^\+?\d{6,15}$/.test(value) ? `\t${value}` : (phone ?? "").trim();
+}
+
+// "<event name> <YYYY-MM-DD of export>.csv", safe as a Windows filename.
+export function exportFilename(title: string, now = new Date()): string {
+  const name =
+    title
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80)
+      .trim() || "Attendees";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return `${name} ${date}.csv`;
 }

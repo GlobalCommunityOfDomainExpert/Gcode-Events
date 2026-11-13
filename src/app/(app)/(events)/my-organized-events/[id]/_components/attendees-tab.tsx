@@ -27,7 +27,7 @@ import {
   audioSubmissionStatus,
   isUploadedAudioUrl,
 } from "@/lib/attendees";
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, exportFilename } from "@/lib/csv";
 import { Event } from "@/lib/event";
 import {
   listParticipantTeamMembers,
@@ -292,7 +292,7 @@ export function AttendeesTab({
             <Button
               variant="primary"
               onClick={() => {
-                exportCsv(`${event.id}-attendees.csv`, filtered);
+                exportCsv(exportFilename(event.title), filtered);
                 notify(`Exported ${filtered.length} rows`);
               }}
               disabled={filtered.length === 0}
@@ -496,7 +496,7 @@ export function AttendeesTab({
             variant="secondary"
             onClick={() =>
               exportCsv(
-                `${event.id}-selected-attendees.csv`,
+                exportFilename(event.title),
                 attendees.filter((a) => selectedIds.has(a.id)),
               )
             }
