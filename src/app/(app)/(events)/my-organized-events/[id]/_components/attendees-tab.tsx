@@ -56,7 +56,6 @@ export interface AttendeesTabProps {
   loading?: boolean;
   selectedIds: Set<string>;
   onSelectedIdsChange: (ids: Set<string>) => void;
-  onNavigateToCommunication: () => void;
   // Refetches the attendee list after a remove — same callback the parent
   // page already threads into RoundsTab.
   onAttendeesChanged: () => void;
@@ -74,7 +73,6 @@ export function AttendeesTab({
   loading = false,
   selectedIds,
   onSelectedIdsChange,
-  onNavigateToCommunication,
   onAttendeesChanged,
 }: AttendeesTabProps) {
   const [query, setQuery] = useState("");
@@ -462,11 +460,6 @@ export function AttendeesTab({
         selectedCount={selectedIds.size}
         onClear={() => onSelectedIdsChange(new Set())}
         actions={[
-          {
-            label: "📧 Send Email to Selected",
-            onClick: onNavigateToCommunication,
-            variant: "ghost",
-          },
           {
             label: "⬇ Export Selected",
             onClick: () =>
