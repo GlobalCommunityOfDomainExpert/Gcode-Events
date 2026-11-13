@@ -18,6 +18,7 @@ import { useAttendees } from "@/hooks/use-attendees";
 import { usePublishOrganizerNav } from "@/hooks/use-organizer-nav";
 import { OrganizedEventContext } from "../_components/event-context";
 import { eventTools } from "@/lib/organizer";
+import { JumpTo } from "../_components/jump-to";
 
 interface ToastState {
   message: string;
@@ -186,6 +187,7 @@ export default function OrganizedEventLayout({
           subtitle={[event.date, event.time].filter(Boolean).join(" · ")}
           actions={
             <div className="flex flex-wrap items-center gap-2">
+              <JumpTo event={event} onNotify={(m) => notify(m, "info")} />
               <ButtonLink
                 href={`/events/${event.id}`}
                 variant="secondary"

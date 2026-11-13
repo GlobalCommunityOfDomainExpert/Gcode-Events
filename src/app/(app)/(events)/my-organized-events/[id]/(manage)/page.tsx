@@ -18,6 +18,7 @@ import { hasEventEnded } from "@/lib/event";
 import { updateEvent } from "@/lib/api/events";
 import { useServerNow } from "@/hooks/use-server-now";
 import { useOrganizedEvent } from "../_components/event-context";
+import { NextSteps } from "../_components/next-steps";
 
 const DAY_MS = 86_400_000;
 
@@ -35,7 +36,7 @@ function daysUntil(
 }
 
 export default function OverviewPage() {
-  const { event, attendees, refreshEvent, notify, isCancelled } =
+  const { claims, event, attendees, refreshEvent, notify, isCancelled } =
     useOrganizedEvent();
   const now = useServerNow();
   const [range, setRange] = useState("14");
@@ -298,6 +299,8 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       <FocusTile {...hero} />
+
+      <NextSteps event={event} claims={claims} now={now} />
 
       <StatStrip
         stats={[
