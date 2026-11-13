@@ -139,7 +139,7 @@ export function NextSteps({
           <h2 className="text-text-primary font-bold">
             {past
               ? "Wrap up"
-              : `Next steps for this ${event.type.toLowerCase()}`}
+              : `Next steps for this ${(event.type ?? "event").toLowerCase()}`}
           </h2>
           <p className="text-small text-text-secondary">
             {todo.length

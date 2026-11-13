@@ -111,8 +111,9 @@ function OrganizedEventsList() {
       if (filter !== "all" && bucketOf(e, now) !== filter) return false;
       if (type !== "all" && e.type !== type) return false;
       if (!q) return true;
+      // Real list rows can have a blank location or an unresolved type.
       return [e.title, e.location, e.type].some((s) =>
-        s.toLowerCase().includes(q),
+        (s ?? "").toLowerCase().includes(q),
       );
     });
     // Upcoming/drafts: soonest first. Past/cancelled/all: most recent first.
