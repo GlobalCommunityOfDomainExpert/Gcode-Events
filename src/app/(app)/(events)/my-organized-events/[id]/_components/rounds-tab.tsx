@@ -841,8 +841,11 @@ export function RoundsTab({
   return (
     <div className="space-y-4">
       {!onlyRoundId && (
-        <Tabs
-          items={event.rounds.map((round, index) => {
+        <ol
+          aria-label="Rounds"
+          className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+        >
+          {event.rounds.map((round, index) => {
             const locked =
               index > 0 &&
               !isRoundDecided(
@@ -850,18 +853,54 @@ export function RoundsTab({
                 decisions,
                 event.rounds[index - 1].id,
               );
-            return {
-              value: round.id,
-              label: locked ? `${round.name} (Locked)` : round.name,
-            };
+            const done = isRoundDecided(participantIds, decisions, round.id);
+            const current = round.id === activeRoundId;
+            return (
+              <li key={round.id} className="min-w-44 flex-1">
+                <button
+                  type="button"
+                  aria-current={current ? "step" : undefined}
+                  onClick={() => {
+                    setInternalActiveRoundId(round.id);
+                    setSelectedIds(new Set());
+                    setActiveSubTab("shortlisting");
+                  }}
+                  className={`focus-visible:ring-primary w-full rounded-md border px-4 py-3 text-left transition-colors hover:cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none ${
+                    current
+                      ? "border-primary bg-primary-light"
+                      : "border-border-light bg-surface-light hover:border-border-hover"
+                  } ${locked && !current ? "opacity-60" : ""}`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`text-small grid size-6 place-items-center rounded-full font-bold ${
+                        done
+                          ? "bg-success text-white"
+                          : current
+                            ? "bg-primary text-white"
+                            : "bg-bg-light text-text-secondary"
+                      }`}
+                    >
+                      {done ? "✓" : index + 1}
+                    </span>
+                    <span
+                      className={`text-body min-w-0 flex-1 truncate font-semibold ${
+                        current ? "text-primary" : "text-text-primary"
+                      }`}
+                    >
+                      {round.name}
+                    </span>
+                  </span>
+                  <span className="text-small text-text-secondary mt-1 block">
+                    {round.mode}
+                    {" · "}
+                    {done ? "Decided" : locked ? "Locked" : "In progress"}
+                  </span>
+                </button>
+              </li>
+            );
           })}
-          value={activeRoundId}
-          onChange={(value) => {
-            setInternalActiveRoundId(value);
-            setSelectedIds(new Set());
-            setActiveSubTab("shortlisting");
-          }}
-        />
+        </ol>
       )}
 
       {error && <Banner tone="danger">{error}</Banner>}

@@ -1,18 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Blurred, RemoveIconButton } from "@/components/atoms";
+import { ChevronRight, Download, Trash2, Users } from "lucide-react";
 import {
-  Banner,
-  BulkActionBar,
-  Chip,
-  Modal,
+  Avatar,
+  Badge,
+  Button,
+  Checkbox,
+  Icon,
+  Select,
+} from "@/components/atoms";
+import {
+  ConfirmDialog,
+  Drawer,
+  EmptyState,
+  FilterTiles,
   Pagination,
   SearchBar,
-  Table,
+  SectionHeader,
   TableSkeleton,
-  TableColumn,
-  Tabs,
 } from "@/components/molecules";
 import {
   ATTENDEES_CSV_HEADERS,
@@ -21,7 +27,7 @@ import {
   audioSubmissionStatus,
   isUploadedAudioUrl,
 } from "@/lib/attendees";
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, exportFilename } from "@/lib/csv";
 import { Event } from "@/lib/event";
 import {
   listParticipantTeamMembers,
@@ -31,6 +37,7 @@ import {
   removeParticipant,
 } from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
+import { useOrganizedEvent } from "./event-context";
 import {
   attendanceStatusLabel,
   attendanceStatusTone,
@@ -52,20 +59,46 @@ export type AttendeesCategoryFilterValue = "all" | "Attendee" | "Participant";
 export interface AttendeesTabProps {
   event: Event;
   attendees: Attendee[];
-  /** True until the first attendee fetch resolves — shows a table skeleton. */
+  /** True until the first attendee fetch resolves — shows a list skeleton. */
   loading?: boolean;
   selectedIds: Set<string>;
   onSelectedIdsChange: (ids: Set<string>) => void;
-  onNavigateToCommunication: () => void;
-  // Refetches the attendee list after a remove — same callback the parent
-  // page already threads into RoundsTab.
+  // Refetches the attendee list after a remove.
   onAttendeesChanged: () => void;
 }
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 function exportCsv(filename: string, attendees: Attendee[]) {
   downloadCsv(filename, ATTENDEES_CSV_HEADERS, attendeesCsvRows(attendees));
+}
+
+function relativeDay(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-border-light flex justify-between gap-4 border-b py-2.5 last:border-b-0">
+      <dt className="text-small text-text-secondary">{label}</dt>
+      <dd className="text-small text-text-primary text-right font-medium">
+        {children}
+      </dd>
+    </div>
+  );
 }
 
 export function AttendeesTab({
@@ -74,88 +107,57 @@ export function AttendeesTab({
   loading = false,
   selectedIds,
   onSelectedIdsChange,
-  onNavigateToCommunication,
   onAttendeesChanged,
 }: AttendeesTabProps) {
+  const { notify } = useOrganizedEvent();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AttendeesFilterValue>("all");
   const [categoryFilter, setCategoryFilter] =
     useState<AttendeesCategoryFilterValue>("all");
   const [page, setPage] = useState(1);
-  const [viewingAttendee, setViewingAttendee] = useState<Attendee | null>(null);
-  const [viewingTracks, setViewingTracks] = useState<
-    ParticipantYoutubeTrackApi[]
-  >([]);
-  const [viewingMembers, setViewingMembers] = useState<
-    ParticipantTeamMemberApi[]
-  >([]);
-  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  const [error, setError] = useState("");
+  const [viewing, setViewing] = useState<Attendee | null>(null);
+  const [tracks, setTracks] = useState<ParticipantYoutubeTrackApi[]>([]);
+  const [members, setMembers] = useState<ParticipantTeamMemberApi[]>([]);
+  const [toRemove, setToRemove] = useState<string[] | null>(null);
+  const [removing, setRemoving] = useState(false);
+
   const submissionDeadlineIso =
     event.participantRegistration.registrationDeadlineIso;
+  const submissionOf = (a: Attendee) =>
+    audioSubmissionStatus(
+      a,
+      submissionDeadlineIso,
+      event.audioRecordingEnabled,
+    );
 
-  // Tracks/team members are participant-submitted child lists, not part of
-  // the Attendee row itself — fetch them only when the detail panel opens
-  // for a Participant-category row (Attendee rows never have them).
+  // Participant-submitted child lists load only when the drawer opens.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (!viewingAttendee || viewingAttendee.category !== "Participant") {
+      if (!viewing || viewing.category !== "Participant") {
         if (!cancelled) {
-          setViewingTracks([]);
-          setViewingMembers([]);
+          setTracks([]);
+          setMembers([]);
         }
         return;
       }
       try {
-        const [tracks, members] = await Promise.all([
-          listParticipantYoutubeTracks(viewingAttendee.id),
-          listParticipantTeamMembers(viewingAttendee.id),
+        const [t, m] = await Promise.all([
+          listParticipantYoutubeTracks(viewing.id),
+          listParticipantTeamMembers(viewing.id),
         ]);
         if (!cancelled) {
-          setViewingTracks(tracks);
-          setViewingMembers(members);
+          setTracks(t);
+          setMembers(m);
         }
       } catch {
-        // best-effort — panel just won't show these if the fetch fails
+        // best-effort
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [viewingAttendee]);
-
-  async function handleRemove(ids: string[]) {
-    if (ids.length === 0) return;
-    const label =
-      ids.length === 1
-        ? (attendees.find((a) => a.id === ids[0])?.name ?? "this attendee")
-        : `${ids.length} attendees`;
-    if (
-      !window.confirm(
-        `Remove ${label}? This cancels their registration — it can't be undone from here.`,
-      )
-    ) {
-      return;
-    }
-    setRemovingIds(new Set(ids));
-    setError("");
-    try {
-      await Promise.all(ids.map((id) => removeParticipant(id)));
-      const next = new Set(selectedIds);
-      ids.forEach((id) => next.delete(id));
-      onSelectedIdsChange(next);
-      onAttendeesChanged();
-    } catch (err) {
-      setError(
-        err instanceof ApiError || err instanceof Error
-          ? err.message
-          : "Couldn't remove one or more attendees.",
-      );
-    } finally {
-      setRemovingIds(new Set());
-    }
-  }
+  }, [viewing]);
 
   const counts = useMemo(
     () => ({
@@ -164,58 +166,37 @@ export function AttendeesTab({
       free: attendees.filter((a) => a.ticketType === "Free").length,
       attended: attendees.filter((a) => a.status === "attended").length,
       missed: attendees.filter((a) => a.status === "missed").length,
-      submitted: attendees.filter(
-        (a) =>
-          audioSubmissionStatus(
-            a,
-            submissionDeadlineIso,
-            event.audioRecordingEnabled,
-          ) === "submitted",
-      ).length,
-      pending: attendees.filter(
-        (a) =>
-          audioSubmissionStatus(
-            a,
-            submissionDeadlineIso,
-            event.audioRecordingEnabled,
-          ) === "pending",
-      ).length,
+      submitted: attendees.filter((a) => submissionOf(a) === "submitted")
+        .length,
+      pending: attendees.filter((a) => submissionOf(a) === "pending").length,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [attendees, submissionDeadlineIso, event.audioRecordingEnabled],
   );
 
-  const categoryCounts = useMemo(
-    () => ({
-      all: attendees.length,
-      Attendee: attendees.filter((a) => a.category === "Attendee").length,
-      Participant: attendees.filter((a) => a.category === "Participant").length,
-    }),
-    [attendees],
-  );
+  const passCounts = {
+    Attendee: attendees.filter((a) => a.category === "Attendee").length,
+    Participant: attendees.filter((a) => a.category === "Participant").length,
+  };
+  const hasBothPasses = passCounts.Attendee > 0 && passCounts.Participant > 0;
 
   const filtered = useMemo(() => {
-    return attendees.filter((attendee) => {
-      if (filter === "paid" && attendee.ticketType !== "Paid") return false;
-      if (filter === "free" && attendee.ticketType !== "Free") return false;
-      if (filter === "attended" && attendee.status !== "attended") return false;
-      if (filter === "missed" && attendee.status !== "missed") return false;
+    const q = query.trim().toLowerCase();
+    return attendees.filter((a) => {
+      if (filter === "paid" && a.ticketType !== "Paid") return false;
+      if (filter === "free" && a.ticketType !== "Free") return false;
+      if (filter === "attended" && a.status !== "attended") return false;
+      if (filter === "missed" && a.status !== "missed") return false;
       if (
         (filter === "submitted" || filter === "pending") &&
-        audioSubmissionStatus(
-          attendee,
-          submissionDeadlineIso,
-          event.audioRecordingEnabled,
-        ) !== filter
+        submissionOf(a) !== filter
       )
         return false;
-      if (categoryFilter !== "all" && attendee.category !== categoryFilter)
+      if (categoryFilter !== "all" && a.category !== categoryFilter)
         return false;
-      if (query.trim()) {
-        const haystack = `${attendee.name} ${attendee.email}`.toLowerCase();
-        if (!haystack.includes(query.trim().toLowerCase())) return false;
-      }
-      return true;
+      return !q || `${a.name} ${a.email}`.toLowerCase().includes(q);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     attendees,
     filter,
@@ -231,11 +212,8 @@ export function AttendeesTab({
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
-
-  function changeFilter(next: AttendeesFilterValue) {
-    setFilter(next);
-    setPage(1);
-  }
+  const allOnPageSelected =
+    pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
 
   function toggleRow(id: string) {
     const next = new Set(selectedIds);
@@ -244,406 +222,467 @@ export function AttendeesTab({
     onSelectedIdsChange(next);
   }
 
-  function toggleAll(checked: boolean) {
-    if (!checked) {
-      onSelectedIdsChange(new Set());
-      return;
-    }
-    onSelectedIdsChange(new Set(pageRows.map((row) => row.id)));
+  function togglePage(checked: boolean) {
+    const next = new Set(selectedIds);
+    pageRows.forEach((r) => (checked ? next.add(r.id) : next.delete(r.id)));
+    onSelectedIdsChange(next);
   }
 
-  const selectedAttendees = attendees.filter((attendee) =>
-    selectedIds.has(attendee.id),
-  );
+  async function confirmRemove() {
+    if (!toRemove) return;
+    setRemoving(true);
+    try {
+      await Promise.all(toRemove.map((id) => removeParticipant(id)));
+      const next = new Set(selectedIds);
+      toRemove.forEach((id) => next.delete(id));
+      onSelectedIdsChange(next);
+      setViewing(null);
+      notify(
+        toRemove.length === 1
+          ? "Registration cancelled"
+          : `${toRemove.length} registrations cancelled`,
+      );
+      setToRemove(null);
+      onAttendeesChanged();
+    } catch (err) {
+      notify(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : "Couldn't remove one or more attendees.",
+        "error",
+      );
+    } finally {
+      setRemoving(false);
+    }
+  }
 
-  const columns: TableColumn<Attendee>[] = [
-    {
-      key: "name",
-      header: "Name",
-      render: (row) => <span className="text-text-primary">{row.name}</span>,
-    },
-    {
-      key: "role",
-      header: "Role",
-      render: (row) => (
-        <Badge variant="muted" tone="neutral" size="sm">
-          {row.role}
-        </Badge>
-      ),
-    },
-    {
-      key: "category",
-      header: "Category",
-      render: (row) => (
-        <Badge
-          variant="muted"
-          tone={row.category === "Participant" ? "primary" : "neutral"}
-          size="sm"
-        >
-          {row.category}
-        </Badge>
-      ),
-    },
-    {
-      key: "registered",
-      header: "Registered",
-      render: (row) => (
-        <span className="text-text-secondary">
-          {new Date(row.registeredAt).toLocaleDateString("en-IN")}
-        </span>
-      ),
-    },
-    {
-      key: "payment",
-      header: "Payment",
-      render: (row) => (
-        <Badge variant="muted" tone={ticketTypeTone[row.ticketType]} size="sm">
-          {row.ticketType}
-        </Badge>
-      ),
-    },
-    {
-      key: "tickets",
-      header: "Tickets",
-      render: (row) => (
-        <span className="text-text-secondary">{row.quantity ?? 1}</span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => (
-        <Badge
-          variant="muted"
-          tone={attendanceStatusTone[row.status]}
-          size="sm"
-        >
-          {attendanceStatusLabel[row.status]}
-        </Badge>
-      ),
-    },
+  const removeLabel =
+    toRemove?.length === 1
+      ? (attendees.find((a) => a.id === toRemove[0])?.name ?? "this attendee")
+      : `${toRemove?.length ?? 0} attendees`;
+
+  const tiles = [
+    { value: "all", label: "Everyone", count: counts.all },
+    { value: "attended", label: "Attended", count: counts.attended },
+    { value: "missed", label: "Missed", count: counts.missed },
+    { value: "paid", label: "Paid", count: counts.paid },
+    { value: "free", label: "Free", count: counts.free },
     ...(event.audioRecordingEnabled
       ? [
           {
-            key: "submission",
-            header: "Submission",
-            render: (row: Attendee) => {
-              const submission = audioSubmissionStatus(
-                row,
-                submissionDeadlineIso,
-                event.audioRecordingEnabled,
-              );
-              if (!submission) {
-                return <span className="text-text-secondary">—</span>;
-              }
-              return (
-                <Badge
-                  variant="muted"
-                  tone={submissionStatusTone[submission]}
-                  size="sm"
-                >
-                  {submissionStatusLabel[submission]}
-                </Badge>
-              );
-            },
-          } satisfies TableColumn<Attendee>,
+            value: "pending",
+            label: "Awaiting submission",
+            count: counts.pending,
+            attention: true,
+          },
+          { value: "submitted", label: "Submitted", count: counts.submitted },
         ]
       : []),
-    {
-      key: "remove",
-      header: "",
-      // Table's row-click-to-open-modal doesn't stop propagation for
-      // ordinary column cells (only the selection checkbox does) — this
-      // span does it here so clicking Remove doesn't also pop the detail
-      // modal open underneath the confirm dialog.
-      render: (row) => (
-        <span
-          onClick={(e) => e.stopPropagation()}
-          className={
-            removingIds.has(row.id) ? "pointer-events-none opacity-50" : ""
-          }
-        >
-          <RemoveIconButton
-            onClick={() => handleRemove([row.id])}
-            ariaLabel={`Remove ${row.name}`}
-          />
-        </span>
-      ),
-    },
   ];
 
+  const viewingSubmission = viewing ? submissionOf(viewing) : undefined;
+
   return (
-    <div className="space-y-4">
-      {error && <Banner tone="danger">{error}</Banner>}
-      <Tabs
-        items={[
-          { value: "all", label: `All (${categoryCounts.all})` },
-          {
-            value: "Attendee",
-            label: `Attendees (${categoryCounts.Attendee})`,
-          },
-          {
-            value: "Participant",
-            label: `Participants (${categoryCounts.Participant})`,
-          },
-        ]}
-        value={categoryFilter}
-        onChange={(value) => {
-          setCategoryFilter(value as AttendeesCategoryFilterValue);
-          setPage(1);
-        }}
+    <div className="space-y-6">
+      <SectionHeader
+        title="Attendees"
+        description="Everyone registered for this event. Click a person for details."
+        actions={
+          <>
+            <Button
+              variant="primary"
+              onClick={() => {
+                exportCsv(exportFilename(event.title), filtered);
+                notify(`Exported ${filtered.length} rows`);
+              }}
+              disabled={filtered.length === 0}
+            >
+              <Icon icon={Download} size="sm" /> Export
+            </Button>
+          </>
+        }
       />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchBar
-          value={query}
-          onChange={(value) => {
-            setQuery(value);
+      {!loading && attendees.length > 0 && (
+        <FilterTiles
+          tiles={tiles}
+          value={filter}
+          onChange={(v) => {
+            setFilter(v as AttendeesFilterValue);
             setPage(1);
           }}
-          placeholder="Search attendees…"
-          className="min-w-48 flex-1"
         />
-        <div className="flex flex-wrap gap-1.5">
-          <Chip selected={filter === "all"} onClick={() => changeFilter("all")}>
-            All ({counts.all})
-          </Chip>
-          <Chip
-            selected={filter === "paid"}
-            onClick={() => changeFilter("paid")}
-          >
-            Paid ({counts.paid})
-          </Chip>
-          <Chip
-            selected={filter === "free"}
-            onClick={() => changeFilter("free")}
-          >
-            Free ({counts.free})
-          </Chip>
-          <Chip
-            selected={filter === "attended"}
-            onClick={() => changeFilter("attended")}
-          >
-            Attended ({counts.attended})
-          </Chip>
-          <Chip
-            selected={filter === "missed"}
-            onClick={() => changeFilter("missed")}
-          >
-            Missed ({counts.missed})
-          </Chip>
-          {event.audioRecordingEnabled && (
-            <>
-              <Chip
-                selected={filter === "submitted"}
-                onClick={() => changeFilter("submitted")}
-              >
-                Submitted ({counts.submitted})
-              </Chip>
-              <Chip
-                selected={filter === "pending"}
-                onClick={() => changeFilter("pending")}
-              >
-                Pending Submission ({counts.pending})
-              </Chip>
-            </>
+      )}
+
+      {!loading && attendees.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchBar
+            value={query}
+            onChange={(v) => {
+              setQuery(v);
+              setPage(1);
+            }}
+            placeholder="Search by name or email"
+            className="min-w-56 flex-1"
+          />
+          {hasBothPasses && (
+            <Select
+              aria-label="Filter by pass"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(
+                  e.target.value as AttendeesCategoryFilterValue,
+                );
+                setPage(1);
+              }}
+              className="sm:w-48"
+            >
+              <option value="all">All passes</option>
+              <option value="Attendee">
+                Attendees ({passCounts.Attendee})
+              </option>
+              <option value="Participant">
+                Participants ({passCounts.Participant})
+              </option>
+            </Select>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => exportCsv(`${event.id}-attendees.csv`, filtered)}
-          className="text-small text-text-secondary hover:text-text-primary border-border-light shrink-0 rounded-md border px-4 py-1.5 font-semibold"
-        >
-          ⬇ Export CSV
-        </button>
-      </div>
-
-      <BulkActionBar
-        selectedCount={selectedIds.size}
-        onClear={() => onSelectedIdsChange(new Set())}
-        actions={[
-          {
-            label: "📧 Send Email to Selected",
-            onClick: onNavigateToCommunication,
-            variant: "ghost",
-          },
-          {
-            label: "⬇ Export Selected",
-            onClick: () =>
-              exportCsv(
-                `${event.id}-selected-attendees.csv`,
-                selectedAttendees,
-              ),
-            variant: "ghost",
-          },
-          {
-            label: "Remove Selected",
-            onClick: () => handleRemove(Array.from(selectedIds)),
-            variant: "ghost",
-          },
-        ]}
-      />
-
-      {loading ? (
-        <TableSkeleton
-          rows={6}
-          cols={columns.length}
-          label="Loading attendees…"
-        />
-      ) : (
-        <Table
-          columns={columns}
-          rows={pageRows}
-          rowKey={(row) => row.id}
-          selectable
-          selectedKeys={selectedIds}
-          onToggleRow={toggleRow}
-          onToggleAll={toggleAll}
-          onRowClick={setViewingAttendee}
-          emptyState={
-            <div className="border-border-light bg-surface-light rounded-md border p-8 text-center">
-              <p className="text-body text-text-secondary">
-                No attendees match these filters.
-              </p>
-            </div>
-          }
-        />
       )}
 
-      {filtered.length > 0 && (
-        <div className="flex items-center justify-between">
-          <span className="text-small text-text-secondary">
-            Showing {pageRows.length} of {filtered.length}
-          </span>
-          <Pagination
-            page={currentPage}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
+      {loading ? (
+        <TableSkeleton rows={6} cols={5} label="Loading attendees…" />
+      ) : attendees.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No registrations yet"
+          description="Once people register, they show up here with their pass, payment and attendance."
+        />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No one matches"
+          description="Try a different search or filter."
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setQuery("");
+                setFilter("all");
+                setCategoryFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
+      ) : (
+        <div className="border-border-light bg-surface-light overflow-hidden rounded-md border">
+          <div className="border-border-light bg-bg-subtle flex items-center gap-3 border-b px-4 py-2.5">
+            <Checkbox
+              checked={allOnPageSelected}
+              onChange={(e) => togglePage(e.target.checked)}
+              aria-label="Select everyone on this page"
+            />
+            <span className="text-small text-text-secondary">
+              {selectedIds.size > 0
+                ? `${selectedIds.size} selected`
+                : `${filtered.length} ${filtered.length === 1 ? "person" : "people"}`}
+            </span>
+          </div>
+          <ul className="divide-border-light divide-y">
+            {pageRows.map((a) => {
+              const submission = submissionOf(a);
+              return (
+                <li
+                  key={a.id}
+                  className={`hover:bg-bg-subtle flex items-center gap-3 px-4 py-3 transition-colors ${
+                    selectedIds.has(a.id) ? "bg-primary-light" : ""
+                  }`}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(a.id)}
+                    onChange={() => toggleRow(a.id)}
+                    aria-label={`Select ${a.name}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setViewing(a)}
+                    className="focus-visible:ring-primary flex min-w-0 flex-1 items-center gap-3 rounded-sm text-left hover:cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    <Avatar
+                      alt={a.name}
+                      initials={a.avatarInitials}
+                      size="md"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="text-body text-text-primary block truncate font-semibold">
+                        {a.name}
+                      </span>
+                      <span className="text-small text-text-secondary block truncate">
+                        {a.email} · {relativeDay(a.registeredAt)}
+                      </span>
+                    </span>
+                    <span className="hidden flex-wrap items-center justify-end gap-1.5 md:flex">
+                      <Badge
+                        variant="muted"
+                        tone={
+                          a.category === "Participant" ? "primary" : "neutral"
+                        }
+                        size="sm"
+                      >
+                        {a.category}
+                      </Badge>
+                      <Badge
+                        variant="muted"
+                        tone={ticketTypeTone[a.ticketType]}
+                        size="sm"
+                      >
+                        {a.ticketType}
+                        {(a.quantity ?? 1) > 1 ? ` ×${a.quantity}` : ""}
+                      </Badge>
+                      {submission && (
+                        <Badge
+                          variant="muted"
+                          tone={submissionStatusTone[submission]}
+                          size="sm"
+                        >
+                          {submissionStatusLabel[submission]}
+                        </Badge>
+                      )}
+                    </span>
+                    <Badge
+                      variant="muted"
+                      tone={attendanceStatusTone[a.status]}
+                      size="sm"
+                    >
+                      {attendanceStatusLabel[a.status]}
+                    </Badge>
+                    <Icon
+                      icon={ChevronRight}
+                      size="sm"
+                      className="text-text-secondary"
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {filtered.length > PAGE_SIZE && (
+            <div className="border-border-light flex items-center justify-between border-t px-4 py-3">
+              <span className="text-small text-text-secondary">
+                {(currentPage - 1) * PAGE_SIZE + 1}–
+                {Math.min(currentPage * PAGE_SIZE, filtered.length)} of{" "}
+                {filtered.length}
+              </span>
+              <Pagination
+                page={currentPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </div>
       )}
 
-      <Modal
-        open={viewingAttendee !== null}
-        onClose={() => setViewingAttendee(null)}
-        title={viewingAttendee?.name ?? "Attendee"}
+      {/* Floating bulk bar */}
+      {selectedIds.size > 0 && (
+        <div className="bg-primary fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-2 rounded-md px-4 py-2.5 text-white shadow-lg">
+          <span className="text-small mr-2 font-semibold">
+            {selectedIds.size} selected
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              exportCsv(
+                exportFilename(event.title),
+                attendees.filter((a) => selectedIds.has(a.id)),
+              )
+            }
+          >
+            <Icon icon={Download} size="sm" /> Export
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => setToRemove(Array.from(selectedIds))}
+          >
+            <Icon icon={Trash2} size="sm" /> Remove
+          </Button>
+          <button
+            type="button"
+            onClick={() => onSelectedIdsChange(new Set())}
+            className="text-small ml-1 rounded-sm px-2 font-medium text-white/80 hover:text-white"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      <Drawer
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? "Attendee"}
+        subtitle={viewing?.email}
+        lead={
+          viewing && (
+            <Avatar
+              alt={viewing.name}
+              initials={viewing.avatarInitials}
+              size="lg"
+            />
+          )
+        }
+        footer={
+          viewing && (
+            <>
+              <Button
+                variant="danger-ghost"
+                size="sm"
+                onClick={() => setToRemove([viewing.id])}
+              >
+                <Icon icon={Trash2} size="sm" /> Remove
+              </Button>
+            </>
+          )
+        }
       >
-        {viewingAttendee && (
-          <div className="text-body text-text-primary space-y-2">
-            <p>
-              <span className="text-text-secondary">Email:</span>{" "}
-              {viewingAttendee.email}
-            </p>
-            <p>
-              <span className="text-text-secondary">Phone:</span>{" "}
-              {viewingAttendee.phone || "—"}
-            </p>
-            <p>
-              <span className="text-text-secondary">Role:</span>{" "}
-              {viewingAttendee.role}
-            </p>
-            <p>
-              <span className="text-text-secondary">Category:</span>{" "}
-              {viewingAttendee.category}
-            </p>
-            <p>
-              <span className="text-text-secondary">Registered:</span>{" "}
-              {new Date(viewingAttendee.registeredAt).toLocaleString("en-IN")}
-            </p>
-            <p>
-              <span className="text-text-secondary">Payment:</span>{" "}
-              {viewingAttendee.ticketType}
-              {viewingAttendee.amountPaid
-                ? ` · ₹${viewingAttendee.amountPaid}`
-                : ""}
-            </p>
-            <p>
-              <span className="text-text-secondary">Tickets:</span>{" "}
-              {viewingAttendee.quantity ?? 1}
-            </p>
-            <p>
-              <span className="text-text-secondary">Status:</span>{" "}
-              {attendanceStatusLabel[viewingAttendee.status]}
-            </p>
-            {viewingAttendee.ageCategory && (
-              <p>
-                <span className="text-text-secondary">Age category:</span>{" "}
-                {AGE_CATEGORY_LABELS[viewingAttendee.ageCategory]}
-              </p>
-            )}
-            {viewingMembers.length > 0 && (
-              <div>
-                <span className="text-text-secondary">Team members:</span>
-                <ul className="mt-1 list-inside list-disc">
-                  {viewingMembers.map((member, index) => (
-                    <li key={index}>{member.member_name}</li>
+        {viewing && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                variant="muted"
+                tone={attendanceStatusTone[viewing.status]}
+                size="sm"
+              >
+                {attendanceStatusLabel[viewing.status]}
+              </Badge>
+              <Badge
+                variant="muted"
+                tone={
+                  viewing.category === "Participant" ? "primary" : "neutral"
+                }
+                size="sm"
+              >
+                {viewing.category}
+              </Badge>
+              <Badge
+                variant="muted"
+                tone={ticketTypeTone[viewing.ticketType]}
+                size="sm"
+              >
+                {viewing.ticketType}
+              </Badge>
+              {viewingSubmission && (
+                <Badge
+                  variant="muted"
+                  tone={submissionStatusTone[viewingSubmission]}
+                  size="sm"
+                >
+                  {submissionStatusLabel[viewingSubmission]}
+                </Badge>
+              )}
+            </div>
+
+            <dl>
+              <DetailRow label="Phone">{viewing.phone || "—"}</DetailRow>
+              <DetailRow label="Role">{viewing.role}</DetailRow>
+              <DetailRow label="Registered">
+                {new Date(viewing.registeredAt).toLocaleString("en-IN", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </DetailRow>
+              <DetailRow label="Tickets">{viewing.quantity ?? 1}</DetailRow>
+              <DetailRow label="Paid">
+                {viewing.amountPaid ? `₹${viewing.amountPaid}` : "—"}
+              </DetailRow>
+              {viewing.ageCategory && (
+                <DetailRow label="Age category">
+                  {AGE_CATEGORY_LABELS[viewing.ageCategory]}
+                </DetailRow>
+              )}
+            </dl>
+
+            {members.length > 0 && (
+              <section>
+                <h3 className="text-small text-text-secondary mb-2 font-bold tracking-widest uppercase">
+                  Team
+                </h3>
+                <ul className="space-y-1.5">
+                  {members.map((m, i) => (
+                    <li key={i} className="text-body">
+                      {m.member_name}
+                    </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             )}
-            {viewingTracks.length > 0 && (
-              <div>
-                <span className="text-text-secondary">Tracks:</span>
-                <ul className="mt-1 list-inside list-disc">
-                  {viewingTracks.map((track, index) => (
-                    <li key={index}>
-                      {track.track_name}:{" "}
+
+            {tracks.length > 0 && (
+              <section>
+                <h3 className="text-small text-text-secondary mb-2 font-bold tracking-widest uppercase">
+                  Tracks
+                </h3>
+                <ul className="space-y-1.5">
+                  {tracks.map((t, i) => (
+                    <li key={i} className="text-small">
+                      <span className="font-medium">{t.track_name}</span>
                       <a
-                        href={track.youtube_url}
+                        href={t.youtube_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary underline"
+                        className="text-primary block truncate underline"
                       >
-                        {track.youtube_url}
+                        {t.youtube_url}
                       </a>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             )}
-            {audioSubmissionStatus(
-              viewingAttendee,
-              submissionDeadlineIso,
-              event.audioRecordingEnabled,
-            ) && (
-              <p>
-                <span className="text-text-secondary">Submission:</span>{" "}
-                {
-                  submissionStatusLabel[
-                    audioSubmissionStatus(
-                      viewingAttendee,
-                      submissionDeadlineIso,
-                      event.audioRecordingEnabled,
-                    )!
-                  ]
-                }
-                {viewingAttendee.audioSubmissionUrl &&
-                  !isUploadedAudioUrl(viewingAttendee.audioSubmissionUrl) && (
-                    <>
-                      {" · "}
-                      <a
-                        href={viewingAttendee.audioSubmissionUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary underline"
-                      >
-                        View submission
-                      </a>
-                    </>
-                  )}
-              </p>
+
+            {viewing.audioSubmissionUrl && (
+              <section>
+                <h3 className="text-small text-text-secondary mb-2 font-bold tracking-widest uppercase">
+                  Submission
+                </h3>
+                {isUploadedAudioUrl(viewing.audioSubmissionUrl) ? (
+                  <audio
+                    controls
+                    src={`/api/audio-proxy?url=${encodeURIComponent(viewing.audioSubmissionUrl)}`}
+                    className="w-full"
+                  />
+                ) : (
+                  <a
+                    href={viewing.audioSubmissionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-small underline"
+                  >
+                    Open submission link
+                  </a>
+                )}
+              </section>
             )}
-            {viewingAttendee.audioSubmissionUrl &&
-              isUploadedAudioUrl(viewingAttendee.audioSubmissionUrl) && (
-                <audio
-                  controls
-                  src={`/api/audio-proxy?url=${encodeURIComponent(viewingAttendee.audioSubmissionUrl)}`}
-                  className="mt-2 w-full"
-                />
-              )}
           </div>
         )}
-      </Modal>
+      </Drawer>
+
+      <ConfirmDialog
+        open={toRemove !== null}
+        title="Remove from event?"
+        confirmLabel="Remove"
+        busy={removing}
+        onConfirm={confirmRemove}
+        onClose={() => setToRemove(null)}
+      >
+        <p>
+          This cancels the registration for {removeLabel}. It can&apos;t be
+          undone from here.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

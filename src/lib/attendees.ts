@@ -1,3 +1,5 @@
+import { phoneCell } from "./csv";
+
 export type AttendeeRole =
   "Fresher" | "Startup Founder" | "Domain Expert" | "Institution" | "Guest";
 export type AttendanceStatus =
@@ -75,6 +77,7 @@ export function attendeesCsvRows(attendees: Attendee[]): string[][] {
   return attendees.map((attendee) => [
     attendee.name,
     attendee.email,
+    phoneCell(attendee.phone),
     attendee.role,
     attendee.category,
     new Date(attendee.registeredAt).toLocaleDateString("en-IN"),
@@ -87,6 +90,7 @@ export function attendeesCsvRows(attendees: Attendee[]): string[][] {
 export const ATTENDEES_CSV_HEADERS = [
   "Name",
   "Email",
+  "Phone",
   "Role",
   "Category",
   "Registered",

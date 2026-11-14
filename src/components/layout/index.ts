@@ -6,3 +6,5 @@ export * from "./footer";
 export * from "./guest-shell";
 export * from "./navbar";
 export * from "./sidebar";
+export * from "./page-header";
+export * from "./toast";

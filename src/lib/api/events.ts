@@ -19,11 +19,36 @@ export interface ListEventsParams {
 export async function listEvents(
   params: ListEventsParams = {},
 ): Promise<EventListItem[]> {
-  const { items } = await apiRequest<ApiListResponse<EventListItem>>(
-    "/events/",
-    { query: params },
-  );
-  return items;
+  // ORDS pages this endpoint at 25 rows and signals more with a `next` link
+  // (?page=N). Reading only the first page silently drops every later event
+  // from the organizer list, its tab counts and the public listing.
+  const items: EventListItem[] = [];
+  let pageNumber: number | undefined;
+
+  while (true) {
+    const page = await apiRequest<{
+      items: EventListItem[];
+      next?: { $ref: string };
+    }>("/events/", {
+      query:
+        pageNumber === undefined ? params : { ...params, page: pageNumber },
+    });
+    items.push(...page.items);
+
+    if (!page.next?.$ref || page.items.length === 0) return items;
+
+    const nextPage = new URL(page.next.$ref, API_BASE_URL).searchParams.get(
+      "page",
+    );
+    const parsedPageNumber = nextPage === null ? NaN : Number(nextPage);
+    if (
+      !Number.isInteger(parsedPageNumber) ||
+      parsedPageNumber <= (pageNumber ?? 0)
+    ) {
+      throw new Error("Events list returned an invalid ORDS next-page link.");
+    }
+    pageNumber = parsedPageNumber;
+  }
 }
 
 // GET /events/:id wraps the row in { items: [...] } (ORDS refcursor output).
@@ -228,10 +253,18 @@ export interface AdvancedOptionApi {
   option_label: string;
   sort_order: number;
 }
-export function saveAdvancedQuestionConfiguration(id: number | string, items: unknown[]) {
-  return apiRequest(`/events/${id}/advanced-question-tree`, { method: "POST", body: items });
+export function saveAdvancedQuestionConfiguration(
+  id: number | string,
+  items: unknown[],
+) {
+  return apiRequest(`/events/${id}/advanced-question-tree`, {
+    method: "POST",
+    body: items,
+  });
 }
-export async function getEventAdvancedEnabled(id: number | string): Promise<boolean> {
+export async function getEventAdvancedEnabled(
+  id: number | string,
+): Promise<boolean> {
   const { items } = await apiRequest<{ items: { advanced_enabled: number }[] }>(
     `/events/${id}/advanced-question-flag`,
     { cache: "no-store" },
@@ -240,7 +273,8 @@ export async function getEventAdvancedEnabled(id: number | string): Promise<bool
 }
 export function setEventAdvancedEnabled(id: number | string, enabled: boolean) {
   return apiRequest(`/events/${id}/advanced-question-flag`, {
-    method: "PUT", body: { advancedEnabled: enabled ? 1 : 0 },
+    method: "PUT",
+    body: { advancedEnabled: enabled ? 1 : 0 },
   });
 }
 
@@ -264,10 +298,17 @@ export async function listAdvancedOptionSettings(id: number | string) {
 
     if (!page.next?.$ref) return items;
 
-    const nextPage = new URL(page.next.$ref, API_BASE_URL).searchParams.get("page");
+    const nextPage = new URL(page.next.$ref, API_BASE_URL).searchParams.get(
+      "page",
+    );
     const parsedPageNumber = nextPage === null ? NaN : Number(nextPage);
-    if (!Number.isInteger(parsedPageNumber) || parsedPageNumber <= (pageNumber ?? 0)) {
-      throw new Error("Advanced question settings returned an invalid ORDS next-page link.");
+    if (
+      !Number.isInteger(parsedPageNumber) ||
+      parsedPageNumber <= (pageNumber ?? 0)
+    ) {
+      throw new Error(
+        "Advanced question settings returned an invalid ORDS next-page link.",
+      );
     }
     pageNumber = parsedPageNumber;
   }

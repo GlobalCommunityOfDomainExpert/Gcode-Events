@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Badge, Button, Input, RemoveIconButton } from "@/components/atoms";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { UserCheck } from "lucide-react";
+import { Avatar, Badge, Button } from "@/components/atoms";
 import {
   Banner,
-  FormField,
-  Table,
-  TableColumn,
+  ConfirmDialog,
+  EmptyState,
+  FilterTiles,
+  SectionHeader,
   TableSkeleton,
 } from "@/components/molecules";
 import { EventPanelist } from "@/lib/event";
@@ -17,26 +20,37 @@ import {
 } from "@/lib/api/panelists";
 import { adaptEventPanelist } from "@/lib/api/adapters";
 import { ApiError } from "@/lib/api/client";
+import { useOrganizedEvent } from "./event-context";
+import { InvitePanelistsModal } from "./invite-panelists-modal";
+import { eventTools } from "@/lib/organizer";
 import { panelistStatusLabel, panelistStatusTone } from "./status-maps";
 
 export interface PanelistsTabProps {
   eventId: string;
 }
 
+type Filter = "all" | EventPanelist["status"];
+
 export function PanelistsTab({ eventId }: PanelistsTabProps) {
+  const { event, notify } = useOrganizedEvent();
   const [panelists, setPanelists] = useState<EventPanelist[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [email, setEmail] = useState("");
-  const [inviting, setInviting] = useState(false);
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const searchParams = useSearchParams();
+  const [inviteOpen, setInviteOpen] = useState(
+    () => searchParams.get("invite") === "1",
+  );
+  const [toRemove, setToRemove] = useState<EventPanelist | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   async function refresh() {
     try {
       const items = await listEventPanelists(eventId);
       setPanelists(items.map(adaptEventPanelist));
     } catch {
-      // best-effort — list just won't show if this fails
+      notify("Couldn't load panelists", "error");
+    } finally {
+      setLoaded(true);
     }
   }
 
@@ -47,151 +61,181 @@ export function PanelistsTab({ eventId }: PanelistsTabProps) {
         const items = await listEventPanelists(eventId);
         if (!cancelled) setPanelists(items.map(adaptEventPanelist));
       } catch {
-        // best-effort — list just won't show if this fails
+        // empty state explains next steps
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
-      if (!cancelled) setLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
   }, [eventId]);
 
-  async function handleInvite() {
-    const trimmed = email.trim();
-    if (!trimmed) return;
-    setInviting(true);
-    setError("");
-    try {
-      await invitePanelist(eventId, trimmed);
-      setEmail("");
-      await refresh();
-    } catch (err) {
-      setError(
-        err instanceof ApiError || err instanceof Error
-          ? err.message
-          : "Couldn't send that invite.",
-      );
-    } finally {
-      setInviting(false);
-    }
+  const counts = useMemo(
+    () => ({
+      all: panelists.length,
+      ACCEPTED: panelists.filter((p) => p.status === "ACCEPTED").length,
+      INVITED: panelists.filter((p) => p.status === "INVITED").length,
+      DECLINED: panelists.filter((p) => p.status === "DECLINED").length,
+    }),
+    [panelists],
+  );
+  const visible = panelists.filter(
+    (p) => filter === "all" || p.status === filter,
+  );
+
+  const noun = eventTools(event).judging ? "judges" : "panelists";
+
+  function openInvite() {
+    setInviteOpen(true);
   }
 
-  async function handleRemove(panelistId: string) {
-    setRemovingId(panelistId);
-    setError("");
+  async function confirmRemove() {
+    if (!toRemove) return;
+    setRemoving(true);
     try {
-      await removePanelist(panelistId);
+      await removePanelist(toRemove.id);
+      notify(`Removed ${toRemove.invitedEmail}`);
+      setToRemove(null);
       await refresh();
     } catch (err) {
-      setError(
+      notify(
         err instanceof ApiError || err instanceof Error
           ? err.message
           : "Couldn't remove that panelist.",
+        "error",
       );
     } finally {
-      setRemovingId(null);
+      setRemoving(false);
     }
   }
 
-  const columns: TableColumn<EventPanelist>[] = [
-    {
-      key: "email",
-      header: "Email",
-      render: (row) => (
-        <span className="text-text-primary">{row.invitedEmail}</span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => (
-        <Badge variant="muted" tone={panelistStatusTone[row.status]} size="sm">
-          {panelistStatusLabel[row.status]}
-        </Badge>
-      ),
-    },
-    {
-      key: "invited",
-      header: "Invited",
-      render: (row) => (
-        <span className="text-text-secondary">
-          {new Date(row.invitedOn).toLocaleDateString()}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      render: (row) => (
-        <span
-          className={
-            removingId === row.id ? "pointer-events-none opacity-50" : ""
-          }
-        >
-          <RemoveIconButton
-            onClick={() => handleRemove(row.id)}
-            ariaLabel={`Remove invite for ${row.invitedEmail}`}
-          />
-        </span>
-      ),
-    },
-  ];
+  const needsJudges =
+    loaded &&
+    event.rounds.length > 0 &&
+    counts.ACCEPTED === 0 &&
+    event.participantRegistration.enabled;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-large text-text-primary font-semibold">
-          Panelists
-        </h2>
-        <p className="text-body text-text-secondary">
-          Invite anyone to judge this event as a panelist — they don&apos;t need
-          any particular account type, just an email. Once accepted, they can
-          score participants the same way you do in the Rounds tab.
-        </p>
-      </div>
+      <SectionHeader
+        title="Panelists"
+        description="Invite judges by email — no account type needed. Once they accept, they can score participants in Rounds."
+        actions={
+          <Button variant="primary" onClick={openInvite}>
+            + Invite {noun}
+          </Button>
+        }
+      />
 
-      {error && <Banner tone="danger">{error}</Banner>}
+      {needsJudges && (
+        <Banner tone="warning">
+          This event has judging rounds but no accepted panelists yet — invite
+          at least one judge before scoring starts.
+        </Banner>
+      )}
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-64 flex-1">
-          <FormField label="Invite by email" htmlFor="panelist-email">
-            <Input
-              id="panelist-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="panelist@example.com"
-              disabled={inviting}
-            />
-          </FormField>
-        </div>
-        <Button
-          variant="primary"
-          disabled={!email.trim() || inviting}
-          onClick={handleInvite}
-        >
-          {inviting ? "Sending…" : "Send Invite"}
-        </Button>
-      </div>
-
-      {!loaded ? (
-        <TableSkeleton
-          rows={3}
-          cols={columns.length}
-          label="Loading panelists…"
-        />
-      ) : (
-        <Table
-          columns={columns}
-          rows={panelists}
-          rowKey={(row) => row.id}
-          emptyState={
-            <p className="text-body text-text-secondary p-6 text-center">
-              No panelists invited yet.
-            </p>
-          }
+      {panelists.length > 0 && (
+        <FilterTiles
+          value={filter}
+          onChange={(v) => setFilter(v as Filter)}
+          tiles={[
+            { value: "all", label: "All", count: counts.all },
+            { value: "ACCEPTED", label: "Accepted", count: counts.ACCEPTED },
+            {
+              value: "INVITED",
+              label: "Awaiting reply",
+              count: counts.INVITED,
+              attention: true,
+            },
+            { value: "DECLINED", label: "Declined", count: counts.DECLINED },
+          ]}
         />
       )}
+
+      {!loaded ? (
+        <TableSkeleton rows={3} cols={3} label="Loading panelists…" />
+      ) : panelists.length === 0 ? (
+        <EmptyState
+          icon={UserCheck}
+          title="No panelists yet"
+          description="Invite the people who will judge or review submissions. They get an email with a link to accept."
+          action={
+            <Button variant="primary" onClick={openInvite}>
+              + Invite {noun}
+            </Button>
+          }
+        />
+      ) : visible.length === 0 ? (
+        <p className="text-body text-text-secondary border-border-light bg-surface-light rounded-md border p-8 text-center">
+          No panelists in this view.
+        </p>
+      ) : (
+        <ul className="border-border-light bg-surface-light divide-border-light divide-y rounded-md border">
+          {visible.map((p) => (
+            <li
+              key={p.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3"
+            >
+              <Avatar
+                alt={p.invitedEmail}
+                initials={p.invitedEmail.slice(0, 2).toUpperCase()}
+                size="md"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-body text-text-primary truncate font-medium">
+                  {p.invitedEmail}
+                </p>
+                <p className="text-small text-text-secondary">
+                  Invited {new Date(p.invitedOn).toLocaleDateString("en-IN")}
+                  {p.respondedOn &&
+                    ` · replied ${new Date(p.respondedOn).toLocaleDateString("en-IN")}`}
+                </p>
+              </div>
+              <Badge
+                variant="muted"
+                tone={panelistStatusTone[p.status]}
+                size="sm"
+              >
+                {panelistStatusLabel[p.status]}
+              </Badge>
+              <Button
+                variant="danger-ghost"
+                size="sm"
+                onClick={() => setToRemove(p)}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <InvitePanelistsModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        noun={noun}
+        existing={panelists.map((p) => p.invitedEmail.toLowerCase())}
+        onInvite={async (address) => {
+          await invitePanelist(eventId, address);
+          notify(`Invite sent to ${address}`);
+          await refresh();
+        }}
+      />
+
+      <ConfirmDialog
+        open={toRemove !== null}
+        title="Remove this panelist?"
+        confirmLabel="Remove"
+        busy={removing}
+        onConfirm={confirmRemove}
+        onClose={() => setToRemove(null)}
+      >
+        <p>
+          {toRemove?.invitedEmail} will lose access to score this event. Scores
+          they already submitted are kept.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

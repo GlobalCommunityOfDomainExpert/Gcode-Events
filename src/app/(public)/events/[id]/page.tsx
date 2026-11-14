@@ -11,6 +11,7 @@ import { EventLinksCard } from "./_components/event-links-card";
 import { InterestButton } from "./_components/interest-button";
 import { EventEnquiryButton } from "./_components/event-enquiry-button";
 import { EventDetailSkeleton } from "./_components/event-detail-skeleton";
+import { OrganizerBar } from "./_components/organizer-bar";
 import {
   AboutSection,
   EventCover,
@@ -93,6 +94,7 @@ export default function EventDetailPage() {
 
   return (
     <div className="flex flex-col gap-8 pb-28 lg:-mt-4 lg:pb-16">
+      <OrganizerBar event={event} />
       <EventCover event={event} state={state} />
 
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
