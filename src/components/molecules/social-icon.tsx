@@ -141,6 +141,12 @@ const WEBSITE: SocialBrand = {
   color: "var(--color-primary)",
 };
 
+/** Every platform, for pickers — value is the label ("Instagram"). */
+export const SOCIAL_PLATFORMS: SocialBrand[] = [
+  ...BRANDS.map(({ key, label, icon, color }) => ({ key, label, icon, color })),
+  WEBSITE,
+];
+
 export function detectSocial(platform: string, url: string): SocialBrand {
   const text = `${platform} ${url}`;
   const hit = BRANDS.find((b) => b.match.test(text));

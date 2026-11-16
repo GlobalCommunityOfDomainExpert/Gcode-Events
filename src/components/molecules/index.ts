@@ -23,6 +23,7 @@ export * from "./media-upload-fields";
 export * from "./modal";
 export * from "./not-found-state";
 export * from "./notification-item";
+export * from "./option-picker";
 export * from "./pagination";
 export * from "./password-strength-meter";
 export * from "./problem-card";

@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { detectSocial } from "@/components/molecules/social-icon";
+import {
+  SOCIAL_PLATFORMS,
+  detectSocial,
+} from "@/components/molecules/social-icon";
 import {
   Button,
   Card,
@@ -12,8 +15,8 @@ import {
   Switch,
   Textarea,
 } from "@/components/atoms";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { FormField } from "@/components/molecules";
+import { ChevronDown, ChevronUp, Link2, PlayCircle, X } from "lucide-react";
+import { FormField, OptionPicker } from "@/components/molecules";
 import { EventTimelineItem, EventSocialLink } from "@/lib/event";
 import { UpdateEventDetailData, EventDetailData } from "@/lib/zod/event";
 
@@ -150,21 +153,6 @@ export function StepTimelineLinks({
 
   function removeSocialLink(index: number) {
     onChange("socialLinks", withRemovedItem(data.socialLinks, index));
-  }
-
-  function addMediaUrl() {
-    onChange("mediaUrls", withAddedItem(data.mediaUrls, ""));
-  }
-
-  function updateMediaUrl(index: number, value: string) {
-    onChange(
-      "mediaUrls",
-      withUpdatedItem(data.mediaUrls, index, () => value),
-    );
-  }
-
-  function removeMediaUrl(index: number) {
-    onChange("mediaUrls", withRemovedItem(data.mediaUrls, index));
   }
 
   return (
@@ -381,13 +369,16 @@ export function StepTimelineLinks({
                   label="Platform"
                   htmlFor={`social-platform-${index}`}
                 >
-                  <Input
+                  <OptionPicker
                     id={`social-platform-${index}`}
                     value={link.platform}
-                    onChange={(event) =>
-                      updateSocialLink(index, "platform", event.target.value)
+                    onChange={(value) =>
+                      updateSocialLink(index, "platform", value)
                     }
-                    placeholder="e.g. Twitter, Discord, Website"
+                    placeholder="Choose a platform"
+                    options={SOCIAL_PLATFORM_OPTIONS}
+                    customLabel="Other…"
+                    customPlaceholder="e.g. Meetup, Luma"
                   />
                 </FormField>
                 <FormField label="URL" htmlFor={`social-url-${index}`}>
@@ -398,7 +389,7 @@ export function StepTimelineLinks({
                     onChange={(event) =>
                       updateSocialLink(index, "url", event.target.value)
                     }
-                    placeholder="https://..."
+                    placeholder={urlPlaceholder(link.platform)}
                   />
                 </FormField>
               </div>
@@ -411,39 +402,11 @@ export function StepTimelineLinks({
       )}
 
       {show("media") && (
-        <div
-          className={`space-y-3 ${show("timeline") || show("links") ? "border-border-light border-t pt-6" : ""}`}
-        >
-          <SectionLabel>Media</SectionLabel>
-          {data.mediaUrls.map((url, index) => (
-            <div key={index} className="flex items-end gap-2">
-              <div className="flex-1">
-                <FormField
-                  label={`Media URL ${index + 1}`}
-                  htmlFor={`media-url-${index}`}
-                >
-                  <Input
-                    id={`media-url-${index}`}
-                    type="url"
-                    value={url}
-                    onChange={(event) =>
-                      updateMediaUrl(index, event.target.value)
-                    }
-                    placeholder="https://..."
-                  />
-                </FormField>
-              </div>
-              <RemoveIconButton
-                onClick={() => removeMediaUrl(index)}
-                ariaLabel={`Remove media URL ${index + 1}`}
-                size="md"
-              />
-            </div>
-          ))}
-          <Button variant="secondary" size="sm" onClick={addMediaUrl}>
-            + Add media link
-          </Button>
-        </div>
+        <MediaEditor
+          urls={data.mediaUrls}
+          onChange={(urls) => onChange("mediaUrls", urls)}
+          divided={show("timeline") || show("links")}
+        />
       )}
     </div>
   );
@@ -470,5 +433,145 @@ function SocialLinkTitle({
       </span>
       {filled ? brand.label : `Link ${index + 1}`}
     </p>
+  );
+}
+
+const SOCIAL_PLATFORM_OPTIONS = SOCIAL_PLATFORMS.map((b) => {
+  const Logo = b.icon;
+  return {
+    value: b.label,
+    label: b.label,
+    icon: <Logo className="size-4" style={{ color: b.color }} />,
+  };
+});
+
+const URL_HINTS: Record<string, string> = {
+  "X (Twitter)": "https://x.com/yourhandle",
+  LinkedIn: "https://linkedin.com/company/…",
+  Instagram: "https://instagram.com/yourhandle",
+  YouTube: "https://youtube.com/@yourchannel",
+  GitHub: "https://github.com/…",
+  Discord: "https://discord.gg/…",
+  WhatsApp: "https://chat.whatsapp.com/…",
+  Telegram: "https://t.me/…",
+  Facebook: "https://facebook.com/…",
+};
+const urlPlaceholder = (platform: string) => URL_HINTS[platform] ?? "https://…";
+
+const YT =
+  /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/i;
+
+// Photos and videos for the event page gallery: YouTube or image links only.
+// Device upload is added once the backend upload endpoint is live (handover 4, D1).
+function MediaEditor({
+  urls,
+  onChange,
+  divided,
+}: {
+  urls: string[];
+  onChange: (urls: string[]) => void;
+  divided: boolean;
+}) {
+  const [link, setLink] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const items = urls.filter((u) => u.trim() !== "");
+
+  function addLink() {
+    const url = link.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      setError("Links start with https://");
+      return;
+    }
+    setError(null);
+    onChange([...items, url]);
+    setLink("");
+  }
+
+  return (
+    <div
+      className={`space-y-4 ${divided ? "border-border-light border-t pt-6" : ""}`}
+    >
+      <div>
+        <SectionLabel>Photos &amp; videos</SectionLabel>
+        <p className="text-small text-text-secondary">
+          Shown as a gallery on the event page. Paste a YouTube or image link.
+        </p>
+      </div>
+
+      {items.length > 0 && (
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {items.map((url, i) => {
+            const yt = url.match(YT)?.[1];
+            const image = /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(url);
+            return (
+              <li
+                key={`${i}-${url.slice(0, 32)}`}
+                className="border-border-light bg-bg-light group relative aspect-video overflow-hidden rounded-md border"
+              >
+                {yt || image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={
+                      yt ? `https://i.ytimg.com/vi/${yt}/hqdefault.jpg` : url
+                    }
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-text-secondary flex h-full flex-col items-center justify-center gap-1 px-2 text-center text-xs">
+                    <Icon icon={Link2} size="sm" />
+                    <span className="line-clamp-2 break-all">{url}</span>
+                  </span>
+                )}
+                {yt && (
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <Icon
+                      icon={PlayCircle}
+                      size="lg"
+                      className="text-white drop-shadow"
+                    />
+                  </span>
+                )}
+                <span className="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {yt ? "Video" : image ? "Image link" : "Link"}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove media ${i + 1}`}
+                  onClick={() => onChange(items.filter((_, j) => j !== i))}
+                  className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                >
+                  <Icon icon={X} size="sm" className="size-3.5" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="flex gap-2">
+        <Input
+          aria-label="YouTube or image link"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addLink();
+            }
+          }}
+          placeholder="Paste a YouTube or image link"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={addLink}
+          disabled={!link.trim()}
+        >
+          Add
+        </Button>
+      </div>
+      {error && <p className="text-small text-danger">{error}</p>}
+    </div>
   );
 }
