@@ -16,6 +16,7 @@ import {
   AboutSection,
   EventCover,
   EventHeading,
+  PartnersStrip,
   EventPills,
   HostCard,
   EthosSection,
@@ -135,6 +136,7 @@ export default function EventDetailPage() {
             </div>
 
             <EventHeading event={event} state={state} className="mt-6" />
+            <PartnersStrip event={event} className="mt-5" />
           </div>
 
           <AboutSection event={event} />

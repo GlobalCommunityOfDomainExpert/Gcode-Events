@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   FileText,
+  Handshake,
   Link2,
   MessageCircleQuestion,
   ListOrdered,
@@ -46,8 +47,10 @@ import {
   EventMeta,
   EventPills,
   FaqSection,
+  HostCard,
   LocationSection,
   MediaSection,
+  PartnersStrip,
   ScheduleSection,
   TermsSection,
   TicketsCard,
@@ -61,6 +64,7 @@ import { StepRegistration } from "./step-registration";
 import { StepScheduleMode } from "./step-schedule-mode";
 import { StepTimelineLinks } from "./step-timeline-links";
 import { StepAdditionalInfo } from "./step-additional-info";
+import { StepPartners } from "./step-partners";
 import { StepTerms } from "./step-terms";
 import { StepFaqs } from "./step-faqs";
 // TODO(dashboard-port): remove the Rounds tab once the dashboard Rounds page exists.
@@ -84,6 +88,7 @@ type SectionId =
   | "terms"
   | "faqs"
   | "links"
+  | "partners"
   | "info"
   // TODO(dashboard-port): remove once the dashboard Rounds page exists.
   | "rounds";
@@ -155,6 +160,14 @@ const SECTIONS: SectionDef[] = [
     onPage: true,
   },
   {
+    id: "partners",
+    tab: "Partners",
+    title: "Partners & co-branding",
+    hint: "Brands shown alongside yours on the event page.",
+    icon: Handshake,
+    onPage: true,
+  },
+  {
     id: "info",
     tab: "Registration form",
     title: "Registration form",
@@ -179,6 +192,7 @@ const FIELD_LABELS: Partial<Record<keyof EventDetailData, string>> = {
   summary: "Summary",
   description: "Description",
   coverImageUrl: "Cover image",
+  cardImageUrl: "Card image",
   type: "Event type",
   categoryIds: "Categories",
   priceAmount: "Ticket price",
@@ -194,6 +208,7 @@ const FIELD_LABELS: Partial<Record<keyof EventDetailData, string>> = {
   mediaUrls: "Media",
   socialLinks: "Links",
   faqs: "FAQs",
+  partners: "Partners",
   stages: "Days & format",
   rounds: "Rounds",
   advancedAdditionalQuestionsEnabled: "Follow-up questions",
@@ -211,11 +226,13 @@ function sectionOf(key: keyof EventDetailData): SectionId | null {
       "summary",
       "description",
       "coverImageUrl",
+      "cardImageUrl",
     ].includes(key)
   )
     return "details";
   if (key === "timeline") return "agenda";
   if (key === "faqs") return "faqs";
+  if (key === "partners") return "partners";
   if (key === "socialLinks" || key === "mediaUrls") return "links";
   if (
     key === "questions" ||
@@ -390,6 +407,16 @@ export function EventEditor(props: EventEditorProps) {
         socialLinks: draft.socialLinks.filter((l) => l.url.trim() !== ""),
         faqs: draft.faqs.filter((f) => f.question.trim() && f.answer.trim()),
         mediaUrls: draft.mediaUrls.filter((u) => u.trim() !== ""),
+        partners: draft.partners
+          .filter((p) => p.name.trim())
+          .map((p) => ({
+            name: p.name.trim(),
+            role: p.role.trim() || "In association with",
+            logoUrl: p.logoUrl || undefined,
+            url: p.url.trim() || undefined,
+            about: p.about.trim() || undefined,
+          })),
+        cardImageUrl: draft.cardImageUrl || undefined,
       };
     };
   }, [types, modes, statusCodes, baseDetail]);
@@ -506,6 +533,8 @@ export function EventEditor(props: EventEditorProps) {
         return <StepTerms data={data} onChange={update} />;
       case "faqs":
         return <StepFaqs data={data} onChange={update} />;
+      case "partners":
+        return <StepPartners data={data} onChange={update} />;
       case "info":
         return <StepAdditionalInfo data={data} onChange={update} />;
       // TODO(dashboard-port): remove with the Rounds tab.
@@ -939,7 +968,7 @@ function SectionPreview({
     case "details":
       return (
         <div className="space-y-5">
-          <EventCover event={event} state={state} />
+          <EventCover event={event} state={state} device={device} />
           {pills}
           <EventHeading event={event} state={state} showMeta={false} />
           <Sk label="Date · Time" className="h-6 w-56" />
@@ -1034,6 +1063,21 @@ function SectionPreview({
               className="h-12"
             />
           )}
+        </div>
+      );
+    case "partners":
+      return (
+        <div className="space-y-5">
+          {banner}
+          <Sk label="Back · Type · Mode" className="h-6 w-56" />
+          <Sk label="Title · Summary" className="h-12" />
+          {(event.partners ?? []).length > 0 ? (
+            <PartnersStrip event={event} />
+          ) : (
+            <Sk label="Partners — add one to show it here" className="h-12" />
+          )}
+          <Sk label="About · Schedule · Location" className="h-12" />
+          <HostCard event={event} />
         </div>
       );
     default:

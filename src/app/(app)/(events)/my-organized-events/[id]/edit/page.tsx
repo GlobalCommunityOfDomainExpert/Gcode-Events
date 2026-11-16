@@ -7,6 +7,7 @@ import { EditorSkeleton, NotFoundState } from "@/components/molecules";
 import {
   getEvent,
   listEventFaqs,
+  listEventPartners,
   listEventMedia,
   listEventSocialLinks,
   listEventTimeline,
@@ -45,6 +46,7 @@ export default function EditOrganizedEventPage() {
           links,
           media,
           faqs,
+          partners,
           advancedEnabled,
         ] = await Promise.all([
           getEvent(params.id),
@@ -54,6 +56,7 @@ export default function EditOrganizedEventPage() {
           listEventSocialLinks(params.id),
           listEventMedia(params.id),
           listEventFaqs(params.id),
+          listEventPartners(params.id),
           getEventAdvancedEnabled(params.id).catch(() => false),
         ]);
         let optionSettings: Awaited<
@@ -76,6 +79,7 @@ export default function EditOrganizedEventPage() {
           links,
           media,
           faqs,
+          partners,
         );
         draft.advancedAdditionalQuestionsEnabled = advancedEnabled;
         draft.questions = attachAdvancedQuestionConfiguration(

@@ -16,6 +16,7 @@ export interface EventListItem {
   ticket_price: number;
   is_featured: number;
   cover_image_url: string | null;
+  card_image_url?: string | null; // 16:7 card/phone image; falls back to cover when empty
   banner_image_url: string | null;
   participation_link: string | null;
   registered_count: number;
@@ -201,6 +202,7 @@ export interface CreateEventPayload {
   is_featured?: number;
   certificate_offered?: number;
   cover_image_url?: string;
+  card_image_url?: string | null;
   banner_image_url?: string;
   is_external?: number;
   external_url?: string;

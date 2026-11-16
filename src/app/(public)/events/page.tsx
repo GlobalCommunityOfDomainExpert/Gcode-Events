@@ -50,7 +50,7 @@ function defaultCardProps(event: Event) {
       event.status === "OPEN" || event.status === undefined
         ? `/events/${event.id}/register`
         : undefined,
-    imageSrc: event.coverImageUrl,
+    imageSrc: event.cardImageUrl || event.coverImageUrl,
     colorSeed: event.id,
     tags: [
       { label: event.type, tone: "primary" as const },
@@ -679,10 +679,10 @@ export default function EventsPage() {
                   key={event.id}
                   className="group relative isolate flex min-h-90 overflow-hidden rounded-lg bg-black shadow-lg"
                 >
-                  {event.coverImageUrl ? (
+                  {event.cardImageUrl || event.coverImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={event.coverImageUrl}
+                      src={event.cardImageUrl || event.coverImageUrl}
                       alt=""
                       className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />
