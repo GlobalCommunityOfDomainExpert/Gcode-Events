@@ -735,25 +735,40 @@ function BrandMark({
 export function PartnersStrip({
   event,
   className = "",
+  compact = false,
 }: {
   event: Event;
   className?: string;
+  // Tight single-size variant for the phone booking bar.
+  compact?: boolean;
 }) {
   const partners = event.partners ?? [];
   if (partners.length === 0) return null;
   return (
     <ul
       aria-label="Event partners"
-      className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${className}`}
+      className={`flex flex-wrap items-center ${compact ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-2"} ${className}`}
     >
       {partners.map((p, i) => (
-        <li key={i} className="flex items-center gap-4">
-          {i > 0 && <span aria-hidden className="bg-border-hover h-5 w-px" />}
-          <span className="flex items-center gap-2.5">
-            <span className="text-text-secondary text-xs font-medium">
+        <li
+          key={i}
+          className={`flex items-center ${compact ? "gap-3" : "gap-4"}`}
+        >
+          {i > 0 && (
+            <span
+              aria-hidden
+              className={`bg-border-hover w-px ${compact ? "h-4" : "h-5"}`}
+            />
+          )}
+          <span
+            className={`flex items-center ${compact ? "gap-1.5" : "gap-2.5"}`}
+          >
+            <span
+              className={`text-text-secondary font-medium ${compact ? "text-[11px]" : "text-xs"}`}
+            >
               {p.role}
             </span>
-            <BrandMark partner={p} size={i === 0 ? "md" : "sm"} />
+            <BrandMark partner={p} size={compact || i > 0 ? "sm" : "md"} />
           </span>
         </li>
       ))}
