@@ -1,37 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
 import {
-  ArrowLeft,
   ArrowRight,
-  Calendar,
+  CalendarPlus,
   Check,
+  ClipboardCheck,
   Compass,
-  Download,
-  MapPin,
+  MonitorPlay,
+  ScanLine,
+  Trophy,
+  type LucideIcon,
 } from "lucide-react";
-import {
-  Badge,
-  BookingRef,
-  Button,
-  ButtonLink,
-  Icon,
-  QrPlaceholder,
-  SectionLabel,
-} from "@/components/atoms";
-import {
-  Breadcrumb,
-  EventBadgeRow,
-  NotFoundState,
-} from "@/components/molecules";
+import { ButtonLink, Icon } from "@/components/atoms";
+import { Breadcrumb, NotFoundState } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
+import { googleCalendarUrl } from "@/lib/event";
 import { getParticipant } from "@/lib/api/participants";
 import { ParticipantApi } from "@/lib/api/types";
 import { getSession } from "@/lib/auth/session";
 import { renderTicketPng } from "@/lib/ticket-image";
 import { RegisteredSkeleton } from "./_components/registered-skeleton";
+import { Ticket } from "./_components/ticket";
 
 export default function EventRegisteredPage() {
   const params = useParams<{ id: string }>();
@@ -140,6 +133,16 @@ export default function EventRegisteredPage() {
 
   if (needsAdditionalInfo) return <RegisteredSkeleton />;
 
+  const holder = participant.user_name || session?.fullName || "Guest";
+  const firstName = holder.split(" ")[0];
+  const online = event.mode === "Online";
+  const isPerformer = participant.category === "PARTICIPANT";
+  const hasEntryForm =
+    (event.audioRecordingEnabled &&
+      event.audioRecordingAppliesTo === category) ||
+    event.questions.some((q) => q.appliesTo === category);
+  const cal = googleCalendarUrl(event);
+
   async function downloadTicket() {
     if (!qrDataUrl || !event) return;
     setDownloading(true);
@@ -164,146 +167,185 @@ export default function EventRegisteredPage() {
     }
   }
 
+  const nextSteps: {
+    icon: LucideIcon;
+    title: string;
+    text: string;
+    action?: { label: string; href: string; external?: boolean };
+  }[] = [
+    ...(hasEntryForm
+      ? [
+          {
+            icon: ClipboardCheck,
+            title: "Entry details received",
+            text: "Your answers and submission are with the organizer. You can update them until the deadline.",
+            action: {
+              label: "Edit entry",
+              href: `/events/${event.id}/additional-info?pid=${participant.id}`,
+            },
+          },
+        ]
+      : []),
+    ...(cal
+      ? [
+          {
+            icon: CalendarPlus,
+            title: "Save the date",
+            text: `${event.date}${event.time ? ` · ${event.time}` : ""} — add it so you don't miss it.`,
+            action: { label: "Add to calendar", href: cal, external: true },
+          },
+        ]
+      : []),
+    online
+      ? {
+          icon: MonitorPlay,
+          title: "Join online",
+          text: "Your join link is in your confirmation email. Open it a few minutes before the start.",
+          ...(event.participationLink
+            ? {
+                action: {
+                  label: "Open join link",
+                  href: event.participationLink,
+                  external: true,
+                },
+              }
+            : {}),
+        }
+      : {
+          icon: ScanLine,
+          title: "On the day",
+          text: `Arrive 15 minutes early and show this ticket at the door${quantity > 1 ? ` — one scan checks in all ${quantity} tickets` : ""}.`,
+        },
+    ...(isPerformer && event.timeline.length > 1
+      ? [
+          {
+            icon: Trophy,
+            title: "What's next for your entry",
+            text: `${event.timeline[1]?.title ?? "The next round"} — we'll email you the results and your next steps.`,
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <Breadcrumb
-          items={[
-            { label: "Events", href: "/events" },
-            { label: event.type, href: "/events" },
-            { label: event.title, href: `/events/${event.id}` },
-            { label: "Registered" },
-          ]}
-        />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => router.back()}
-          className="shrink-0"
-        >
-          <Icon icon={ArrowLeft} size="sm" /> Back
-        </Button>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "Events", href: "/events" },
+          { label: event.title, href: `/events/${event.id}` },
+          { label: "Your ticket" },
+        ]}
+      />
+
+      {/* success */}
+      <div className="flex items-center gap-4">
+        <span className="bg-success grid size-12 shrink-0 place-items-center rounded-full text-white shadow-sm">
+          <Icon icon={Check} size="md" />
+        </span>
+        <div>
+          <h1 className="text-display text-text-primary leading-tight font-extrabold">
+            You&apos;re in, {firstName}!
+          </h1>
+          <p className="text-body text-text-secondary">
+            {`${quantity} ticket${quantity === 1 ? "" : "s"} confirmed · we've emailed it to ${participant.email || "you"}.`}
+          </p>
+        </div>
       </div>
 
-      <div className="border-success/20 bg-success-light flex items-start gap-4 rounded-md border p-6">
-        <div className="bg-success flex size-10 shrink-0 items-center justify-center rounded-full text-white">
-          <Icon icon={Check} size="md" />
-        </div>
-        <div>
-          <h1 className="text-large text-success font-bold">
-            You&apos;re registered!
-          </h1>
-          <p className="text-body text-text-primary">
-            A confirmation has been sent to your email address.
-          </p>
-          <p className="text-small text-text-secondary">
-            {quantity} ticket{quantity === 1 ? "" : "s"} confirmed
-          </p>
+      <Ticket
+        event={event}
+        holder={holder}
+        passLabel={categoryLabel}
+        quantity={quantity}
+        bookingRef={bookingRef}
+        qrDataUrl={qrDataUrl}
+        showQr
+        onDownload={
+          isBsssPartnerEvent ? () => void downloadTicket() : undefined
+        }
+        downloading={downloading}
+      />
+
+      {(isBsssPartnerEvent || event.id === "422") && (
+        <div className="border-border-light bg-surface-light rounded-lg border p-5">
           {isBsssPartnerEvent && (
             <a
               href="https://gcode.in/ords/r/gcode2/gcode/sign-up"
-              className="bg-primary hover:bg-primary-hover text-small mt-4 inline-flex min-h-10 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
+              className="bg-primary hover:bg-primary-hover text-small inline-flex min-h-10 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
             >
               Join Gcode partner ecosystem
             </a>
           )}
           {event.id === "422" && (
-            <p className="text-small text-text-primary mt-2">
+            <p className="text-small text-text-primary">
               For more information, call <strong>9355251219</strong> or WhatsApp{" "}
               <strong>8588868562</strong>.
             </p>
           )}
         </div>
-      </div>
-
-      <div className="border-border-light bg-surface-light overflow-hidden rounded-md border">
-        <div className="bg-primary px-4 py-3">
-          <Badge variant="solid" tone="neutral">
-            {event.type}
-          </Badge>
-        </div>
-        <div className="space-y-2 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <EventBadgeRow
-              type={event.type}
-              mode={event.mode}
-              price={event.price}
-            />
-            {session && (
-              <ButtonLink
-                href={`/events/${event.id}`}
-                variant="outline"
-                size="sm"
-              >
-                View Event <Icon icon={ArrowRight} size="sm" />
-              </ButtonLink>
-            )}
-          </div>
-          <h2 className="text-body text-text-primary font-semibold">
-            {event.title}
-          </h2>
-          <Badge variant="muted" tone="primary">
-            {categoryLabel}
-          </Badge>
-          <p className="text-small text-text-secondary flex items-center gap-2">
-            <Icon icon={Calendar} size="sm" />
-            {event.date} · {event.time}
-          </p>
-          <p className="text-small text-text-secondary flex items-center gap-2">
-            <Icon icon={MapPin} size="sm" />
-            {event.location}
-          </p>
-        </div>
-      </div>
-
-      <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-6">
-        <SectionLabel>Your Ticket</SectionLabel>
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          <QrPlaceholder src={qrDataUrl} loading={!qrDataUrl} />
-          <div className="space-y-2">
-            <p className="text-small text-text-secondary">Booking Reference</p>
-            <BookingRef>{bookingRef}</BookingRef>
-            <p className="text-small text-text-secondary">
-              {quantity} ticket{quantity === 1 ? "" : "s"} · one QR code covers
-              this whole booking — present it once at check-in.
-            </p>
-            {qrDataUrl && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {isBsssPartnerEvent ? (
-                  <button
-                    type="button"
-                    disabled={downloading}
-                    onClick={() => void downloadTicket()}
-                    className="border-border-light text-text-primary text-small hover:bg-bg-light inline-flex h-9 items-center gap-2 rounded-sm border px-3 font-medium disabled:opacity-60"
-                  >
-                    <Icon icon={Download} size="sm" />{" "}
-                    {downloading ? "Preparing…" : "Download Ticket"}
-                  </button>
-                ) : (
-                  <a
-                    href={qrDataUrl}
-                    download={`${bookingRef}.png`}
-                    className="border-border-light text-text-primary text-small hover:bg-bg-light inline-flex h-9 items-center gap-2 rounded-sm border px-3 font-medium"
-                  >
-                    <Icon icon={Download} size="sm" /> Download PNG
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {session && (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <ButtonLink href="/my-events" variant="primary" className="flex-1">
-            View My Events →
-          </ButtonLink>
-          <ButtonLink href="/events" variant="secondary" className="flex-1">
-            Browse More Events
-          </ButtonLink>
-        </div>
       )}
+
+      {/* what happens next — one row of steps under the ticket */}
+      <section>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-text-primary text-lg font-bold">
+            What happens next
+          </h2>
+          {session && (
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink href="/events" variant="secondary" size="sm">
+                Browse more events
+              </ButtonLink>
+              <ButtonLink href="/my-events" variant="primary" size="sm">
+                All my tickets <Icon icon={ArrowRight} size="sm" />
+              </ButtonLink>
+            </div>
+          )}
+        </div>
+        <ol
+          className={`mt-4 grid gap-3 sm:grid-cols-2 ${nextSteps.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+        >
+          {nextSteps.map((st, i) => (
+            <li
+              key={st.title}
+              className="border-border-light bg-surface-light flex flex-col rounded-lg border p-5"
+            >
+              <div className="flex items-center gap-3">
+                <span className="bg-primary-light text-primary grid size-10 shrink-0 place-items-center rounded-full">
+                  <Icon icon={st.icon} size="sm" />
+                </span>
+                <span className="text-text-secondary text-xs font-bold tracking-wider uppercase">
+                  Step {i + 1}
+                </span>
+              </div>
+              <p className="text-text-primary mt-4 font-semibold">{st.title}</p>
+              <p className="text-small text-text-secondary mt-1 flex-1">
+                {st.text}
+              </p>
+              {st.action &&
+                (st.action.external ? (
+                  <a
+                    href={st.action.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-small mt-4 inline-flex items-center gap-1 font-semibold hover:underline"
+                  >
+                    {st.action.label}{" "}
+                    <Icon icon={ArrowRight} size="sm" className="size-3.5" />
+                  </a>
+                ) : (
+                  <Link
+                    href={st.action.href}
+                    className="text-primary text-small mt-4 inline-flex items-center gap-1 font-semibold hover:underline"
+                  >
+                    {st.action.label}{" "}
+                    <Icon icon={ArrowRight} size="sm" className="size-3.5" />
+                  </Link>
+                ))}
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 }

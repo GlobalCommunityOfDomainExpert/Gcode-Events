@@ -96,6 +96,21 @@ export function replaceEventSocialLinks(
 }
 
 // GCODE_EVENT_FAQS — contract-only full-replace, same shape as social links.
+// GCODE_EVENT_PARTNERS full-replace (order = sort_order). The backend also
+// validates logoUrl/url as http(s) or a server path.
+export function replaceEventPartners(
+  id: number | string,
+  items: {
+    name: string;
+    role: string;
+    logoUrl: string;
+    url: string;
+    about: string;
+  }[],
+): Promise<unknown> {
+  return apiRequest(`/events/${id}/partners`, { method: "POST", body: items });
+}
+
 export function replaceEventFaqs(
   id: number | string,
   items: { question: string; answer: string }[],
@@ -113,6 +128,15 @@ export function replaceEventMedia(
 export interface EventSocialLinkApi {
   platform: string;
   url: string;
+  sort_order?: number;
+}
+
+export interface EventPartnerApi {
+  name: string;
+  role: string;
+  logo_url?: string | null;
+  url?: string | null;
+  about?: string | null;
   sort_order?: number;
 }
 
@@ -135,6 +159,20 @@ export async function listEventSocialLinks(
   try {
     const { items } = await apiRequest<ApiListResponse<EventSocialLinkApi>>(
       `/events/${id}/social-links`,
+    );
+    return items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// A backend without the partners endpoint reads as "no partners".
+export async function listEventPartners(
+  id: number | string,
+): Promise<EventPartnerApi[]> {
+  try {
+    const { items } = await apiRequest<ApiListResponse<EventPartnerApi>>(
+      `/events/${id}/partners`,
     );
     return items ?? [];
   } catch {
@@ -356,6 +394,22 @@ export async function uploadCoverImage(
   });
   if (!res.ok) {
     throw new ApiError(`Cover image upload failed: ${res.status}`, res.status);
+  }
+}
+
+// Same shape as uploadCoverImage for the 16:7 card image; the server sets
+// card_image_url to the serving path.
+export async function uploadCardImage(
+  id: number | string,
+  blob: Blob,
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/events/${id}/card-image-file`, {
+    method: "PUT",
+    headers: { "Content-Type": blob.type || "application/octet-stream" },
+    body: blob,
+  });
+  if (!res.ok) {
+    throw new ApiError(`Card image upload failed: ${res.status}`, res.status);
   }
 }
 

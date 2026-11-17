@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Clock,
   Lock,
+  ExternalLink,
   MapPin,
   ScrollText,
   Ticket,
@@ -23,6 +24,7 @@ import { hasLiveRoom } from "@/lib/live-room";
 import { getEventColor } from "@/lib/event-color";
 import {
   Event,
+  EventPartner,
   EventTimelineItem,
   formatTimeRange,
   formatWeekday,
@@ -162,16 +164,24 @@ export function PrimaryCta({ state }: { state: EventState }) {
 // Banner at 3:1 (wizard asks for 1800×600). Older 8:3 uploads (1600×600) fit
 // with ~5.5% trimmed top and bottom, so their text and logos survive.
 // Nothing is drawn over the artwork.
+// On phone widths a 3:1 strip is too small to read, so when the event has a
+// 16:7 card image that's shown instead (below `sm`). `device` pins one
+// version for the editor's preview frames, which don't follow the viewport.
+// Nothing is drawn over the artwork.
 export function EventCover({
   event,
   state,
+  device,
 }: {
   event: Event;
   state: EventState;
+  device?: "web" | "phone";
 }) {
-  return (
+  const card = event.cardImageUrl;
+  const frame = `border-border-light relative w-full overflow-hidden rounded-sm border shadow-sm ${state.isPast ? "grayscale" : ""}`;
+  const wide = (
     <div
-      className={`border-border-light relative aspect-[3/1] w-full overflow-hidden rounded-sm border shadow-sm ${state.isPast ? "grayscale" : ""}`}
+      className={`${frame} aspect-[3/1]`}
       style={
         event.coverImageUrl
           ? undefined
@@ -187,6 +197,25 @@ export function EventCover({
         />
       )}
     </div>
+  );
+  if (!card) return wide;
+  const tall = (
+    <div className={`${frame} aspect-[16/7]`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={card}
+        alt={event.title}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    </div>
+  );
+  if (device === "phone") return tall;
+  if (device === "web") return wide;
+  return (
+    <>
+      <div className="sm:hidden">{tall}</div>
+      <div className="hidden sm:block">{wide}</div>
+    </>
   );
 }
 
@@ -342,8 +371,8 @@ export function AboutSection({ event }: { event: Event }) {
 // count, a one-line preview); open a day to see its full timeline.
 // Single-day agendas show the timeline.
 export function ScheduleSection({ event }: { event: Event }) {
-  // Hybrid split into stages: the agenda is merged into "Schedule & venue".
-  if (event.mode === "Hybrid" && event.stages.length > 0) return null;
+  // Split into days: the agenda is merged into "Schedule & venue".
+  if (event.stages.length > 0) return null;
   const days = groupByDay(event.timeline);
   return (
     <Section title="Schedule">
@@ -381,9 +410,9 @@ export function LocationSection({
   event: Event;
   state: EventState;
 }) {
-  // Hybrid split into days/stages: one stage at a time, never link + map
+  // Split into days/stages (any mode): one stage at a time, never link + map
   // stacked together.
-  if (event.mode === "Hybrid" && event.stages.length > 0) {
+  if (event.stages.length > 0) {
     return (
       <Section title="Schedule & venue">
         <HybridStagesPanel event={event} registerHref={state.registerHref} />
@@ -583,19 +612,167 @@ export function TicketsCard({
   );
 }
 
+// Who's behind the event. With partners, the sidebar card introduces the
+// lead brand (the strip under the title only names it): who they are, a
+// link out, and the platform on one line underneath. Without partners it's
+// the organizer account, as before.
 export function HostCard({ event }: { event: Event }) {
-  return (
-    <div className="border-border-light bg-surface-light flex items-center gap-3 rounded-lg border p-4 shadow-sm">
-      <span className="bg-primary-light text-primary flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold">
-        {event.organizer.name.slice(0, 2).toUpperCase()}
-      </span>
-      <div className="min-w-0">
-        <p className="text-small text-text-secondary">Hosted by</p>
-        <p className="text-body text-text-primary truncate font-semibold">
-          {event.organizer.name}
-        </p>
+  const [lead, ...rest] = event.partners ?? [];
+  if (!lead) {
+    return (
+      <div className="border-border-light bg-surface-light flex items-center gap-3 rounded-lg border p-4 shadow-sm">
+        <span className="bg-primary-light text-primary flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold">
+          {event.organizer.name.slice(0, 2).toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <p className="text-small text-text-secondary">Hosted by</p>
+          <p className="text-body text-text-primary truncate font-semibold">
+            {event.organizer.name}
+          </p>
+        </div>
       </div>
-    </div>
+    );
+  }
+  return (
+    <section
+      aria-label={`${lead.role} ${lead.name}`}
+      className="border-border-light bg-surface-light overflow-hidden rounded-lg border shadow-sm"
+    >
+      <div className="p-4">
+        <p className="text-text-secondary text-xs font-semibold">{lead.role}</p>
+        <div className="mt-2">
+          <BrandMark partner={lead} size="lg" />
+        </div>
+        {lead.about && (
+          <p className="text-small text-text-secondary mt-2">{lead.about}</p>
+        )}
+        {lead.url && (
+          <a
+            href={lead.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-small text-primary mt-3 inline-flex items-center gap-1 font-semibold hover:underline"
+          >
+            Visit {lead.name} <Icon icon={ExternalLink} size="sm" />
+          </a>
+        )}
+      </div>
+      {rest.length > 0 && (
+        <div className="border-border-light bg-bg-subtle flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5">
+          {rest.map((p, i) => (
+            <span
+              key={i}
+              className="text-text-secondary flex items-center gap-2 text-xs"
+            >
+              {p.role}
+              <BrandMark partner={p} size="sm" withName />
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// A brand, said once: its logo when it has one (name as alt text, plus the
+// name beside it only where asked), otherwise the name set as a wordmark.
+// Logos sit on white — most are made for light backgrounds.
+function BrandMark({
+  partner,
+  size,
+  withName = false,
+}: {
+  partner: EventPartner;
+  size: "sm" | "md" | "lg";
+  withName?: boolean;
+}) {
+  const h = { sm: "h-5", md: "h-8", lg: "h-12" }[size];
+  const text = {
+    sm: "text-xs font-semibold",
+    md: "text-body font-extrabold",
+    lg: "text-xl font-black",
+  }[size];
+  const body = partner.logoUrl ? (
+    <span className="flex items-center gap-2">
+      <span className="flex items-center rounded-sm bg-white px-1 py-0.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={partner.logoUrl}
+          alt={partner.name}
+          className={`${h} w-auto max-w-32 object-contain`}
+        />
+      </span>
+      {withName && (
+        <span className="text-text-primary text-xs font-semibold">
+          {partner.name}
+        </span>
+      )}
+    </span>
+  ) : (
+    <span
+      className={`${text} text-text-primary leading-none tracking-tight uppercase`}
+    >
+      {partner.name}
+    </span>
+  );
+  return partner.url ? (
+    <a
+      href={partner.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={partner.name}
+      className="transition-opacity hover:opacity-80"
+    >
+      {body}
+    </a>
+  ) : (
+    body
+  );
+}
+
+// Co-branding line under the title — names the brands once, logo-first,
+// like the poster's top line. The lead brand is set larger.
+export function PartnersStrip({
+  event,
+  className = "",
+  compact = false,
+}: {
+  event: Event;
+  className?: string;
+  // Tight single-size variant for the phone booking bar.
+  compact?: boolean;
+}) {
+  const partners = event.partners ?? [];
+  if (partners.length === 0) return null;
+  return (
+    <ul
+      aria-label="Event partners"
+      className={`flex flex-wrap items-center ${compact ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-2"} ${className}`}
+    >
+      {partners.map((p, i) => (
+        <li
+          key={i}
+          className={`flex items-center ${compact ? "gap-3" : "gap-4"}`}
+        >
+          {i > 0 && (
+            <span
+              aria-hidden
+              className={`bg-border-hover w-px ${compact ? "h-4" : "h-5"}`}
+            />
+          )}
+          <span
+            className={`flex items-center ${compact ? "gap-1.5" : "gap-2.5"}`}
+          >
+            <span
+              className={`text-text-secondary font-medium ${compact ? "text-[11px]" : "text-xs"}`}
+            >
+              {p.role}
+            </span>
+            <BrandMark partner={p} size={compact || i > 0 ? "sm" : "md"} />
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

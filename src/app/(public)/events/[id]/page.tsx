@@ -16,6 +16,7 @@ import {
   AboutSection,
   EventCover,
   EventHeading,
+  PartnersStrip,
   EventPills,
   HostCard,
   EthosSection,
@@ -135,6 +136,10 @@ export default function EventDetailPage() {
             </div>
 
             <EventHeading event={event} state={state} className="mt-6" />
+            {/* Phones show partners in the booking bar instead. */}
+            <div className="hidden lg:block">
+              <PartnersStrip event={event} className="mt-5" />
+            </div>
           </div>
 
           <AboutSection event={event} />
@@ -170,6 +175,13 @@ export default function EventDetailPage() {
 
       {/* ---------------------------------------------- mobile booking bar */}
       <div className="border-border-light bg-surface-light/90 fixed inset-x-0 bottom-0 z-30 border-t px-4 py-3 shadow-lg backdrop-blur-xl lg:hidden">
+        <div className="mx-auto max-w-xl">
+          <PartnersStrip
+            event={event}
+            compact
+            className="border-border-light mb-2 border-b pb-2"
+          />
+        </div>
         <div className="mx-auto flex max-w-xl items-center gap-4">
           <div className="min-w-0">
             <p className="text-large text-text-primary leading-tight font-extrabold">

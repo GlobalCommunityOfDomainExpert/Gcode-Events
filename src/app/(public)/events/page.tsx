@@ -35,6 +35,7 @@ import {
   hasEventEnded,
   priceTone,
 } from "@/lib/event";
+import { AttentionIsland } from "@/components/molecules/attention-island";
 import { useEvent } from "@/hooks/use-event";
 import { useEvents } from "@/hooks/use-events";
 import { useLookup } from "@/hooks/use-lookup";
@@ -50,7 +51,7 @@ function defaultCardProps(event: Event) {
       event.status === "OPEN" || event.status === undefined
         ? `/events/${event.id}/register`
         : undefined,
-    imageSrc: event.coverImageUrl,
+    imageSrc: event.cardImageUrl || event.coverImageUrl,
     colorSeed: event.id,
     tags: [
       { label: event.type, tone: "primary" as const },
@@ -540,6 +541,9 @@ export default function EventsPage() {
       </div>
 
       <div className="flex flex-col gap-16">
+        {/* Signed-in users with an unfinished entry; renders nothing otherwise. */}
+        <AttentionIsland />
+
         {/* --------------------------------------------------------- filters
             Single bar that morphs while pinning — see the effect above. The
             sentinel's negative bottom margin cancels the column gap so the
@@ -679,10 +683,10 @@ export default function EventsPage() {
                   key={event.id}
                   className="group relative isolate flex min-h-90 overflow-hidden rounded-lg bg-black shadow-lg"
                 >
-                  {event.coverImageUrl ? (
+                  {event.cardImageUrl || event.coverImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={event.coverImageUrl}
+                      src={event.cardImageUrl || event.coverImageUrl}
                       alt=""
                       className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />

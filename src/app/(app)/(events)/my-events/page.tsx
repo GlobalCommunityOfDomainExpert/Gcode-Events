@@ -16,6 +16,7 @@ import {
   formatDateBadge,
 } from "@/lib/event";
 import { useMyTickets } from "@/hooks/use-my-tickets";
+import { AttentionIsland } from "@/components/molecules/attention-island";
 
 const tabItems = [
   { value: "upcoming", label: "Upcoming" },
@@ -71,6 +72,8 @@ export default function MyEventsPage() {
           Registered events, history &amp; purchases
         </p>
       </div>
+
+      <AttentionIsland />
 
       <div className="border-border-light bg-surface-light space-y-4 rounded-md border p-4">
         <Tabs items={tabItems} value={activeTab} onChange={setActiveTab} />

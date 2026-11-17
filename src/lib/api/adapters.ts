@@ -38,6 +38,10 @@ import { API_BASE_URL } from "./client";
 
 // Cover/banner URLs may be stored as an API-relative path (DB-hosted image),
 // a local /images/ static path, or an absolute URL. Resolve relative ones against the API base.
+function isLocalPreview(url: string): boolean {
+  return url.startsWith("blob:") || url.startsWith("data:");
+}
+
 export function resolveImageUrl(url: string | null): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("http")) return url;
@@ -293,6 +297,7 @@ export function blankEventDetail(organizerName = "You"): EventDetail {
     ticket_price: 0,
     is_featured: 0,
     cover_image_url: null,
+    card_image_url: null,
     banner_image_url: null,
     participation_link: null,
     registered_count: 0,
@@ -365,6 +370,10 @@ export function draftToPreviewDetail(
     max_attendees: data.capacity || null,
     ticket_price: data.priceAmount,
     cover_image_url: data.coverImageUrl || null,
+    // Never persist a local preview: the PUT to /card-image-file sets the real URL.
+    card_image_url: isLocalPreview(data.cardImageUrl)
+      ? null
+      : data.cardImageUrl || null,
     registration_start: data.attendeeRegistrationOpens
       ? (toIsoTimestamp(data.attendeeRegistrationOpens) ?? null)
       : null,
@@ -617,6 +626,7 @@ export function parseStages(raw: string | null | undefined): EventStageData[] {
     return rows.map((r, i) => ({
       label: r.label?.trim() || `Day ${i + 1}`,
       date: r.date ?? "",
+      endDate: r.end_date ?? "",
       time: r.time ?? "",
       mode: r.mode === "OFFLINE" || r.mode === "BOTH" ? r.mode : "ONLINE",
       link: r.link ?? "",
@@ -644,6 +654,8 @@ export function stagesJson(
   const rows: EventStageApi[] = data.stages.map((s, i) => ({
     label: s.label.trim() || `Day ${i + 1}`,
     date: s.date,
+    // Only a real range is written; same day or earlier = one day.
+    end_date: s.date && s.endDate > s.date ? s.endDate : "",
     time: s.time,
     mode: s.mode,
     link: s.mode !== "OFFLINE" ? s.link.trim() : "",
@@ -701,6 +713,13 @@ export function toEventDraft(
   socialLinks: { platform: string; url: string }[] = [],
   media: { url: string }[] = [],
   faqs: { question: string; answer: string }[] = [],
+  partners: {
+    name: string;
+    role: string;
+    logo_url?: string | null;
+    url?: string | null;
+    about?: string | null;
+  }[] = [],
 ): EventDetailData {
   return {
     id: detail.id,
@@ -745,6 +764,7 @@ export function toEventDraft(
       : "",
     duration: detail.duration_text ?? "",
     coverImageUrl: resolveImageUrl(detail.cover_image_url) ?? "",
+    cardImageUrl: resolveImageUrl(detail.card_image_url ?? null) ?? "",
     mediaUrls:
       media.length > 0
         ? media.map((m) => m.url)
@@ -754,6 +774,13 @@ export function toEventDraft(
     socialLinks: socialLinks.map(({ platform, url }) => ({ platform, url })),
     stages: parseStages(detail.stages_json),
     faqs: faqs.map(({ question, answer }) => ({ question, answer })),
+    partners: partners.map((p) => ({
+      name: p.name,
+      role: p.role,
+      logoUrl: p.logo_url ?? "",
+      url: p.url ?? "",
+      about: p.about ?? "",
+    })),
     timeline: timeline.map((row) => {
       const item = adaptTimelineItem(row);
       return {
@@ -1137,6 +1164,7 @@ export function adaptApiEvent(
     stages: parseStages(detail?.stages_json).map((s): EventStage => ({
       label: s.label,
       date: s.date,
+      endDate: s.date && s.endDate > s.date ? s.endDate : undefined,
       time: s.time,
       mode:
         s.mode === "ONLINE"
@@ -1171,6 +1199,7 @@ export function adaptApiEvent(
       ? parseJsonArray<string>(detail.category_names)
       : undefined,
     coverImageUrl: resolveImageUrl(event.cover_image_url),
+    cardImageUrl: resolveImageUrl(event.card_image_url ?? null),
     mediaUrls: event.banner_image_url ? [event.banner_image_url] : [],
     participationLink: event.participation_link ?? undefined,
   };

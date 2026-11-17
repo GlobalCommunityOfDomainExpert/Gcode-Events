@@ -18,14 +18,51 @@ function istDay(d: Date): string {
   }).format(d);
 }
 
+/** Last date of a stage — its end date when it spans several, else its date. */
+export const stageLastDay = (stage: Pick<EventStage, "date" | "endDate">) =>
+  stage.endDate && stage.endDate > stage.date ? stage.endDate : stage.date;
+
+/** "today" also covers every date inside a multi-date stage. */
 export function stageStatus(
-  stage: Pick<EventStage, "date">,
+  stage: Pick<EventStage, "date" | "endDate">,
   now: Date,
 ): StageStatus {
   if (!stage.date) return "tba";
   const today = istDay(now);
-  if (stage.date < today) return "done";
-  return stage.date === today ? "today" : "upcoming";
+  if (stageLastDay(stage) < today) return "done";
+  return stage.date <= today ? "today" : "upcoming";
+}
+
+const fmtDay = (iso: string, o: Intl.DateTimeFormatOptions) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-IN", {
+    ...o,
+    timeZone: "UTC",
+  });
+};
+
+/**
+ * "Sat, 9 Jan" or, across several dates, "9 – 16 Jan" / "28 Dec – 3 Jan".
+ * `long` spells the weekday out for a single day ("Saturday, 9 Jan").
+ */
+export function stageDates(
+  stage: Pick<EventStage, "date" | "endDate">,
+  long = false,
+): string {
+  if (!stage.date) return "Date TBA";
+  const last = stageLastDay(stage);
+  if (last === stage.date)
+    return fmtDay(stage.date, {
+      weekday: long ? "long" : "short",
+      day: "numeric",
+      month: "short",
+    });
+  const sameMonth = stage.date.slice(0, 7) === last.slice(0, 7);
+  const from = fmtDay(
+    stage.date,
+    sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" },
+  );
+  return `${from} – ${fmtDay(last, { day: "numeric", month: "short" })}`;
 }
 
 /**
@@ -45,31 +82,34 @@ export const STAGE_STATUS_LABEL: Record<StageStatus, string> = {
   tba: "Date to be announced",
 };
 
-/** "Fri, 27 Nov · 10:00 AM", "Fri, 27 Nov", or "Date TBA". */
-export function stageWhen(stage: Pick<EventStage, "date" | "time">): string {
+/** "Fri, 27 Nov · 10:00 AM", "9 – 16 Jan · 6:00 PM", or "Date TBA". */
+export function stageWhen(
+  stage: Pick<EventStage, "date" | "endDate" | "time">,
+): string {
   if (!stage.date) return "Date TBA";
-  const [y, m, d] = stage.date.split("-").map(Number);
-  const day = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
+  const day = stageDates(stage);
   if (!stage.time) return day;
   const [hh, mm] = stage.time.split(":").map(Number);
   const time = `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, "0")} ${hh < 12 ? "AM" : "PM"}`;
   return `${day} · ${time}`;
 }
 
-/** "Today", "Tomorrow", "In 16 days", "Date TBA" — null once it's over. */
+/**
+ * "Today", "Tomorrow", "In 16 days", "Date TBA" — null once it's over. A
+ * multi-date stage in progress says "On now · ends 16 Jan".
+ */
 export function stageCountdown(
-  stage: Pick<EventStage, "date">,
+  stage: Pick<EventStage, "date" | "endDate">,
   now: Date,
 ): string | null {
   const status = stageStatus(stage, now);
   if (status === "done") return null;
   if (status === "tba") return "Date TBA";
-  if (status === "today") return "Today";
+  if (status === "today") {
+    const last = stageLastDay(stage);
+    if (last === istDay(now)) return last === stage.date ? "Today" : "Last day";
+    return `On now · ends ${fmtDay(last, { day: "numeric", month: "short" })}`;
+  }
   const days = Math.round(
     (Date.parse(stage.date) - Date.parse(istDay(now))) / 86_400_000,
   );
