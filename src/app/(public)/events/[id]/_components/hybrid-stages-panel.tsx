@@ -21,6 +21,8 @@ import type { Event, EventStage, EventTimelineItem } from "@/lib/event";
 import {
   STAGE_MODE_LABEL,
   stageCountdown,
+  stageDates,
+  stageLastDay,
   stageStatus,
   type StageStatus,
 } from "@/lib/event-stages";
@@ -62,10 +64,14 @@ type DayRow = {
   key: string;
   label: string;
   date: string;
+  endDate?: string; // multi-date stage
   mode: Mode;
   stage?: EventStage;
   sessions: EventTimelineItem[];
 };
+
+// Distinct dates among a day's sessions (for "N sessions over M dates").
+const datesIn = (row: DayRow) => new Set(row.sessions.map((x) => x.date)).size;
 
 // A session is online when its location says so; anything else is a venue.
 const sessionOnline = (s: EventTimelineItem) =>
@@ -81,18 +87,24 @@ function mixMode(base: Mode | undefined, sessions: EventTimelineItem[]): Mode {
 }
 
 // Stages + agenda → one dated run. Stage rows own the agenda sessions on
-// their date; leftover agenda days become rows of their own.
+// their date — every date in range for a multi-date stage, so semi-final
+// slots on 9, 10 and 16 Jan sit under one "Semi Finals" row. Leftover
+// agenda days become rows of their own.
 function buildRows(stages: EventStage[], timeline: EventTimelineItem[]) {
   const groups = groupByDay(timeline);
   const used = new Set<string>();
   const rows: DayRow[] = stages.map((stage, i) => {
-    const sessions =
-      (stage.date && groups.find((g) => g.day === stage.date)?.items) || [];
-    if (stage.date) used.add(stage.date);
+    const last = stageLastDay(stage);
+    const mine = stage.date
+      ? groups.filter((g) => g.day && g.day >= stage.date && g.day <= last)
+      : [];
+    mine.forEach((g) => used.add(g.day));
+    const sessions = mine.flatMap((g) => g.items);
     return {
       key: `stage-${i}`,
       label: stage.label,
       date: stage.date,
+      endDate: last !== stage.date ? last : undefined,
       mode: mixMode(stage.mode, sessions),
       stage,
       sessions,
@@ -124,7 +136,9 @@ function buildRows(stages: EventStage[], timeline: EventTimelineItem[]) {
 }
 
 // "7:00 PM – 11:00 PM" across the day's sessions, else the stage's time.
+// Over several dates the sessions' hours differ, so just the stage's time.
 function hoursOf(row: DayRow): string {
+  if (row.endDate) return row.stage?.time ? to12Hour(row.stage.time) : "";
   const first = row.sessions[0];
   if (!first?.time) return row.stage?.time ? to12Hour(row.stage.time) : "";
   const last = row.sessions[row.sessions.length - 1];
@@ -203,10 +217,21 @@ function DayRowItem({
   const venue = row.stage?.venue || event.location;
   const venueName = venue.split(",")[0].trim();
   const date = row.date ? new Date(`${row.date}T00:00:00Z`) : null;
-  const f = (o: Intl.DateTimeFormatOptions) =>
-    date
-      ? new Intl.DateTimeFormat("en-IN", { ...o, timeZone: "UTC" }).format(date)
+  const end = row.endDate ? new Date(`${row.endDate}T00:00:00Z`) : null;
+  const fmt = (d: Date | null, o: Intl.DateTimeFormatOptions) =>
+    d
+      ? new Intl.DateTimeFormat("en-IN", { ...o, timeZone: "UTC" }).format(d)
       : "";
+  const f = (o: Intl.DateTimeFormatOptions) => fmt(date, o);
+  const month = (d: Date | null) => fmt(d, { month: "short" }).toUpperCase();
+  // tile: "JAN / 9–16", or "DEC–JAN / 28–3" across a month
+  const tileMonth =
+    end && month(end) !== month(date)
+      ? `${month(date)}–${month(end)}`
+      : month(date);
+  const tileDay = end
+    ? `${f({ day: "numeric" })}–${fmt(end, { day: "numeric" })}`
+    : f({ day: "numeric" });
   const pill = stageCountdown(row, now) ?? "Completed";
   const bodyId = `${row.key}-body`;
   const meta = [
@@ -229,19 +254,19 @@ function DayRowItem({
         {/* same date tile as the plain Schedule */}
         <span
           aria-hidden
-          className={`bg-surface-light flex w-11 shrink-0 flex-col overflow-hidden rounded-md border text-center ${
+          className={`bg-surface-light flex shrink-0 flex-col overflow-hidden rounded-md border text-center ${end ? "w-14" : "w-11"} ${
             current
               ? "border-primary ring-primary/15 ring-4"
               : "border-border-light"
           }`}
         >
           <span className="bg-primary py-px text-[9px] font-bold tracking-widest text-white">
-            {date ? f({ month: "short" }).toUpperCase() : "DATE"}
+            {date ? tileMonth : "DATE"}
           </span>
           <span
-            className={`text-text-primary py-0.5 leading-tight font-extrabold ${date ? "text-lg" : "text-[11px] leading-[1.6rem]"}`}
+            className={`text-text-primary py-0.5 leading-tight font-extrabold ${!date ? "text-[11px] leading-[1.6rem]" : end ? "text-sm leading-[1.6rem]" : "text-lg"}`}
           >
-            {date ? f({ day: "numeric" }) : "TBA"}
+            {date ? tileDay : "TBA"}
           </span>
         </span>
 
@@ -251,7 +276,7 @@ function DayRowItem({
             {date && (
               <span className="text-text-secondary font-normal">
                 {" "}
-                · {f({ weekday: "long", day: "numeric", month: "short" })}
+                · {stageDates(row, true)}
               </span>
             )}
           </span>
@@ -375,7 +400,7 @@ function DayBody({
               icon={ListOrdered}
               on={showAgenda}
               onClick={() => setShowAgenda((v) => !v)}
-              label={`${showAgenda ? "Hide" : "View"} agenda · ${row.sessions.length} session${row.sessions.length === 1 ? "" : "s"}`}
+              label={`${showAgenda ? "Hide" : "View"} agenda · ${row.sessions.length} session${row.sessions.length === 1 ? "" : "s"}${row.endDate ? ` over ${datesIn(row)} date${datesIn(row) === 1 ? "" : "s"}` : ""}`}
             />
           )}
           {inPerson && (
@@ -389,8 +414,20 @@ function DayBody({
         </div>
       )}
       {showAgenda && (
-        <div className="pt-1">
-          <AgendaTimeline items={row.sessions} />
+        <div className="space-y-4 pt-1">
+          {row.endDate ? (
+            // several dates: one short agenda per date
+            groupByDay(row.sessions).map((g) => (
+              <div key={g.day}>
+                <p className="text-text-secondary mb-2 text-xs font-bold tracking-wider uppercase">
+                  {g.day ? stageDates({ date: g.day }, true) : "Date TBA"}
+                </p>
+                <AgendaTimeline items={g.items} />
+              </div>
+            ))
+          ) : (
+            <AgendaTimeline items={row.sessions} />
+          )}
         </div>
       )}
       {showMap && (

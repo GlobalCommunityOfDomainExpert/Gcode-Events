@@ -371,8 +371,8 @@ export function AboutSection({ event }: { event: Event }) {
 // count, a one-line preview); open a day to see its full timeline.
 // Single-day agendas show the timeline.
 export function ScheduleSection({ event }: { event: Event }) {
-  // Hybrid split into stages: the agenda is merged into "Schedule & venue".
-  if (event.mode === "Hybrid" && event.stages.length > 0) return null;
+  // Split into days: the agenda is merged into "Schedule & venue".
+  if (event.stages.length > 0) return null;
   const days = groupByDay(event.timeline);
   return (
     <Section title="Schedule">
@@ -410,9 +410,9 @@ export function LocationSection({
   event: Event;
   state: EventState;
 }) {
-  // Hybrid split into days/stages: one stage at a time, never link + map
+  // Split into days/stages (any mode): one stage at a time, never link + map
   // stacked together.
-  if (event.mode === "Hybrid" && event.stages.length > 0) {
+  if (event.stages.length > 0) {
     return (
       <Section title="Schedule & venue">
         <HybridStagesPanel event={event} registerHref={state.registerHref} />
