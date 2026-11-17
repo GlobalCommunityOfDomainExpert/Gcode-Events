@@ -41,6 +41,8 @@ export default function EventRegisteredPage() {
   >("loading");
   const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
   const [downloading, setDownloading] = useState(false);
+  // Fixed at mount: only used to tell whether the edit window is still open.
+  const [mountedAt] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -79,12 +81,20 @@ export default function EventRegisteredPage() {
   }, [participant]);
 
   const category = participant?.category ?? "ATTENDEE";
+  const audioAppliesToMe =
+    !!event?.audioRecordingEnabled &&
+    event.audioRecordingAppliesTo === category;
+  // A clip that is already in means the entry was done — go straight to the
+  // ticket instead of asking for the details again (editing stays one click
+  // away on the ticket).
+  const alreadySubmitted =
+    audioAppliesToMe && !!participant?.audio_submission_url;
   const needsAdditionalInfo =
     !additionalInfoComplete &&
+    !alreadySubmitted &&
     !!event &&
     !!participant &&
-    ((event.audioRecordingEnabled &&
-      event.audioRecordingAppliesTo === category) ||
+    (audioAppliesToMe ||
       event.questions.some((question) => question.appliesTo === category));
 
   useEffect(() => {
@@ -142,6 +152,16 @@ export default function EventRegisteredPage() {
       event.audioRecordingAppliesTo === category) ||
     event.questions.some((q) => q.appliesTo === category);
   const cal = googleCalendarUrl(event);
+  // Same window the entry page enforces for audio: 24h after the pass's own
+  // registration close. Past it the clip is locked, so no edit link.
+  const closesIso =
+    (category === "PARTICIPANT"
+      ? event.participantRegistration.registrationDeadlineIso
+      : event.attendeeRegistration.registrationDeadlineIso) ??
+    participant.applied_on;
+  const entryLocked =
+    audioAppliesToMe &&
+    new Date(closesIso).getTime() + 24 * 60 * 60 * 1000 <= mountedAt;
 
   async function downloadTicket() {
     if (!qrDataUrl || !event) return;
@@ -178,11 +198,17 @@ export default function EventRegisteredPage() {
           {
             icon: ClipboardCheck,
             title: "Entry details received",
-            text: "Your answers and submission are with the organizer. You can update them until the deadline.",
-            action: {
-              label: "Edit entry",
-              href: `/events/${event.id}/additional-info?pid=${participant.id}`,
-            },
+            text: entryLocked
+              ? "Your answers and submission are with the organizer. The window has closed, so they are locked in."
+              : "Your answers and submission are with the organizer. You can update them until the deadline.",
+            ...(entryLocked
+              ? {}
+              : {
+                  action: {
+                    label: "Edit entry",
+                    href: `/events/${event.id}/additional-info?pid=${participant.id}`,
+                  },
+                }),
           },
         ]
       : []),
