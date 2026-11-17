@@ -234,7 +234,7 @@ function sectionOf(key: keyof EventDetailData): SectionId | null {
     ].includes(key)
   )
     return "details";
-  if (key === "timeline") return "agenda";
+  if (key === "timeline" || key === "stages") return "agenda";
   if (key === "faqs") return "faqs";
   if (key === "partners") return "partners";
   if (key === "socialLinks" || key === "mediaUrls") return "links";
@@ -256,7 +256,6 @@ function sectionOf(key: keyof EventDetailData): SectionId | null {
       "location",
       "city",
       "participationLink",
-      "stages",
     ].includes(key)
   )
     return "schedule";
@@ -1043,7 +1042,12 @@ function SectionPreview({
         <div className="space-y-5">
           {banner}
           <Sk label="Title · About" className="h-12" />
-          <ScheduleSection event={event} />
+          {event.stages.length > 0 ? (
+            // split into days: the agenda lives inside "Schedule & venue"
+            <LocationSection event={event} state={state} />
+          ) : (
+            <ScheduleSection event={event} />
+          )}
           <Sk label="Location · Who it's for · Terms" />
         </div>
       );

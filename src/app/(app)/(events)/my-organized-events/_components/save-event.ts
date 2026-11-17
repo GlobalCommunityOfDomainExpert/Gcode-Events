@@ -16,7 +16,6 @@ import {
   removeCategory,
 } from "@/lib/api/events";
 import { replaceEventRounds } from "@/lib/api/rounds";
-import { getModes } from "@/lib/api/lookups";
 import {
   toCreatePayload,
   toTimelinePayload,
@@ -47,7 +46,10 @@ export interface SaveResult {
   warnings: string[];
 }
 
-/** D6 — the `stages_json` key for the event row, or nothing at all. */
+/**
+ * The `stages_json` key for the event row, or nothing at all. Days work for
+ * every event mode, so there is no mode check here.
+ */
 async function stagesField(
   data: EventDetailData,
   initialData?: EventDetailData,
@@ -56,14 +58,7 @@ async function stagesField(
   // Nothing to write and nothing to clear: never touch the column, so a
   // backend that doesn't have it yet is unaffected.
   if (data.stages.length === 0 && !hadStages) return {};
-  let isHybrid = false;
-  try {
-    const modes = await getModes();
-    isHybrid = modes.find((m) => m.id === data.mode)?.mode_name === "HYBRID";
-  } catch {
-    return {}; // can't tell the mode — leave stages alone
-  }
-  const value = stagesJson(data, hadStages, isHybrid);
+  const value = stagesJson(data, hadStages);
   return value === undefined ? {} : { stages_json: value };
 }
 

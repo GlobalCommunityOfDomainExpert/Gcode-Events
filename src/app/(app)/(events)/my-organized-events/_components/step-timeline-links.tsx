@@ -1,11 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { uploadImage } from "@/lib/api/uploads";
 import {
   SOCIAL_PLATFORMS,
   detectSocial,
 } from "@/components/molecules/social-icon";
+import { uploadImage } from "@/lib/api/uploads";
 import {
   Button,
   Card,
@@ -22,11 +22,23 @@ import {
   ImagePlus,
   Link2,
   PlayCircle,
+  Plus,
   X,
 } from "lucide-react";
 import { FormField, OptionPicker } from "@/components/molecules";
 import { EventTimelineItem, EventSocialLink } from "@/lib/event";
-import { UpdateEventDetailData, EventDetailData } from "@/lib/zod/event";
+import {
+  UpdateEventDetailData,
+  EventDetailData,
+  EventStageData,
+} from "@/lib/zod/event";
+import { useLookup } from "@/hooks/use-lookup";
+import { getModes } from "@/lib/api/lookups";
+import {
+  HybridStagesField,
+  fixedModeFor,
+  newStage,
+} from "./hybrid-stages-field";
 
 function withAddedItem<T>(list: T[], item: T): T[] {
   return [...list, item];
@@ -46,20 +58,10 @@ function withRemovedItem<T>(list: T[], index: number): T[] {
   return list.filter((_, itemIndex) => itemIndex !== index);
 }
 
-// Swaps item at `index` with its neighbor in the given direction. Order here
-// becomes EVENT_TIMELINE.sort_order on save, so this is how organizers
-// control display order for a plain title+description agenda.
-function withMovedItem<T>(
-  list: T[],
-  index: number,
-  direction: "up" | "down",
-): T[] {
-  const target = direction === "up" ? index - 1 : index + 1;
-  if (target < 0 || target >= list.length) return list;
-  const next = [...list];
-  [next[index], next[target]] = [next[target], next[index]];
-  return next;
-}
+const inDay = (d: EventStageData, date: string) =>
+  !!d.date &&
+  date >= d.date &&
+  date <= (d.endDate > d.date ? d.endDate : d.date);
 
 export interface StepTimelineLinksProps {
   data: EventDetailData;
@@ -77,9 +79,64 @@ export function StepTimelineLinks({
   // Local UI-only toggle — doesn't touch stored data. Off = a plain ordered
   // title+description agenda with no date/time inputs shown at all.
   const [showTimes, setShowTimes] = useState(true);
+  const { data: modes } = useLookup(getModes);
+  const modeCode = modes.find((m) => m.id === data.mode)?.mode_name ?? "";
+  const splitDays = data.stages.length > 0;
+  // Days switched off are kept for this session, so flipping back restores them.
+  const parkedDays = useRef<EventStageData[]>([]);
 
-  function moveTimelineItem(index: number, direction: "up" | "down") {
-    onChange("timeline", withMovedItem(data.timeline, index, direction));
+  // Turning days on: one day per agenda date, consecutive dates that share a
+  // day name merged into one range (semi-final slots → "Semi Final 9–16 Jan").
+  function daysFromAgenda(): EventStageData[] {
+    const fixed = fixedModeFor(modeCode);
+    const dates = [
+      ...new Set(data.timeline.map((t) => t.date).filter(Boolean)),
+    ].sort();
+    const days: EventStageData[] = [];
+    for (const date of dates) {
+      const items = data.timeline.filter((t) => t.date === date);
+      const name =
+        items.find((t) => t.dayLabel?.trim())?.dayLabel?.trim() ?? "";
+      const prev = days[days.length - 1];
+      if (prev && name && prev.label === name) {
+        prev.endDate = date;
+        continue;
+      }
+      const online = items.some((t) => /^online\b/i.test(t.location.trim()));
+      const venue = items.some(
+        (t) => t.location.trim() && !/^online\b/i.test(t.location.trim()),
+      );
+      const day = newStage(days.length + 1, undefined, fixed);
+      days.push({
+        ...day,
+        label: name || `Day ${days.length + 1}`,
+        date,
+        time: items.find((t) => t.time)?.time ?? "",
+        mode:
+          fixed ??
+          (online && venue
+            ? "BOTH"
+            : online
+              ? "ONLINE"
+              : venue
+                ? "OFFLINE"
+                : day.mode),
+      });
+    }
+    return days.length ? days : [newStage(1, undefined, fixed)];
+  }
+
+  function toggleDays(on: boolean) {
+    if (on) {
+      onChange(
+        "stages",
+        parkedDays.current.length ? parkedDays.current : daysFromAgenda(),
+      );
+      if (!showTimes) setShowTimes(true);
+    } else {
+      parkedDays.current = data.stages;
+      onChange("stages", []);
+    }
   }
 
   // A day's name lives on every item of that date; new or moved items pick
@@ -138,6 +195,227 @@ export function StepTimelineLinks({
     onChange("timeline", withRemovedItem(data.timeline, index));
   }
 
+  // Swap two sessions by their place in the flat list (a day's sessions
+  // needn't sit next to each other in it).
+  function swapItems(a: number, b: number) {
+    const next = [...data.timeline];
+    [next[a], next[b]] = [next[b], next[a]];
+    onChange("timeline", next);
+  }
+
+  function addSession(date: string) {
+    onChange(
+      "timeline",
+      withAddedItem(data.timeline, {
+        date,
+        time: "",
+        endTime: "",
+        title: "",
+        description: "",
+        location: "",
+        dayLabel: dayLabelFor(date),
+      }),
+    );
+  }
+
+  // Days change. Moving one day's start date carries its sessions with it.
+  function changeDays(next: EventStageData[]) {
+    const fixed = fixedModeFor(modeCode);
+    if (fixed) next = next.map((d) => ({ ...d, mode: fixed }));
+    const prev = data.stages;
+    if (next.length === prev.length) {
+      const moved = next
+        .map((_, i) => i)
+        .filter((i) => next[i].date !== prev[i].date);
+      const i = moved[0];
+      if (
+        moved.length === 1 &&
+        next[i].label === prev[i].label &&
+        prev[i].date &&
+        next[i].date
+      ) {
+        const delta = Date.parse(next[i].date) - Date.parse(prev[i].date);
+        onChange(
+          "timeline",
+          data.timeline.map((t) =>
+            t.date && inDay(prev[i], t.date)
+              ? {
+                  ...t,
+                  date: new Date(Date.parse(t.date) + delta)
+                    .toISOString()
+                    .slice(0, 10),
+                }
+              : t,
+          ),
+        );
+      }
+    }
+    onChange("stages", next);
+  }
+
+  const indexed = data.timeline.map((item, index) => ({ item, index }));
+  const unplaced = indexed.filter(
+    ({ item }) => !item.date || !data.stages.some((d) => inDay(d, item.date)),
+  );
+
+  // One session's fields. `date` — show the date input (limited to the
+  // day's range when given); otherwise the date is the day's own.
+  function sessionCard(
+    { item, index }: { item: EventTimelineItem; index: number },
+    o: {
+      label: string;
+      times: boolean;
+      date: boolean;
+      min?: string;
+      max?: string;
+      up?: number;
+      down?: number;
+    },
+  ) {
+    return (
+      <Card key={index} className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-body text-text-primary font-semibold">{o.label}</p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => o.up !== undefined && swapItems(index, o.up)}
+              disabled={o.up === undefined}
+              aria-label={`Move ${o.label} up`}
+              className="text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <Icon icon={ChevronUp} size="sm" />
+            </button>
+            <button
+              type="button"
+              onClick={() => o.down !== undefined && swapItems(index, o.down)}
+              disabled={o.down === undefined}
+              aria-label={`Move ${o.label} down`}
+              className="text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <Icon icon={ChevronDown} size="sm" />
+            </button>
+            <RemoveIconButton
+              onClick={() => removeTimelineItem(index)}
+              ariaLabel={`Remove ${o.label}`}
+            />
+          </div>
+        </div>
+        {o.times && (
+          <div
+            className={`grid gap-4 ${o.date ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+          >
+            {o.date && (
+              <FormField label="Date" htmlFor={`timeline-date-${index}`}>
+                <Input
+                  id={`timeline-date-${index}`}
+                  type="date"
+                  min={o.min}
+                  max={o.max}
+                  value={item.date}
+                  onChange={(event) =>
+                    updateTimelineItem(index, "date", event.target.value)
+                  }
+                />
+              </FormField>
+            )}
+            <FormField label="Start" htmlFor={`timeline-time-${index}`}>
+              <Input
+                id={`timeline-time-${index}`}
+                type="time"
+                value={item.time}
+                onChange={(event) =>
+                  updateTimelineItem(index, "time", event.target.value)
+                }
+              />
+            </FormField>
+            <FormField label="End" htmlFor={`timeline-endtime-${index}`}>
+              <Input
+                id={`timeline-endtime-${index}`}
+                type="time"
+                value={item.endTime}
+                onChange={(event) =>
+                  updateTimelineItem(index, "endTime", event.target.value)
+                }
+              />
+            </FormField>
+          </div>
+        )}
+        <FormField label="Title" htmlFor={`timeline-title-${index}`}>
+          <Input
+            id={`timeline-title-${index}`}
+            value={item.title}
+            onChange={(event) =>
+              updateTimelineItem(index, "title", event.target.value)
+            }
+            placeholder="e.g. Kickoff & Problem Statement"
+          />
+        </FormField>
+        <FormField label="Location" htmlFor={`timeline-location-${index}`}>
+          <Input
+            id={`timeline-location-${index}`}
+            value={item.location}
+            onChange={(event) =>
+              updateTimelineItem(index, "location", event.target.value)
+            }
+            placeholder="e.g. Main Hall (optional)"
+          />
+        </FormField>
+        <FormField
+          label="Description"
+          htmlFor={`timeline-description-${index}`}
+        >
+          <Textarea
+            id={`timeline-description-${index}`}
+            value={item.description}
+            onChange={(event) =>
+              updateTimelineItem(index, "description", event.target.value)
+            }
+            placeholder="What happens in this slot?"
+            rows={2}
+          />
+        </FormField>
+      </Card>
+    );
+  }
+
+  // Inside a day card: that day's sessions and an add row.
+  function daySessions(day: EventStageData) {
+    if (!day.date)
+      return (
+        <p className="text-small text-text-secondary">
+          Set this day&apos;s date first — its sessions go on that date.
+        </p>
+      );
+    const multi = day.endDate > day.date;
+    const mine = indexed.filter(
+      ({ item }) => item.date && inDay(day, item.date),
+    );
+    return (
+      <div className="space-y-2">
+        {mine.map((x, k) =>
+          sessionCard(x, {
+            label: `Session ${k + 1}`,
+            times: true,
+            date: multi,
+            min: day.date,
+            max: multi ? day.endDate : undefined,
+            up: mine[k - 1]?.index,
+            down: mine[k + 1]?.index,
+          }),
+        )}
+        <button
+          type="button"
+          onClick={() => addSession(day.date)}
+          className="border-border-light text-text-secondary hover:border-primary hover:text-primary hover:bg-primary-light/40 text-small flex w-full items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 font-semibold transition-colors"
+        >
+          <Icon icon={Plus} size="sm" className="size-4" />
+          {mine.length ? "Add session" : "Add the first session"}
+        </button>
+      </div>
+    );
+  }
+
   function addSocialLink() {
     onChange(
       "socialLinks",
@@ -177,38 +455,63 @@ export function StepTimelineLinks({
 
       {show("timeline") && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionLabel>Timeline</SectionLabel>
-            <Switch
-              label="Show specific times"
-              checked={showTimes}
-              onChange={(event) => {
-                const next = event.target.checked;
-                setShowTimes(next);
-                // Turning times off: clear any date/time already on existing
-                // items too, not just hide the inputs — otherwise a stale
-                // date silently produces a fake "00:00" timestamp on save.
-                if (!next) {
-                  onChange(
-                    "timeline",
-                    data.timeline.map((item) => ({
-                      ...item,
-                      date: "",
-                      time: "",
-                      endTime: "",
-                    })),
-                  );
-                }
-              }}
-            />
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <Switch
+                label="Split into days"
+                checked={splitDays}
+                onChange={(event) => toggleDays(event.target.checked)}
+              />
+              <Switch
+                label="Show specific times"
+                checked={showTimes}
+                disabled={splitDays}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setShowTimes(next);
+                  // Turning times off: clear any date/time already on existing
+                  // items too, not just hide the inputs — otherwise a stale
+                  // date silently produces a fake "00:00" timestamp on save.
+                  if (!next) {
+                    onChange(
+                      "timeline",
+                      data.timeline.map((item) => ({
+                        ...item,
+                        date: "",
+                        time: "",
+                        endTime: "",
+                      })),
+                    );
+                  }
+                }}
+              />
+            </div>
           </div>
+          {splitDays && (
+            <HybridStagesField
+              stages={data.stages}
+              venue={data.location}
+              eventMode={modeCode}
+              timeline={data.timeline}
+              renderSessions={(day) => daySessions(day)}
+              onChange={changeDays}
+            />
+          )}
+          {!splitDays && (
+            <p className="text-small text-text-secondary">
+              Rounds on different dates, or online then at the venue? Turn on{" "}
+              <strong className="text-text-primary">Split into days</strong> to
+              give each its own dates, link or venue and button.
+            </p>
+          )}
           {!showTimes && (
             <p className="text-small text-text-secondary">
               Times are hidden — items show as a plain title &amp; description
               agenda, in the order below. Use the arrows to reorder.
             </p>
           )}
-          {showTimes && agendaDays.length > 1 && (
+          {showTimes && !splitDays && agendaDays.length > 1 && (
             <div className="bg-bg-light border-border-light space-y-3 rounded-md border p-4">
               <div>
                 <p className="text-body text-text-primary font-semibold">
@@ -248,113 +551,55 @@ export function StepTimelineLinks({
               </ul>
             </div>
           )}
-          {data.timeline.map((item, index) => (
-            <Card key={index} className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-body text-text-primary font-semibold">
-                  Item {index + 1}
-                </p>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveTimelineItem(index, "up")}
-                    disabled={index === 0}
-                    aria-label={`Move timeline item ${index + 1} up`}
-                    className="text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    <Icon icon={ChevronUp} size="sm" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveTimelineItem(index, "down")}
-                    disabled={index === data.timeline.length - 1}
-                    aria-label={`Move timeline item ${index + 1} down`}
-                    className="text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    <Icon icon={ChevronDown} size="sm" />
-                  </button>
-                  <RemoveIconButton
-                    onClick={() => removeTimelineItem(index)}
-                    ariaLabel={`Remove timeline item ${index + 1}`}
-                  />
+          {splitDays ? (
+            // sessions live inside their day; anything outside every day
+            // stays editable here so it can be moved in
+            unplaced.length > 0 && (
+              <div className="border-warning/40 space-y-2 rounded-md border border-dashed p-3">
+                <div>
+                  <p className="text-body text-text-primary font-semibold">
+                    Not in any day
+                  </p>
+                  <p className="text-small text-text-secondary">
+                    Change a session&apos;s date to one inside a day, or remove
+                    it.
+                  </p>
                 </div>
+                {unplaced.map((x, k) =>
+                  sessionCard(x, {
+                    label: x.item.title.trim() || `Session ${k + 1}`,
+                    times: true,
+                    date: true,
+                    up: unplaced[k - 1]?.index,
+                    down: unplaced[k + 1]?.index,
+                  }),
+                )}
               </div>
-              {showTimes && (
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <FormField label="Date" htmlFor={`timeline-date-${index}`}>
-                    <Input
-                      id={`timeline-date-${index}`}
-                      type="date"
-                      value={item.date}
-                      onChange={(event) =>
-                        updateTimelineItem(index, "date", event.target.value)
-                      }
-                    />
-                  </FormField>
-                  <FormField label="Start" htmlFor={`timeline-time-${index}`}>
-                    <Input
-                      id={`timeline-time-${index}`}
-                      type="time"
-                      value={item.time}
-                      onChange={(event) =>
-                        updateTimelineItem(index, "time", event.target.value)
-                      }
-                    />
-                  </FormField>
-                  <FormField label="End" htmlFor={`timeline-endtime-${index}`}>
-                    <Input
-                      id={`timeline-endtime-${index}`}
-                      type="time"
-                      value={item.endTime}
-                      onChange={(event) =>
-                        updateTimelineItem(index, "endTime", event.target.value)
-                      }
-                    />
-                  </FormField>
-                </div>
+            )
+          ) : (
+            <>
+              {indexed.map((x, i) =>
+                sessionCard(x, {
+                  label: `Item ${i + 1}`,
+                  times: showTimes,
+                  date: showTimes,
+                  up: i > 0 ? i - 1 : undefined,
+                  down: i < indexed.length - 1 ? i + 1 : undefined,
+                }),
               )}
-              <FormField label="Title" htmlFor={`timeline-title-${index}`}>
-                <Input
-                  id={`timeline-title-${index}`}
-                  value={item.title}
-                  onChange={(event) =>
-                    updateTimelineItem(index, "title", event.target.value)
-                  }
-                  placeholder="e.g. Kickoff & Problem Statement"
-                />
-              </FormField>
-              <FormField
-                label="Location"
-                htmlFor={`timeline-location-${index}`}
+              {/* add sits where the next item will appear */}
+              <button
+                type="button"
+                onClick={addTimelineItem}
+                className="border-border-light text-text-secondary hover:border-primary hover:text-primary hover:bg-primary-light/40 text-small flex w-full items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 font-semibold transition-colors"
               >
-                <Input
-                  id={`timeline-location-${index}`}
-                  value={item.location}
-                  onChange={(event) =>
-                    updateTimelineItem(index, "location", event.target.value)
-                  }
-                  placeholder="e.g. Main Hall (optional)"
-                />
-              </FormField>
-              <FormField
-                label="Description"
-                htmlFor={`timeline-description-${index}`}
-              >
-                <Textarea
-                  id={`timeline-description-${index}`}
-                  value={item.description}
-                  onChange={(event) =>
-                    updateTimelineItem(index, "description", event.target.value)
-                  }
-                  placeholder="What happens in this slot?"
-                  rows={2}
-                />
-              </FormField>
-            </Card>
-          ))}
-          <Button variant="secondary" size="sm" onClick={addTimelineItem}>
-            + Add timeline item
-          </Button>
+                <Icon icon={Plus} size="sm" className="size-4" />
+                {data.timeline.length
+                  ? "Add timeline item"
+                  : "Add the first timeline item"}
+              </button>
+            </>
+          )}
         </div>
       )}
 
