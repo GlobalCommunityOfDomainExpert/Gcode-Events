@@ -63,7 +63,11 @@ import { StepDetails } from "./step-details";
 import { StepRegistration } from "./step-registration";
 import { StepScheduleMode } from "./step-schedule-mode";
 import { StepTimelineLinks } from "./step-timeline-links";
-import { StepAdditionalInfo } from "./step-additional-info";
+import {
+  RegistrationFormPreview,
+  StepAdditionalInfo,
+  type FormAudience,
+} from "./step-additional-info";
 import { StepPartners } from "./step-partners";
 import { StepTerms } from "./step-terms";
 import { StepFaqs } from "./step-faqs";
@@ -316,6 +320,8 @@ export function EventEditor(props: EventEditorProps) {
   const [device, setDevice] = useState<Device>("web");
   const [previewOn, setPreviewOn] = useState(true);
   const [showBefore, setShowBefore] = useState(false);
+  // Which pass's registration form is open — shared by form and preview.
+  const [formFor, setFormFor] = useState<FormAudience>("ATTENDEE");
   const [saving, setSaving] = useState<"save" | "draft" | "publish" | null>(
     null,
   );
@@ -433,7 +439,17 @@ export function EventEditor(props: EventEditorProps) {
   const current = sections.find((s) => s.id === section) ?? sections[0];
   const canCompare = isEdit && editedSections.has(current.id);
   const previewing = showBefore && canCompare ? savedEvent : draftEvent;
-  const showPanel = previewOn && current.onPage;
+  // The registration form isn't on the event page but still gets a preview
+  // — of the form itself.
+  const isForm = current.id === "info";
+  const hasPreview = current.onPage || isForm;
+  const showPanel = previewOn && hasPreview;
+  const formPreview = (
+    <RegistrationFormPreview
+      data={showBefore && canCompare ? initialData : data}
+      audience={formFor}
+    />
+  );
 
   function openSection(id: SectionId) {
     setSection(id);
@@ -536,7 +552,14 @@ export function EventEditor(props: EventEditorProps) {
       case "partners":
         return <StepPartners data={data} onChange={update} />;
       case "info":
-        return <StepAdditionalInfo data={data} onChange={update} />;
+        return (
+          <StepAdditionalInfo
+            data={data}
+            onChange={update}
+            audience={formFor}
+            onAudienceChange={setFormFor}
+          />
+        );
       // TODO(dashboard-port): remove with the Rounds tab.
       case "rounds":
         return <StepRounds data={data} onChange={update} />;
@@ -680,7 +703,7 @@ export function EventEditor(props: EventEditorProps) {
             );
           })}
         </nav>
-        {!previewOn && current.onPage && (
+        {!previewOn && hasPreview && (
           <button
             type="button"
             onClick={() => setPreview(true)}
@@ -755,7 +778,9 @@ export function EventEditor(props: EventEditorProps) {
               <div className="min-w-0 flex-1">
                 <h2 className="text-text-primary text-lg font-bold">Preview</h2>
                 <p className="text-small text-text-secondary">
-                  How your event page will look to attendees.
+                  {isForm
+                    ? "The form pass holders fill in right after booking."
+                    : "How your event page will look to attendees."}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
@@ -817,15 +842,20 @@ export function EventEditor(props: EventEditorProps) {
                     </span>
                     <span className="bg-bg-light text-text-secondary min-w-0 flex-1 truncate rounded-full px-3 py-1 text-xs">
                       events.gcode.in/events/{eventId ?? "new"}
+                      {isForm && "/additional-info"}
                     </span>
                   </div>
                   <div className="bg-background max-h-[calc(100dvh-25rem)] min-h-64 overflow-y-auto p-5">
-                    <SectionPreview
-                      section={current.id}
-                      event={previewing}
-                      now={now}
-                      device="web"
-                    />
+                    {isForm ? (
+                      <div className="mx-auto max-w-lg">{formPreview}</div>
+                    ) : (
+                      <SectionPreview
+                        section={current.id}
+                        event={previewing}
+                        now={now}
+                        device="web"
+                      />
+                    )}
                   </div>
                 </div>
               ) : (
@@ -834,12 +864,16 @@ export function EventEditor(props: EventEditorProps) {
                     <div className="bg-background relative h-[min(44rem,calc(100dvh-24rem))] overflow-hidden rounded-[1.9rem]">
                       <div className="bg-primary absolute top-2 left-1/2 z-10 h-5 w-24 -translate-x-1/2 rounded-full" />
                       <div className="h-full overflow-y-auto px-4 pt-10 pb-6">
-                        <SectionPreview
-                          section={current.id}
-                          event={previewing}
-                          now={now}
-                          device="phone"
-                        />
+                        {isForm ? (
+                          formPreview
+                        ) : (
+                          <SectionPreview
+                            section={current.id}
+                            event={previewing}
+                            now={now}
+                            device="phone"
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
