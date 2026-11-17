@@ -235,6 +235,7 @@ export interface CreateEventPayload {
 export interface EventStageApi {
   label: string; // organizer's own text — "Day 1", "Round 1 – Online Screening"
   date: string; // yyyy-mm-dd, "" = to be announced
+  end_date?: string; // yyyy-mm-dd last date of a multi-date day; absent/"" = one day
   time: string; // HH:mm, "" = TBD
   mode: "ONLINE" | "OFFLINE" | "BOTH"; // BOTH = same day, online and at the venue
   link: string; // ONLINE/BOTH — "" = nothing to join (e.g. video screening)

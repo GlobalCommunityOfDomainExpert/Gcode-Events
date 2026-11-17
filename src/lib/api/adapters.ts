@@ -626,6 +626,7 @@ export function parseStages(raw: string | null | undefined): EventStageData[] {
     return rows.map((r, i) => ({
       label: r.label?.trim() || `Day ${i + 1}`,
       date: r.date ?? "",
+      endDate: r.end_date ?? "",
       time: r.time ?? "",
       mode: r.mode === "OFFLINE" || r.mode === "BOTH" ? r.mode : "ONLINE",
       link: r.link ?? "",
@@ -653,6 +654,8 @@ export function stagesJson(
   const rows: EventStageApi[] = data.stages.map((s, i) => ({
     label: s.label.trim() || `Day ${i + 1}`,
     date: s.date,
+    // Only a real range is written; same day or earlier = one day.
+    end_date: s.date && s.endDate > s.date ? s.endDate : "",
     time: s.time,
     mode: s.mode,
     link: s.mode !== "OFFLINE" ? s.link.trim() : "",
@@ -1161,6 +1164,7 @@ export function adaptApiEvent(
     stages: parseStages(detail?.stages_json).map((s): EventStage => ({
       label: s.label,
       date: s.date,
+      endDate: s.date && s.endDate > s.date ? s.endDate : undefined,
       time: s.time,
       mode:
         s.mode === "ONLINE"

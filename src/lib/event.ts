@@ -328,6 +328,7 @@ export function googleCalendarUrl(
 export interface EventStage {
   label: string;
   date: string; // yyyy-mm-dd, "" = to be announced
+  endDate?: string; // yyyy-mm-dd, only when the day spans several dates
   time: string; // HH:mm, "" = TBD
   mode: "Online" | "In-Person" | "Both";
   link?: string; // online/both — absent = nothing to join live

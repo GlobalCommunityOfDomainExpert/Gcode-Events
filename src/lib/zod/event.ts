@@ -16,6 +16,8 @@ const eventTimelineItemSchema = z.object({
 const eventStageSchema = z.object({
   label: z.string().default(""),
   date: z.string().default(""),
+  // Last date when the day spans several ("" = a single day).
+  endDate: z.string().default(""),
   time: z.string().default(""),
   mode: z.enum(["ONLINE", "OFFLINE", "BOTH"]).default("ONLINE"),
   link: z.string().default(""),
