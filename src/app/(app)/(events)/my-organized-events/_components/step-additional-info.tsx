@@ -761,7 +761,7 @@ function QuestionCard({
                 <Icon icon={Plus} size="sm" className="size-3.5" /> Add choice
                 <span className="font-normal">· or press Enter</span>
               </button>
-              {advanced && (
+              {advanced && q.type === "CHECKBOX" && (
                 <div className="pl-6">
                   <Checkbox
                     label="Add Other (please specify)"
