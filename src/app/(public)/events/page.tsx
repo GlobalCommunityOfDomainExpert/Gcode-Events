@@ -35,6 +35,7 @@ import {
   hasEventEnded,
   priceTone,
 } from "@/lib/event";
+import { AttentionIsland } from "@/components/molecules/attention-island";
 import { useEvent } from "@/hooks/use-event";
 import { useEvents } from "@/hooks/use-events";
 import { useLookup } from "@/hooks/use-lookup";
@@ -540,6 +541,9 @@ export default function EventsPage() {
       </div>
 
       <div className="flex flex-col gap-16">
+        {/* Signed-in users with an unfinished entry; renders nothing otherwise. */}
+        <AttentionIsland />
+
         {/* --------------------------------------------------------- filters
             Single bar that morphs while pinning — see the effect above. The
             sentinel's negative bottom margin cancels the column gap so the

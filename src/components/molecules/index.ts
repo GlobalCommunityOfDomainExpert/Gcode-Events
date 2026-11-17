@@ -49,6 +49,7 @@ export * from "./stat-strip";
 export * from "./progress-ring";
 export * from "./charts";
 export * from "./focus-tile";
+export * from "./attention-island";
 export * from "./confirm-dialog";
 export * from "./drawer";
 export * from "./filter-tiles";
