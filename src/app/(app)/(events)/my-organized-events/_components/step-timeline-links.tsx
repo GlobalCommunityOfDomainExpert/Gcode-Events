@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { uploadImage } from "@/lib/api/uploads";
 import {
   SOCIAL_PLATFORMS,
   detectSocial,
@@ -15,7 +16,14 @@ import {
   Switch,
   Textarea,
 } from "@/components/atoms";
-import { ChevronDown, ChevronUp, Link2, PlayCircle, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ImagePlus,
+  Link2,
+  PlayCircle,
+  X,
+} from "lucide-react";
 import { FormField, OptionPicker } from "@/components/molecules";
 import { EventTimelineItem, EventSocialLink } from "@/lib/event";
 import { UpdateEventDetailData, EventDetailData } from "@/lib/zod/event";
@@ -461,8 +469,9 @@ const urlPlaceholder = (platform: string) => URL_HINTS[platform] ?? "https://…
 const YT =
   /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/i;
 
-// Photos and videos for the event page gallery: YouTube or image links only.
-// Device upload is added once the backend upload endpoint is live (handover 4, D1).
+// Photos (uploaded from the device) and videos / image links for the event
+// page gallery. Uploads are downscaled in the browser, stored in object
+// storage by /api/uploads/image, and only the returned URL is kept.
 function MediaEditor({
   urls,
   onChange,
@@ -474,7 +483,27 @@ function MediaEditor({
 }) {
   const [link, setLink] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
   const items = urls.filter((u) => u.trim() !== "");
+
+  async function upload(files: FileList | null) {
+    if (!files?.length) return;
+    setError(null);
+    setBusy(true);
+    const added: string[] = [];
+    const problems: string[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        added.push(await uploadImage(file, "gallery"));
+      } catch (err) {
+        problems.push(err instanceof Error ? err.message : "Upload failed.");
+      }
+    }
+    setBusy(false);
+    if (added.length) onChange([...items, ...added]);
+    if (problems.length) setError(problems.join(" "));
+  }
 
   function addLink() {
     const url = link.trim();
@@ -494,7 +523,8 @@ function MediaEditor({
       <div>
         <SectionLabel>Photos &amp; videos</SectionLabel>
         <p className="text-small text-text-secondary">
-          Shown as a gallery on the event page. Paste a YouTube or image link.
+          Shown as a gallery on the event page. Upload photos, or paste a
+          YouTube or image link.
         </p>
       </div>
 
@@ -548,6 +578,32 @@ function MediaEditor({
           })}
         </ul>
       )}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void upload(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={busy}
+        className="border-border-light text-text-secondary hover:border-border-hover hover:text-text-primary flex w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed py-5 transition-colors disabled:opacity-60"
+      >
+        <Icon icon={ImagePlus} size="md" />
+        <span className="text-small font-semibold">
+          {busy ? "Uploading photos…" : "Upload photos"}
+        </span>
+        <span className="text-xs">
+          JPG, PNG, WebP or GIF · several at once · 10 MB each · 16:9 looks best
+        </span>
+      </button>
 
       <div className="flex gap-2">
         <Input

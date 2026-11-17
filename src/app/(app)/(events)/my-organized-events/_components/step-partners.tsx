@@ -8,6 +8,8 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
+import { useRef, useState } from "react";
+import { uploadImage } from "@/lib/api/uploads";
 import { Icon, Input } from "@/components/atoms";
 import {
   FormField,
@@ -91,7 +93,11 @@ export function StepPartners({
             className="border-border-light bg-surface-light space-y-3 rounded-md border p-4"
           >
             <div className="flex items-start gap-4">
-              <LogoTile url={p.logoUrl} />
+              <LogoTile
+                url={p.logoUrl}
+                name={p.name}
+                onChange={(logoUrl) => patch(i, { logoUrl })}
+              />
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                 <FormField label="Shown as" htmlFor={`partner-role-${i}`}>
                   <OptionPicker
@@ -204,22 +210,84 @@ export function StepPartners({
   );
 }
 
-// Preview of the logo link. Device upload comes once the backend upload
-// endpoint is live (handover 4, D1) — until then a logo is a link.
-function LogoTile({ url }: { url: string }) {
+// Logo preview that doubles as the upload button. The file is downscaled in
+// the browser, stored via /api/uploads/image, and only the URL is kept (a
+// pasted link works too, in the field beside it).
+function LogoTile({
+  url,
+  name,
+  onChange,
+}: {
+  url: string;
+  name: string;
+  onChange: (url: string) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setBusy(true);
+    try {
+      onChange(await uploadImage(file, "logo"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="border-border-light flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-white p-2">
-      {url.trim() ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt=""
-          className="max-h-full max-w-full object-contain"
-        />
-      ) : (
-        <span className="text-text-secondary flex flex-col items-center gap-1 text-[11px] font-semibold">
-          <Icon icon={ImageIcon} size="sm" /> Logo
-        </span>
+    <div className="flex w-20 shrink-0 flex-col items-center gap-1">
+      <input
+        ref={ref}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          void pick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        disabled={busy}
+        aria-label={url ? `Change ${name || "partner"} logo` : "Upload logo"}
+        className="border-border-light hover:border-border-hover flex size-20 items-center justify-center overflow-hidden rounded-md border bg-white p-2 disabled:opacity-60"
+      >
+        {busy ? (
+          <span className="text-text-secondary text-[11px] font-semibold">
+            Uploading…
+          </span>
+        ) : url.trim() ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : (
+          <span className="text-text-secondary flex flex-col items-center gap-1 text-[11px] font-semibold">
+            <Icon icon={ImageIcon} size="sm" /> Upload
+          </span>
+        )}
+      </button>
+      {url && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="text-text-secondary hover:text-danger text-xs"
+        >
+          Remove
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="text-danger text-center text-[11px]">
+          {error}
+        </p>
       )}
     </div>
   );
