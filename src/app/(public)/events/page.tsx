@@ -542,7 +542,7 @@ export default function EventsPage() {
 
       <div className="flex flex-col gap-16">
         {/* Signed-in users with an unfinished entry; renders nothing otherwise. */}
-        <AttentionIsland />
+        <AttentionIsland className="mt-10" />
 
         {/* --------------------------------------------------------- filters
             Single bar that morphs while pinning — see the effect above. The
