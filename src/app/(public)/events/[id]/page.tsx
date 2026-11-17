@@ -1,8 +1,8 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Compass, Info } from "lucide-react";
-import { Icon } from "@/components/atoms";
+import { ArrowLeft, ArrowRight, Compass, Info } from "lucide-react";
+import { ButtonLink, Icon } from "@/components/atoms";
 import { NotFoundState } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { useServerNow } from "@/hooks/use-server-now";
@@ -60,6 +60,9 @@ export default function EventDetailPage() {
 
   const state = getEventState(event, now);
   const { isLive, isCancelled, weekday, dateLabel, venueName } = state;
+  // More than one pass on sale: the phone bar sends people to the picker.
+  const choosePass =
+    isLive && !state.ctaDisabledLabel && state.enabledPasses.length > 1;
 
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/events/${event.id}`;
   const interestButtonNode = isLive ? (
@@ -185,14 +188,22 @@ export default function EventDetailPage() {
         <div className="mx-auto flex max-w-xl items-center gap-4">
           <div className="min-w-0">
             <p className="text-large text-text-primary leading-tight font-extrabold">
-              {state.priceLabel}
+              {choosePass ? "Choose your pass" : state.priceLabel}
             </p>
             <p className="text-small text-text-secondary truncate">
               {weekday ? `${weekday.slice(0, 3)}, ${event.date}` : event.date}
             </p>
           </div>
           <div className="ml-auto w-44 shrink-0">
-            <PrimaryCta state={state} />
+            {choosePass ? (
+              // Several passes: the price would be only the first one, so the
+              // button leads to the pass picker instead of one registration.
+              <ButtonLink href="#tickets" variant="accent" className="w-full">
+                Get Tickets <Icon icon={ArrowRight} size="sm" />
+              </ButtonLink>
+            ) : (
+              <PrimaryCta state={state} />
+            )}
           </div>
         </div>
       </div>
