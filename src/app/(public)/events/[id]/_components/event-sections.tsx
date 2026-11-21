@@ -686,7 +686,8 @@ function BrandMark({
   size: "sm" | "md" | "lg";
   withName?: boolean;
 }) {
-  const h = { sm: "h-5", md: "h-8", lg: "h-12" }[size];
+  // Fixed pill height: every logo gets the same box whatever its aspect.
+  const pill = { sm: "h-6", md: "h-10", lg: "h-14" }[size];
   const text = {
     sm: "text-xs font-semibold",
     md: "text-body font-extrabold",
@@ -694,12 +695,12 @@ function BrandMark({
   }[size];
   const body = partner.logoUrl ? (
     <span className="flex items-center gap-2">
-      <span className="flex items-center rounded-sm bg-white px-1 py-0.5">
+      <span className={`flex items-center rounded-sm  px-1 ${pill}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={partner.logoUrl}
           alt={partner.name}
-          className={`${h} w-auto max-w-32 object-contain`}
+          className="h-full w-auto max-w-40 object-contain "
         />
       </span>
       {withName && (
@@ -768,7 +769,7 @@ export function PartnersStrip({
             >
               {p.role}
             </span>
-            <BrandMark partner={p} size={compact || i > 0 ? "sm" : "md"} />
+            <BrandMark partner={p} size={compact ? "sm" : "md"} />
           </span>
         </li>
       ))}
