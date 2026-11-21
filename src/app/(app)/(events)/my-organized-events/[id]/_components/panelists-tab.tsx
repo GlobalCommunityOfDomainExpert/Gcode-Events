@@ -214,10 +214,20 @@ export function PanelistsTab({ eventId }: PanelistsTabProps) {
       <InvitePanelistsModal
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        noun={noun}
+        eventTitle={event.title}
+        defaultRole={
+          eventTools(event).judging
+            ? "Judge"
+            : event.mode === "In-Person"
+              ? "Mentor"
+              : "Speaker"
+        }
         existing={panelists.map((p) => p.invitedEmail.toLowerCase())}
-        onInvite={async (address) => {
-          await invitePanelist(eventId, address);
+        onInvite={async (address, { role, note }) => {
+          await invitePanelist(eventId, address, {
+            role: role.toUpperCase() as "JUDGE" | "MENTOR" | "SPEAKER",
+            note: note || undefined,
+          });
           notify(`Invite sent to ${address}`);
           await refresh();
         }}

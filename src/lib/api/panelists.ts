@@ -24,11 +24,19 @@ export async function listEventPanelists(
 export function invitePanelist(
   eventId: number | string,
   email: string,
+  // Optional: a backend that has not added the columns ignores both fields
+  // and behaves exactly as before (docs/sql/organizer-portal).
+  extra?: { role?: "JUDGE" | "MENTOR" | "SPEAKER"; note?: string },
 ): Promise<EventPanelistApi> {
   const invitedBy = getSession()?.userId ?? "";
   return apiRequest(`/events/${eventId}/panelists`, {
     method: "POST",
-    body: { email, invited_by: invitedBy },
+    body: {
+      email,
+      invited_by: invitedBy,
+      ...(extra?.role ? { panelist_role: extra.role } : {}),
+      ...(extra?.note ? { invite_note: extra.note } : {}),
+    },
   });
 }
 
