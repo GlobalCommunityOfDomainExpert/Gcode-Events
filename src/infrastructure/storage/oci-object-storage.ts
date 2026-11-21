@@ -1,3 +1,4 @@
+import "server-only";
 import * as common from "oci-common";
 import * as objectstorage from "oci-objectstorage";
 import { spawn } from "node:child_process";
