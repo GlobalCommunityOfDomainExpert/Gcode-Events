@@ -1,11 +1,9 @@
-import { getEvent, listEventQuestions } from "@/lib/api/events";
-import { getParticipant, listParticipantAnswers } from "@/lib/api/participants";
-import type {
-  EventDetail,
-  EventQuestionApi,
-  ParticipantAnswerApi,
-  ParticipantApi,
-} from "@/lib/api/types";
+import { getEvent, getEventQuestions } from "@/lib/api/events";
+import type { EventDetail } from "@/lib/api/events";
+import { getParticipant, getParticipantAnswers } from "@/lib/api/participants";
+import type { ParticipantSummary } from "@/lib/api/participants";
+import type { ParticipantAnswer } from "@/server/modules/participants/participants.schemas";
+import type { EventQuestion } from "@/server/modules/questions/questions.schemas";
 import type { MyTicket } from "@/lib/event";
 
 // Same window the additional-info page enforces: entries can be completed
@@ -27,20 +25,17 @@ interface EntryInputs {
   ticket: MyTicket;
   detail: Pick<
     EventDetail,
-    | "audio_recording_enabled"
-    | "audio_recording_applies_to"
-    | "registration_deadline"
-    | "participant_registration_deadline"
+    | "audioRecordingEnabled"
+    | "audioRecordingAppliesTo"
+    | "registrationDeadline"
+    | "participantRegistrationDeadline"
   >;
-  questions: Pick<EventQuestionApi, "id" | "applies_to" | "is_required">[];
+  questions: Pick<EventQuestion, "id" | "appliesTo" | "required">[];
   participant: Pick<
-    ParticipantApi,
-    "category" | "audio_submission_url" | "applied_on"
+    ParticipantSummary,
+    "category" | "audioSubmissionUrl" | "appliedOn"
   >;
-  answers: Pick<
-    ParticipantAnswerApi,
-    "question_id" | "option_id" | "answer_text"
-  >[];
+  answers: ParticipantAnswer[];
 }
 
 /**
@@ -55,25 +50,23 @@ export function computeEntryTodo(
   now = new Date(),
 ): EntryTodo | null {
   const category = participant.category ?? "ATTENDEE";
-  const asked = questions.filter(
-    (q) => q.applies_to === category && Number(q.is_required) === 1,
-  );
+  const asked = questions.filter((q) => q.appliesTo === category && q.required);
   const answeredIds = new Set(
     answers
-      .filter((a) => a.option_id !== null || !!a.answer_text?.trim())
-      .map((a) => a.question_id),
+      .filter((a) => a.optionId !== null || !!a.answerText?.trim())
+      .map((a) => a.questionId),
   );
   const answered = asked.filter((q) => answeredIds.has(q.id)).length;
-  // Mirrors the adapter: audio is on unless the event explicitly turns it off.
   const clipApplies =
-    Number(detail.audio_recording_enabled) !== 0 &&
-    (detail.audio_recording_applies_to ?? "PARTICIPANT") === category;
-  const needsClip = clipApplies && !participant.audio_submission_url;
+    detail.audioRecordingEnabled && detail.audioRecordingAppliesTo === category;
+  const needsClip = clipApplies && !participant.audioSubmissionUrl;
 
   const closes =
     (category === "PARTICIPANT"
-      ? detail.participant_registration_deadline
-      : detail.registration_deadline) ?? participant.applied_on;
+      ? detail.participantRegistrationDeadline
+      : detail.registrationDeadline) ?? participant.appliedOn;
+  // No deadline and no booking date: nothing to count down to.
+  if (!closes) return null;
   const deadline = new Date(new Date(closes).getTime() + SUBMISSION_WINDOW_MS);
   if (deadline <= now) return null;
   if (answered === asked.length && !needsClip) return null;
@@ -97,19 +90,19 @@ export async function entryTodoFor(
   ticket: MyTicket,
   now = new Date(),
 ): Promise<EntryTodo | null> {
-  const [detail, questions, participant] = await Promise.all([
+  const [detail, { questions }, participant] = await Promise.all([
     getEvent(ticket.eventId),
-    listEventQuestions(ticket.eventId),
+    getEventQuestions(ticket.eventId),
     getParticipant(ticket.participantId),
   ]);
   if (!detail || !participant) return null;
 
   const category = participant.category ?? "ATTENDEE";
   const hasRequired = questions.some(
-    (q) => q.applies_to === category && Number(q.is_required) === 1,
+    (q) => q.appliesTo === category && q.required,
   );
   const answers = hasRequired
-    ? await listParticipantAnswers(ticket.participantId)
+    ? (await getParticipantAnswers(ticket.participantId)).answers
     : [];
   return computeEntryTodo(
     { ticket, detail, questions, participant, answers },

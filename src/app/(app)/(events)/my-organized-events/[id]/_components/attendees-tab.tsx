@@ -32,8 +32,8 @@ import { Event } from "@/lib/event";
 import {
   listParticipantTeamMembers,
   listParticipantYoutubeTracks,
-  ParticipantTeamMemberApi,
-  ParticipantYoutubeTrackApi,
+  type TeamMember,
+  type YoutubeTrack,
   removeParticipant,
 } from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
@@ -116,8 +116,8 @@ export function AttendeesTab({
     useState<AttendeesCategoryFilterValue>("all");
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<Attendee | null>(null);
-  const [tracks, setTracks] = useState<ParticipantYoutubeTrackApi[]>([]);
-  const [members, setMembers] = useState<ParticipantTeamMemberApi[]>([]);
+  const [tracks, setTracks] = useState<YoutubeTrack[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [toRemove, setToRemove] = useState<string[] | null>(null);
   const [removing, setRemoving] = useState(false);
 
@@ -613,7 +613,7 @@ export function AttendeesTab({
                 <ul className="space-y-1.5">
                   {members.map((m, i) => (
                     <li key={i} className="text-body">
-                      {m.member_name}
+                      {m.memberName}
                     </li>
                   ))}
                 </ul>
@@ -628,14 +628,14 @@ export function AttendeesTab({
                 <ul className="space-y-1.5">
                   {tracks.map((t, i) => (
                     <li key={i} className="text-small">
-                      <span className="font-medium">{t.track_name}</span>
+                      <span className="font-medium">{t.trackName}</span>
                       <a
-                        href={t.youtube_url}
+                        href={t.youtubeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary block truncate underline"
                       >
-                        {t.youtube_url}
+                        {t.youtubeUrl}
                       </a>
                     </li>
                   ))}

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth/session";
+import { ApiError, v1Request } from "./client";
 
 export type ImageUploadKind = "gallery" | "logo";
 
@@ -33,7 +33,7 @@ async function downscale(file: File, kind: ImageUploadKind): Promise<Blob> {
   return blob;
 }
 
-// Uploads one image through /api/uploads/image (server → OCI Object Storage)
+// Uploads one image through /api/v1/uploads/image (server → OCI Object Storage)
 // and returns its public URL. Throws an Error with a user-facing message.
 export async function uploadImage(
   file: File,
@@ -45,26 +45,20 @@ export async function uploadImage(
   if (file.size > MAX_SOURCE_BYTES) {
     throw new Error(`${file.name}: images must be under 10 MB.`);
   }
-  const session = getSession();
-  if (!session) throw new Error("Sign in again to upload.");
 
   const blob = await downscale(file, kind).catch(() => {
     throw new Error(`${file.name}: couldn't read that image.`);
   });
-  const res = await fetch(`/api/uploads/image?kind=${kind}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": blob.type,
-      Authorization: `Bearer ${session.token}`,
-    },
-    body: blob,
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    url?: string;
-    error?: string;
-  };
-  if (!res.ok || !data.url) {
-    throw new Error(data.error ?? `${file.name}: upload failed.`);
+  try {
+    const { url } = await v1Request<{ url: string }>("/uploads/image", {
+      method: "POST",
+      query: { kind },
+      raw: { body: blob },
+    });
+    return url;
+  } catch (err) {
+    throw new Error(
+      err instanceof ApiError ? err.message : `${file.name}: upload failed.`,
+    );
   }
-  return data.url;
 }

@@ -59,8 +59,12 @@ export default function OrganizedEventLayout({
   const refreshClaims = useCallback(async () => {
     if (!money) return;
     try {
-      const items = await listUpiClaims(params.id);
-      setClaims(items.map(adaptUpiClaim));
+      const items = await listUpiClaims(params.id).catch((err: unknown) => {
+        // Only feeds the sidebar badge and Next steps; keep what we have.
+        console.error("[upi-claims] couldn't load", err);
+        return null;
+      });
+      if (items) setClaims(items.map(adaptUpiClaim));
     } finally {
       setClaimsLoaded(true);
     }

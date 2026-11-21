@@ -136,7 +136,7 @@ export function CategoryField({
             selected={data.categoryIds.includes(category.id)}
             onClick={() => toggleCategory(category.id)}
           >
-            {category.category_name}
+            {category.name}
           </Chip>
         ))}
       </div>

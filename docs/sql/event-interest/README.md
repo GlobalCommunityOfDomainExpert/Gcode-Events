@@ -20,5 +20,5 @@ package body is large, so it is not duplicated here).
 Frontend: `src/app/(public)/events/[id]/_components/interest-button.tsx`,
 `src/lib/api/interest.ts`.
 
-Known gap (same as the rest of the guest flow): OTP send/verify has no rate
-limit or attempt cap.
+OTP send/verify and this endpoint are rate limited by the Next.js app
+(`src/server/rate-limit/`, see the handoff doc).

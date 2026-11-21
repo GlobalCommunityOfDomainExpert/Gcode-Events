@@ -10,7 +10,7 @@ import {
   ValueLine,
 } from "@/components/molecules";
 import { Button, ButtonLink } from "@/components/atoms";
-import { deleteEvent, updateEvent } from "@/lib/api/events";
+import { deleteEvent, patchEvent } from "@/lib/api/events";
 import { getStatuses } from "@/lib/api/lookups";
 import { useOrganizedEvent } from "../../_components/event-context";
 import { CancelEventModal } from "../../_components/cancel-event-modal";
@@ -65,9 +65,9 @@ function EventSettings() {
     setError("");
     try {
       const statuses = await getStatuses();
-      const cancelled = statuses.find((s) => s.status_code === "CANCELLED");
+      const cancelled = statuses.find((s) => s.code === "CANCELLED");
       if (!cancelled) throw new Error("missing CANCELLED status");
-      await updateEvent(event.id, { status_id: cancelled.id });
+      await patchEvent(event.id, { statusId: cancelled.id });
       await refreshEvent();
       setPending(null);
       notify("Event cancelled");

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   isOwnAudioObjectUrl,
   normalizeAudioContentType,
-} from "@/lib/oci/object-storage";
+} from "@/infrastructure/storage/oci-object-storage";
 
 // Re-serves an already-uploaded audio submission with a normalized
 // Content-Type — the bucket's stored value can be a non-standard MIME type

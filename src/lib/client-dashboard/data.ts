@@ -1,6 +1,6 @@
-import { getEvent } from "@/lib/api/events";
-import { getEventTypes, getModes, getStatuses } from "@/lib/api/lookups";
-import { listParticipants } from "@/lib/api/participants";
+import { eventsService } from "@/server/modules/events/events.service";
+import { lookupsService } from "@/server/modules/lookups/lookups.service";
+import { participantsService } from "@/server/modules/participants/participants.service";
 import { adaptApiEvent, adaptParticipant } from "@/lib/api/adapters";
 import { Attendee } from "@/lib/attendees";
 import { Event } from "@/lib/event";
@@ -26,19 +26,19 @@ export async function getDashboardData(
   eventId: string,
 ): Promise<DashboardData | null> {
   const [detail, rows, types, modes, statuses] = await Promise.all([
-    getEvent(eventId),
-    listParticipants(eventId),
-    getEventTypes(),
-    getModes(),
-    getStatuses(),
+    eventsService.get(Number(eventId)).catch(() => null),
+    participantsService.listForEvent(Number(eventId)),
+    lookupsService.eventTypes(),
+    lookupsService.modes(),
+    lookupsService.statuses(),
   ]);
   if (!detail) return null;
 
   const event = adaptApiEvent(
     detail,
     Object.fromEntries(types.map((t) => [t.id, t.name])),
-    Object.fromEntries(modes.map((m) => [m.id, m.mode_name])),
-    Object.fromEntries(statuses.map((s) => [s.id, s.status_code])),
+    Object.fromEntries(modes.map((m) => [m.id, m.code])),
+    Object.fromEntries(statuses.map((s) => [s.id, s.code])),
   );
 
   const prices = {
@@ -48,7 +48,7 @@ export async function getDashboardData(
   const attendees = rows
     .filter(
       (r) =>
-        r.active === "Y" && r.status !== "CANCELLED" && !isDummy(r.user_name),
+        r.active && r.status !== "CANCELLED" && !isDummy(r.fullName),
     )
     .map((r) => adaptParticipant(r, prices));
 

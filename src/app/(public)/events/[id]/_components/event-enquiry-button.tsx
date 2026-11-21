@@ -6,7 +6,7 @@ import { ImagePlus, Mail, MessageCircle, Phone, X } from "lucide-react";
 import { Button, Icon, Input, Textarea } from "@/components/atoms";
 import { FormField, Modal } from "@/components/molecules";
 import { submitEventEnquiry } from "@/lib/api/event-enquiries";
-import { shrinkToDataUrl } from "@/lib/api/events";
+import { shrinkToDataUrl } from "@/lib/images/shrink-to-data-url";
 import { ApiError } from "@/lib/api/client";
 import type { EventFaq } from "@/lib/event";
 

@@ -6,7 +6,8 @@ import { CalendarCheck } from "lucide-react";
 import { AppShell } from "./app-shell";
 import { Navbar } from "./navbar";
 import { Sidebar, SidebarLink } from "./sidebar";
-import { clearSession, isAdmin, Session } from "@/lib/auth/session";
+import { isAdmin, Session } from "@/lib/auth/session";
+import { signOut } from "@/lib/api/auth";
 import { initials } from "@/lib/auth/format";
 
 function buildSidebarLinks(session: Session): SidebarLink[] {
@@ -40,8 +41,8 @@ export function AuthedShell({ session, children }: AuthedShellProps) {
     avatarInitials: initials(session.fullName),
   };
 
-  function handleLogout() {
-    clearSession();
+  async function handleLogout() {
+    await signOut();
     router.push("/sign-in");
   }
 
