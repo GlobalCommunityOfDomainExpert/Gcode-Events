@@ -1,20 +1,13 @@
-import { apiRequest } from "./client";
+import { v1Request } from "./client";
+import type { SubmitEnquiryBody } from "@/server/modules/enquiries/enquiries.schemas";
 
-// A question for the organizer from the event page. `message`/`topic`/`image`
-// are contract-only — the live handler stores email + phone today; it should
-// keep accepting the old shape until it adds the columns. `image` is a
-// downscaled data URL (screenshot/photo picked from the device), max ~1200px.
+// A question for the organizer from the event page. `image` is a downscaled
+// data URL (screenshot/photo picked from the device).
 export function submitEventEnquiry(
   eventId: number | string,
-  payload: {
-    email: string;
-    phone?: string;
-    message: string;
-    topic?: string;
-    image?: string;
-  },
-): Promise<{ ok: boolean }> {
-  return apiRequest(`/events/${eventId}/enquiries`, {
+  payload: SubmitEnquiryBody,
+): Promise<void> {
+  return v1Request(`/events/${eventId}/enquiries`, {
     method: "POST",
     body: payload,
   });

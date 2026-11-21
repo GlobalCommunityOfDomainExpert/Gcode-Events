@@ -341,13 +341,13 @@ export function rankByTotalScore(
 // computeAutoShortlist/rankByTotalScore above but for the audience side.
 export function isRoundFullyRated(
   participantIds: string[],
-  ratings: { participant_id: number; rating_count: number }[],
+  ratings: { participantId: number; ratingCount: number }[],
 ): boolean {
   if (participantIds.length === 0) return false;
   const rated = new Set(
     ratings
-      .filter((r) => r.rating_count > 0)
-      .map((r) => String(r.participant_id)),
+      .filter((r) => r.ratingCount > 0)
+      .map((r) => String(r.participantId)),
   );
   return participantIds.every((id) => rated.has(id));
 }
@@ -364,7 +364,7 @@ export function isRoundFullyJudged(
   rubric: { id: string }[],
   participantIds: string[],
   scores: RoundScore[],
-  ratings: { participant_id: number; rating_count: number }[],
+  ratings: { participantId: number; ratingCount: number }[],
   roundId: string,
   expectedJudgeIds: string[],
   judgeActive: boolean,
@@ -399,12 +399,12 @@ export function rankByBlendedScore(
   round: { judgeWeight: number; audienceWeight: number },
   rubric: { id: string; maxScore: number }[],
   scores: RoundScore[],
-  ratings: { participant_id: number; avg_rating: number }[],
+  ratings: { participantId: number; avgRating: number }[],
   participantIds: string[],
   roundId: string,
 ): Record<string, number> {
   const ratingByParticipant = new Map(
-    ratings.map((r) => [String(r.participant_id), r.avg_rating]),
+    ratings.map((r) => [String(r.participantId), r.avgRating]),
   );
   const scoreFor = (participantId: string) =>
     blendedFinalScore(
@@ -428,13 +428,13 @@ export function computeAutoShortlistBlended(
   rubric: { id: string; maxScore: number }[],
   participantIds: string[],
   scores: RoundScore[],
-  ratings: { participant_id: number; avg_rating: number }[],
+  ratings: { participantId: number; avgRating: number }[],
   decisions: RoundDecision[],
   roundId: string,
   shortlistCount: number,
 ): { shortlistIds: string[]; rejectIds: string[] } {
   const ratingByParticipant = new Map(
-    ratings.map((r) => [String(r.participant_id), r.avg_rating]),
+    ratings.map((r) => [String(r.participantId), r.avgRating]),
   );
   const scoreFor = (participantId: string) =>
     blendedFinalScore(

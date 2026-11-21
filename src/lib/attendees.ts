@@ -62,7 +62,7 @@ export function audioSubmissionStatus(
 // external link (Google Drive/YouTube/etc., link mode) — same field either
 // way (see the audioSubmissionUrl comment above). Client-safe check by
 // hostname pattern only, no bucket name/credentials involved — the
-// server-only equivalent (src/lib/oci/object-storage.ts's
+// server-only equivalent (src/infrastructure/storage/oci-object-storage.ts's
 // isOwnAudioObjectUrl) does the real validation before actually fetching
 // anything.
 export function isUploadedAudioUrl(url: string): boolean {

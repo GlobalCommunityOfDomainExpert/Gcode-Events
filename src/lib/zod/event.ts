@@ -12,7 +12,7 @@ const eventTimelineItemSchema = z.object({
   dayLabel: z.string().default(""),
 });
 
-// A day/stage of a hybrid event — see EventStageApi.
+// A day/stage of a hybrid event — see StageJson in src/lib/event-draft/payloads.ts.
 const eventStageSchema = z.object({
   label: z.string().default(""),
   date: z.string().default(""),

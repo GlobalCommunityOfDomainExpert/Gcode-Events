@@ -1,15 +1,12 @@
-import { getSession } from "@/lib/auth/session";
+import type { ApiErrorBody, PageInfo } from "@/server/http/contract";
 
-const DEFAULT_BASE_URL =
-  "https://g39bc7cd4ecbbbb-gcdev01.adb.ap-hyderabad-1.oraclecloudapps.com/ords/wksp_gcode2/v1";
-
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_BASE_URL;
-
+// TODO: Define Defferent Error Class
 export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    // Machine-readable code from /api/v1 errors (NOT_FOUND, CONFLICT, …).
+    public code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -21,58 +18,73 @@ interface RequestOptions {
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
   cache?: RequestCache;
+  // Binary body (file upload) sent as-is instead of JSON, with its headers.
+  raw?: { body: Blob; headers?: Record<string, string> };
 }
 
-// ORDS returns HTTP 200 with `{ error: "..." }` for not-found/invalid requests
-// rather than a 4xx status, so both must be checked.
-export async function apiRequest<T>(
+// ── /api/v1 (Next.js route handlers) ────────────────────────────────────
+// Same-origin, cookie-authenticated, and every response is `{ data }`,
+// `{ data, page }` or `{ error: { code, message } }` with a real HTTP
+// status.
+
+// Shared by v1Request/v1RequestPage: one place that turns non-2xx and
+// `{ error }` bodies into ApiError.
+async function v1Fetch<TBody>(
   path: string,
-  { method = "GET", body, query, cache }: RequestOptions = {},
-): Promise<T> {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  { method = "GET", body, query, cache, raw }: RequestOptions,
+): Promise<TBody | undefined> {
+  const params = new URLSearchParams();
   if (query) {
     for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
+      if (value !== undefined) params.set(key, String(value));
     }
   }
+  const qs = params.size ? `?${params}` : "";
 
-  // Auth endpoints (sign-in, sign-up, etc.) run before a session exists;
-  // everything else that needs the caller's identity (e.g. /participants/me)
-  // relies on the backend decoding this token server-side.
-  const session = typeof window !== "undefined" ? getSession() : null;
-  const headers: Record<string, string> = {};
-  if (body) headers["Content-Type"] = "application/json";
-  if (session) headers["Authorization"] = `Bearer ${session.token}`;
-
-  const res = await fetch(url, {
+  const res = await fetch(`/api/v1${path}${qs}`, {
     method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: raw
+      ? { "Content-Type": raw.body.type || "application/octet-stream", ...raw.headers }
+      : body
+        ? { "Content-Type": "application/json" }
+        : undefined,
+    body: raw ? raw.body : body ? JSON.stringify(body) : undefined,
+    credentials: "same-origin",
     cache,
   });
 
-  const data = await res.json().catch(() => null);
+  if (res.status === 204) return undefined;
+  const json = (await res.json().catch(() => null)) as
+    TBody | ApiErrorBody | null;
 
-  if (
-    !res.ok ||
-    (data && typeof data === "object" && "error" in (data as object))
-  ) {
-    const errorBody = data as {
-      error?: string;
-      message?: string;
-      cause?: string;
-    } | null;
-    // RAISE_APPLICATION_ERROR text doesn't land in `message` (that's ORDS's
-    // generic "user defined resource" wrapper) — it's inside `cause`, e.g.
-    // "...SQL Error Code 20001, Error Message: ORA-20001: <our message>\nORA-06512...".
-    const causeMatch = errorBody?.cause?.match(/ORA-\d+:\s*([^\n]+)/);
-    const rawMessage =
-      errorBody?.error ??
-      causeMatch?.[1] ??
-      errorBody?.message ??
-      `Request failed: ${res.status}`;
-    throw new ApiError(rawMessage.replace(/^ORA-\d+:\s*/, ""), res.status);
+  if (!res.ok || !json || (typeof json === "object" && "error" in json)) {
+    const error =
+      json && typeof json === "object" && "error" in json
+        ? (json as ApiErrorBody).error
+        : null;
+    throw new ApiError(
+      error?.message ?? `Request failed: ${res.status}`,
+      res.status,
+      error?.code,
+    );
   }
+  return json as TBody;
+}
 
-  return data as T;
+export async function v1Request<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const json = await v1Fetch<{ data: T }>(path, options);
+  return json?.data as T;
+}
+
+// For list endpoints: the rows plus the `page` info.
+export async function v1RequestPage<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ data: T[]; page: PageInfo }> {
+  const json = await v1Fetch<{ data: T[]; page: PageInfo }>(path, options);
+  if (!json) throw new ApiError("Empty response", 204);
+  return json;
 }

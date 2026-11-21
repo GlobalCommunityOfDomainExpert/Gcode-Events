@@ -1,65 +1,59 @@
-import { apiRequest } from "./client";
-import { ApiListResponse, EventPanelistApi, PanelistInviteApi } from "./types";
-import { getSession } from "@/lib/auth/session";
+import { v1Request } from "./client";
+import type {
+  MyPanelistAccess,
+  Panelist,
+  PanelistInvite,
+} from "@/server/modules/panelists/panelists.schemas";
 
-// Contract-only — GCODE_EVENT_PANELISTS doesn't exist on the live backend
-// yet, so this degrades to [] instead of throwing into whatever Promise.all
-// it's called from (see project memory "contract-first-ords-endpoints").
-export async function listEventPanelists(
+export type { MyPanelistAccess, Panelist, PanelistInvite };
+
+// /api/v1 judging panelists. Browser-only.
+
+// Organizer list (admin).
+export function listEventPanelists(
   eventId: number | string,
-): Promise<EventPanelistApi[]> {
-  try {
-    const { items } = await apiRequest<ApiListResponse<EventPanelistApi>>(
-      `/events/${eventId}/panelists`,
-    );
-    return items;
-  } catch {
-    return [];
-  }
+): Promise<Panelist[]> {
+  return v1Request(`/events/${eventId}/panelists`);
 }
 
-// Organizer-only — invites an email as a judging panelist for this event.
-// Not degrade-safe: the organizer needs to see a real error if this fails,
-// same as decideRoundStatus/submitRoundScore.
+// Whether the signed-in user is an accepted panelist for this event.
+export function getMyPanelistAccess(
+  eventId: number | string,
+): Promise<MyPanelistAccess> {
+  return v1Request(`/events/${eventId}/panelists/me`);
+}
+
+// Organizer (admin): emails the invite link.
 export function invitePanelist(
   eventId: number | string,
   email: string,
-): Promise<EventPanelistApi> {
-  const invitedBy = getSession()?.userId ?? "";
-  return apiRequest(`/events/${eventId}/panelists`, {
+): Promise<{ id: number }> {
+  return v1Request(`/events/${eventId}/panelists`, {
     method: "POST",
-    body: { email, invited_by: invitedBy },
+    body: { email },
   });
 }
 
-// Public-ish (any signed-in user) — single invite lookup for the invitee's
-// own accept/decline page, which only has the panelist id from the link.
-// GET /panelists/:id wraps the row in { items: [...] } (ORDS refcursor
-// output), same convention as getEvent in events.ts.
-export async function getPanelistInvite(
+// The invitee's accept/decline page. Only the invited account (or an admin)
+// can read it; anyone else gets a 403 explaining which account to use.
+export function getPanelistInvite(
   panelistId: number | string,
-): Promise<PanelistInviteApi> {
-  const { items } = await apiRequest<{ items: PanelistInviteApi[] }>(
-    `/panelists/${panelistId}`,
-  );
-  return items[0];
+): Promise<PanelistInvite> {
+  return v1Request(`/panelists/${panelistId}`);
 }
 
-// The invitee accepting/declining their own invite — p_user_id comes from
-// the caller's own session, same trust level as decideRoundStatus's
-// decided_by (this backend doesn't verify bearer tokens server-side).
+// Only from the invited account.
 export function respondToPanelistInvite(
   panelistId: number | string,
   status: "ACCEPTED" | "DECLINED",
-): Promise<unknown> {
-  const userId = getSession()?.userId ?? "";
-  return apiRequest(`/panelists/${panelistId}/respond`, {
-    method: "PUT",
-    body: { status, user_id: userId },
+): Promise<void> {
+  return v1Request(`/panelists/${panelistId}/response`, {
+    method: "POST",
+    body: { status },
   });
 }
 
-// Organizer-only — revokes/removes an invite.
-export function removePanelist(panelistId: number | string): Promise<unknown> {
-  return apiRequest(`/panelists/${panelistId}`, { method: "DELETE" });
+// Organizer (admin): revokes an invite.
+export function removePanelist(panelistId: number | string): Promise<void> {
+  return v1Request(`/panelists/${panelistId}`, { method: "DELETE" });
 }

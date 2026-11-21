@@ -1,4 +1,4 @@
-// Event type names come from the backend's EventTypeLookup table, not a
+// Event type names come from the backend's event-types lookup, not a
 // fixed set — so this is a plain string, not a literal union.
 export type EventType = string;
 
@@ -167,7 +167,7 @@ export interface Coupon {
 
 // Backed by GCODE_UPI_PAYMENT_CLAIMS (contract-only, see docs/sql/coupons/).
 // Self-reported offline UPI QR payment, pending organizer confirmation
-// against their own bank/Razorpay settlement — not a verified payment.
+// against their own bank settlement — not a verified payment.
 export interface UpiClaim {
   id: string;
   eventId: string;
@@ -328,7 +328,7 @@ export interface EventStage {
 }
 
 export interface EventOrganizer {
-  name: string; // backed by EventDetail.created_by; falls back to "GCODE Team"
+  name: string; // backed by EventDetail.createdBy; falls back to "GCODE Team"
   title: string; // no backend column — adapter hardcodes "Organizer"
   verified: boolean; // no backend column — adapter hardcodes false
   eventsHosted: number; // no backend column — adapter hardcodes 0
@@ -336,32 +336,32 @@ export interface EventOrganizer {
 }
 
 export interface Event {
-  id: string; // EventListItem.id
-  title: string; // EventListItem.event_name
-  type: EventType; // EventListItem.event_type_id, resolved via EventTypeLookup
-  mode: "Online" | "In-Person" | "Hybrid"; // EventListItem.mode_of_event_id, resolved via EventModeLookup
-  status?: EventStatus; // EventListItem.status_id, resolved via EVENT_STATUS lookup
-  price: "Free" | string; // derived from EventListItem.ticket_price
-  priceAmount?: number; // EventListItem.ticket_price
-  date: string; // derived from EventListItem.start_date
-  time: string; // derived from EventListItem.start_date
-  location: string; // derived from EventListItem.city + address
-  registeredCount: number; // EventListItem.registered_count — live SUM(quantity) from GCODE_EVENT_PARTICIPANTS
-  interestedCount?: number; // EventDetail.interested_count — distinct emails who clicked "I'm Interested"
+  id: string; // EventSummary.id
+  title: string; // EventSummary.title
+  type: EventType; // EventSummary.eventTypeId, resolved via the event-types lookup
+  mode: "Online" | "In-Person" | "Hybrid"; // EventSummary.modeOfEventId, resolved via the modes lookup
+  status?: EventStatus; // EventSummary.statusId, resolved via EVENT_STATUS lookup
+  price: "Free" | string; // derived from EventSummary.ticketPrice
+  priceAmount?: number; // EventSummary.ticketPrice
+  date: string; // derived from EventSummary.startDate
+  time: string; // derived from EventSummary.startDate
+  location: string; // derived from EventSummary.city + address
+  registeredCount: number; // EventSummary.registeredCount — live SUM(quantity) from GCODE_EVENT_PARTICIPANTS
+  interestedCount?: number; // EventDetail.interestedCount — distinct emails who clicked "I'm Interested"
   spotsLeft?: number; // max_attendees - registeredCount
-  capacity?: number; // EventListItem.max_attendees
+  capacity?: number; // EventSummary.maxAttendees
   attendeeRegistration: RegistrationCategory; // always present, mirrors price/priceAmount/capacity/spotsLeft/registeredCount above; .enabled toggleable by the organizer
   participantRegistration: RegistrationCategory; // always present too — check .enabled, not presence, to see if the organizer has turned it on
-  featured?: boolean; // EventListItem.is_featured
-  maxTicketsPerRegistration?: number; // EventDetail.max_tickets_per_registration — organizer cap per single booking, unset = no cap
-  is_featured?: boolean; // EventListItem.is_featured
-  registrationCloses: string; // EventDetail.registration_deadline, falls back to start_date
-  registrationDeadlineIso?: string | null; // EventDetail.registration_deadline, raw ISO for computing "days left"
+  featured?: boolean; // EventSummary.isFeatured
+  maxTicketsPerRegistration?: number; // EventDetail.maxTicketsPerRegistration — organizer cap per single booking, unset = no cap
+  is_featured?: boolean; // EventSummary.isFeatured
+  registrationCloses: string; // EventDetail.registrationDeadline, falls back to start_date
+  registrationDeadlineIso?: string | null; // EventDetail.registrationDeadline, raw ISO for computing "days left"
   duration: string; // derived from start_date/end_date span, or the timeline's own span as fallback
-  endDateIso?: string | null; // EventListItem.end_date, falls back to start_date — raw ISO for hasEventEnded()
-  startDateIso?: string | null; // EventListItem.start_date — raw ISO for weekday / time-range display
+  endDateIso?: string | null; // EventSummary.endDate, falls back to start_date — raw ISO for hasEventEnded()
+  startDateIso?: string | null; // EventSummary.startDate — raw ISO for weekday / time-range display
   summary?: string; // EventDetail.summary — one-line pitch shown on event cards
-  durationText?: string; // EventDetail.duration_text — organizer's free-text duration (e.g. "3 hours"), used as a display fallback when time is TBD
+  durationText?: string; // EventDetail.durationText — organizer's free-text duration (e.g. "3 hours"), used as a display fallback when time is TBD
   teamSize: string; // no backend column — adapter hardcodes ""
   certificate: boolean; // no backend column — adapter hardcodes false
   description: string[]; // EventDetail.description (detail fetch only), wrapped in array
@@ -369,15 +369,15 @@ export interface Event {
   stages: EventStage[]; // EVENTS.STAGES_JSON — hybrid days/stages, [] when unset
   rounds: EventRound[]; // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25, adapter hardcodes [] until the table exists
   organizer: EventOrganizer; // see EventOrganizer — only .name is backed
-  organizerId?: string; // EventDetail.organizer_id — owner check for the manage bar
+  organizerId?: string; // EventDetail.organizerId — owner check for the manage bar
   terms: string[]; // EventDetail.terms, split on newline — falls back to DEFAULT_TERMS when blank
   eligibility: string[]; // EventDetail.eligibility, split on newline — falls back to DEFAULT_ELIGIBILITY when blank
   tags?: string[]; // EventDetail.categories (detail fetch only)
   faqs?: EventFaq[]; // GCODE_EVENT_FAQS — contract-only, served at /events/:id/faqs
   socialLinks?: EventSocialLink[]; // no backend column — adapter never sets this
-  coverImageUrl?: string; // EventListItem.cover_image_url
-  mediaUrls?: string[]; // EventListItem.banner_image_url, wrapped in array
-  participationLink?: string; // EventListItem.participation_link — column exists, not yet mapped in adapter
+  coverImageUrl?: string; // EventSummary.coverImageUrl
+  mediaUrls?: string[]; // EventSummary.bannerImageUrl, wrapped in array
+  participationLink?: string; // EventSummary.participationLink — column exists, not yet mapped in adapter
   // Contract-only — EVENTS has no RATING_MODE column yet as of 2026-07-21.
   // Missing/undefined -> "Competitive", same degrade convention as
   // status/mode above, so every event keeps today's 0-10 rating behavior
