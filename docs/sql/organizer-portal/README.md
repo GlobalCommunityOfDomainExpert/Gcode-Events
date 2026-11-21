@@ -1,45 +1,64 @@
-# Organizer portal and live room backend (Handover 7)
+# Organizer portal and live room (Handover 7)
 
-Three scripts, run in this order in WKSP_GCODE2 (take a backup first; everything is additive):
+APEX holds **tables only**. Everything else (tokens, who may do what, the video
+provider, webhooks, replay streaming) is Next.js server code in
+`src/server/portal` and `src/app/api/portal`, which reads and writes the tables
+through ORDS. No packages, no `DBMS_CRYPTO` grant.
 
-1. `01_tables.sql`: tables and columns.
-2. `02_packages.sql`: the packages (`GCODE_EVENT_PORTAL_API`, `GCODE_EVENT_LIVE_API`, `GCODE_EVENT_HTTP_API`).
-3. `03_ords.sql`: the REST routes.
+## Run, in WKSP_GCODE2
 
-## Before running
+1. `01_tables.sql`: the tables and read-only views. Re-runnable: it first drops
+   the Handover 7 objects of an earlier attempt, including the packages that
+   failed to compile.
+2. `02_rest.sql`: turns on ORDS REST for those tables under `/portal_*`, locks
+   that path behind an OAuth2 client, and creates the client. Then run the
+   `SELECT` at the bottom (in SQL Commands) to read the client id and secret.
 
-- Your DBA runs `GRANT EXECUTE ON SYS.DBMS_CRYPTO TO <schema>` once (tokens, hashing, signatures).
-- After script 1, insert into `GCODE_PORTAL_SETTINGS` (see the comment in the script): at minimum
-  `JWT_SECRET` (so callers are verified, not just decoded) and, for the live room,
-  `VIDEOSDK_API_KEY`, `VIDEOSDK_SECRET`, `WEBHOOK_SECRET`.
-- `01_tables.sql` adds `PANELIST_ROLE` / `INVITE_NOTE` to the panelists table only if it can find it
-  (`GCODE_EVENT_PANELISTS`); otherwise it prints what to add by hand.
+## Vercel environment
 
-## What is built, and what is not
+Required for the portal:
 
-Built and enforced on the server:
+| Variable | What |
+|---|---|
+| `ORDS_CLIENT_ID`, `ORDS_CLIENT_SECRET` | from step 2 (server only, never `NEXT_PUBLIC_`) |
+| `JWT_SECRET` | the secret that signs sign-in tokens (it lives in the database). Without it callers are only decoded, not verified |
+| `NEXT_PUBLIC_ORGANIZER_PORTAL=true` | shows Communication and Team & access |
 
-- Team invites and view-only share links: 256-bit tokens, only the SHA-256 hash is stored, a token
-  is shown once, expiry and revoke are checked on every read, co-organizer needs a signed-in
-  account, share links can never be co-organizer.
-- `GET /shared/:token` has no side effects; `POST /shared/:token/open` counts a view or activates an invite.
-- `/shared/:token/data` returns only what the role may see and never emails or phones.
-- Communications: the browser sends a recipient group, the server resolves recipients and returns the real
-  count; max 5 sends per event per hour. "Paid" is rejected until payment status can be told.
-- Live room decisions: role (host / speaker / attendee), registration, door state on the server clock,
-  room-shaping settings locked once doors open, removed people get no credential, the replay URL only
-  reaches ticket holders when it is published.
-- Host actions (go live, stop, record, captions, end) are written to `GCODE_EVENT_LIVE_COMMANDS`; the
-  live/recording flags only change when a provider event is recorded (`record_provider_event`).
+Required for the live room:
 
-Not built, because the request and response shapes are unverified until the provider spike
-(Handover 7, Part 0b):
+| Variable | What |
+|---|---|
+| `NEXT_PUBLIC_LIVE_ROOM=true` | shows the live room |
+| `VIDEOSDK_API_KEY`, `VIDEOSDK_SECRET` | provider credentials |
+| `OCI_RECORDINGS_BUCKET_NAME` | a **private** bucket for recordings (the other `OCI_*` vars already exist) |
+| `PUBLIC_BASE_URL` | optional; the site origin the provider calls back, default the request origin |
+| `ROOM_LIMIT_INTERACTIVE`, `ROOM_LIMIT_VIEWERS` | optional plan limits, default 50 and 100 |
+| `ORDS_ROOT`, `REPLAY_SECRET` | optional overrides |
 
-- Creating the provider room (`ROOM_REF` stays empty, so `POST /events/:id/live/token` answers "not switched on").
-- The worker that reads `GCODE_EVENT_LIVE_COMMANDS` and calls the provider (HLS start, recording, end, remove).
-- The webhook relay that verifies the provider's RSA signature and calls `POST /webhooks/live`.
-- Moving the recording into our own bucket and storing its URL in `RECORDING_URL`.
-- The mailer job that sends `GCODE_EVENT_COMM_RECIPIENTS` rows. Until it exists nothing is emailed.
-- The token claims in `h_live_token` follow the v2 docs and are untested against the provider.
+Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL.
 
-Frontend flags (default off): `NEXT_PUBLIC_ORGANIZER_PORTAL`, `NEXT_PUBLIC_LIVE_ROOM`.
+## What is enforced where
+
+- Team invites and share links: 256-bit tokens, only the SHA-256 hash is stored, shown once; expiry and revoke
+  checked on every read; co-organizer needs a signed-in account and only the organizer can grant it; links can
+  never be co-organizer.
+- `GET /shared/:token` has no side effects; `POST .../open` counts a view or activates an invite;
+  `.../data` returns only what the role may see, never contacts.
+- Communications: the browser names a group, the server resolves recipients and returns the real count; 5 sends
+  per event per hour. "Paid" is rejected until payment status can be told. Rows are written as QUEUED.
+- Live room: role, registration and door state come from the server; room-shaping settings lock once doors
+  open; removed people get no credential; host actions run against the provider from the server.
+- Replay: the recording is copied into the private bucket and streamed through a signed, short-lived,
+  ticket-bound route. There is no public link.
+
+## Not proven yet
+
+- **No provider call has been run against a real VideoSDK account.** The room, HLS, recording, end and remove
+  calls, the join token claims, the webhook signature (RSA-SHA256 over the raw body) and the payload mapping
+  all follow the public docs but need the spike (Handover 7, Part 0b). The adapter is `provider.ts`.
+- **Nothing here has run against your ORDS.** The AutoREST calls (filter syntax, POST returning the new row,
+  PUT as full-row replace) follow the ORDS docs and are the first thing to test.
+- The inside of the room is still the "Room opening soon" stub in `components/live-room.tsx`: the provider
+  embed waits on the spike.
+- Recordings over 200 MB are not copied (held in memory); that needs a worker.
+- No mailer: Communication rows stay QUEUED.

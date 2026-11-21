@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { Readable } from "node:stream";
 import { join } from "node:path";
 import ffmpeg from "@ffmpeg-installer/ffmpeg";
 
@@ -293,4 +294,77 @@ export async function abortAudioMultipartUpload(
     objectName: audioObjectName(participantId, contentType),
     uploadId,
   });
+}
+
+// Live-room recordings live in their own PRIVATE bucket (OCI_RECORDINGS_BUCKET_NAME):
+// no public URL exists, so a recording is reachable only through the
+// ticket-checked replay route, which streams it from here.
+function recordingsBucket() {
+  return {
+    namespaceName: requiredEnv("OCI_NAMESPACE"),
+    bucketName: requiredEnv("OCI_RECORDINGS_BUCKET_NAME"),
+  };
+}
+
+/** Stores a recording and returns its object name (not a URL). */
+export async function uploadRecordingObject(
+  eventId: number,
+  body: Buffer,
+  contentType: string,
+): Promise<string> {
+  const { namespaceName, bucketName } = recordingsBucket();
+  const objectName = `events/${eventId}/recording-${randomUUID()}`;
+  await getClient().putObject({
+    namespaceName,
+    bucketName,
+    objectName,
+    putObjectBody: body,
+    contentLength: body.length,
+    contentType,
+  });
+  return objectName;
+}
+
+/** A recording as a web stream, honouring a Range header so players can seek. */
+export async function getRecordingObject(
+  objectName: string,
+  range?: string | null,
+): Promise<{
+  body: ReadableStream;
+  contentType: string;
+  contentLength?: string;
+  contentRange?: string;
+  status: 200 | 206;
+}> {
+  const { namespaceName, bucketName } = recordingsBucket();
+  // "bytes=start-end" from the player's Range header.
+  const m = range?.match(/^bytes=(\d*)-(\d*)$/);
+  const parsed = m
+    ? new common.Range(
+        m[1] ? Number(m[1]) : null,
+        m[2] ? Number(m[2]) : null,
+        null,
+      )
+    : undefined;
+  const res = await getClient().getObject({
+    namespaceName,
+    bucketName,
+    objectName,
+    ...(parsed ? { range: parsed } : {}),
+  });
+  const value = res.value as unknown;
+  const body =
+    typeof (value as ReadableStream).getReader === "function"
+      ? (value as ReadableStream)
+      : (Readable.toWeb(value as Readable) as ReadableStream);
+  return {
+    body,
+    contentType: res.contentType ?? "video/mp4",
+    contentLength: res.contentLength ? String(res.contentLength) : undefined,
+    contentRange:
+      res.contentRange && res.contentRange.contentLength !== null
+        ? `bytes ${res.contentRange.startByte}-${res.contentRange.endByte}/${res.contentRange.contentLength}`
+        : undefined,
+    status: parsed && res.contentRange ? 206 : 200,
+  };
 }

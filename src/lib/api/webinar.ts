@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { portalRequest } from "./portal";
 import {
   DEFAULT_WEBINAR,
   type Speaker,
@@ -81,7 +81,7 @@ export async function getWebinar(
   eventId: string,
 ): Promise<{ settings: WebinarSettings; configured: boolean }> {
   try {
-    const r = await apiRequest<WebinarApi>(`/events/${eventId}/webinar`);
+    const r = await portalRequest<WebinarApi>(`/events/${eventId}/webinar`);
     return { settings: adapt(r), configured: true };
   } catch {
     return { settings: DEFAULT_WEBINAR, configured: false };
@@ -93,7 +93,7 @@ export function saveWebinar(
   eventId: string,
   patch: Partial<WebinarConfig>,
 ): Promise<unknown> {
-  return apiRequest(`/events/${eventId}/webinar`, {
+  return portalRequest(`/events/${eventId}/webinar`, {
     method: "PUT",
     body: {
       audience: patch.audience,
@@ -118,7 +118,7 @@ export function hostAction(
   action: HostAction,
   body: Record<string, unknown> = {},
 ): Promise<unknown> {
-  return apiRequest(`/events/${eventId}/live/${action}`, {
+  return portalRequest(`/events/${eventId}/live/${action}`, {
     method: "POST",
     body,
   });
@@ -128,7 +128,7 @@ export function removeFromRoom(
   eventId: string,
   registrationId: string,
 ): Promise<unknown> {
-  return apiRequest(`/events/${eventId}/live/remove-person`, {
+  return portalRequest(`/events/${eventId}/live/remove-person`, {
     method: "POST",
     body: { registration_id: Number(registrationId) },
   });
@@ -146,7 +146,7 @@ export interface LiveAccess {
 }
 
 export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
-  const r = await apiRequest<{
+  const r = await portalRequest<{
     registered: boolean;
     role: "HOST" | "SPEAKER" | "ATTENDEE";
     state: WebinarState;
@@ -177,7 +177,7 @@ export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
  * LiveRoom component hands it to the provider.
  */
 export async function requestJoinCredential(eventId: string): Promise<string> {
-  const r = await apiRequest<{ credential: string }>(
+  const r = await portalRequest<{ credential: string }>(
     `/events/${eventId}/live/token`,
     { method: "POST", body: {} },
   );

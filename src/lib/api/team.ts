@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { portalRequest } from "./portal";
 import { ApiListResponse } from "./types";
 import type {
   SharedAccess,
@@ -59,7 +59,7 @@ const link = (r: ShareLinkApi): ShareLink => ({
 // opens before the endpoints exist.
 export async function listTeam(eventId: string): Promise<TeamMember[]> {
   try {
-    const { items } = await apiRequest<ApiListResponse<TeamMemberApi>>(
+    const { items } = await portalRequest<ApiListResponse<TeamMemberApi>>(
       `/events/${eventId}/team`,
     );
     return items.map(member);
@@ -74,26 +74,26 @@ export function inviteTeamMember(
   email: string,
   role: TeamRole,
 ): Promise<{ token: string }> {
-  return apiRequest<{ token: string }>(`/events/${eventId}/team`, {
+  return portalRequest<{ token: string }>(`/events/${eventId}/team`, {
     method: "POST",
     body: { email, role },
   });
 }
 
 export function changeTeamRole(id: string, role: TeamRole): Promise<unknown> {
-  return apiRequest(`/team/${id}`, {
+  return portalRequest(`/team/${id}`, {
     method: "PUT",
     body: { role },
   });
 }
 
 export function removeTeamMember(id: string): Promise<unknown> {
-  return apiRequest(`/team/${id}`, { method: "DELETE" });
+  return portalRequest(`/team/${id}`, { method: "DELETE" });
 }
 
 export async function listShareLinks(eventId: string): Promise<ShareLink[]> {
   try {
-    const { items } = await apiRequest<ApiListResponse<ShareLinkApi>>(
+    const { items } = await portalRequest<ApiListResponse<ShareLinkApi>>(
       `/events/${eventId}/share-links`,
     );
     return items.map(link);
@@ -109,7 +109,7 @@ export async function createShareLink(
   eventId: string,
   payload: { label: string; role: TeamRole; expiry: LinkExpiry },
 ): Promise<{ id: string; token: string }> {
-  const r = await apiRequest<{ id: number; token: string }>(
+  const r = await portalRequest<{ id: number; token: string }>(
     `/events/${eventId}/share-links`,
     {
       method: "POST",
@@ -124,14 +124,14 @@ export async function createShareLink(
 }
 
 export function revokeShareLink(id: string): Promise<unknown> {
-  return apiRequest(`/share-links/${id}`, {
+  return portalRequest(`/share-links/${id}`, {
     method: "DELETE",
   });
 }
 
 /** Read-only: opening the page must not change anything (see openShared). */
 export async function getSharedAccess(token: string): Promise<SharedAccess> {
-  const r = await apiRequest<{
+  const r = await portalRequest<{
     event_id: number;
     role: TeamRole;
     viewer: string;
@@ -152,7 +152,7 @@ export async function getSharedAccess(token: string): Promise<SharedAccess> {
  * who has arrived, and money totals for roles that get them.
  */
 export async function getSharedData(token: string): Promise<SharedData> {
-  const r = await apiRequest<{
+  const r = await portalRequest<{
     guests?: { id: number; name: string; category: string }[];
     arrived?: number[];
     money?: {
@@ -182,7 +182,7 @@ export async function getSharedData(token: string): Promise<SharedData> {
 export function openShared(token: string): Promise<unknown> {
   // A signed-in caller is identified by the bearer token, which a
   // co-organizer invite needs; view-only roles open it anonymously.
-  return apiRequest(`/shared/${token}/open`, { method: "POST", body: {} });
+  return portalRequest(`/shared/${token}/open`, { method: "POST", body: {} });
 }
 
 /** Door check-in: participant ids marked as arrived. */
@@ -191,7 +191,7 @@ export async function listCheckIns(
   token?: string,
 ): Promise<string[]> {
   try {
-    const { items } = await apiRequest<
+    const { items } = await portalRequest<
       ApiListResponse<{ participant_id: number }>
     >(`/events/${eventId}/check-ins`, { query: { token } });
     return items.map((r) => String(r.participant_id));
@@ -206,7 +206,7 @@ export function setCheckIn(
   arrived: boolean,
   token?: string,
 ): Promise<unknown> {
-  return apiRequest(`/events/${eventId}/check-ins`, {
+  return portalRequest(`/events/${eventId}/check-ins`, {
     method: "POST",
     body: {
       participant_id: Number(participantId),

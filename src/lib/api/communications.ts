@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { portalRequest } from "./portal";
 import { ApiListResponse } from "./types";
 import { CommunicationLog, RecipientGroup } from "@/lib/communications";
 
@@ -29,7 +29,7 @@ export async function listCommunications(
   eventId: number | string,
 ): Promise<CommunicationLog[]> {
   try {
-    const { items } = await apiRequest<ApiListResponse<CommunicationApi>>(
+    const { items } = await portalRequest<ApiListResponse<CommunicationApi>>(
       `/events/${eventId}/communications`,
     );
     return items.map(adapt);
@@ -48,7 +48,7 @@ export async function sendCommunication(
     participantIds?: string[];
   },
 ): Promise<CommunicationLog> {
-  const row = await apiRequest<CommunicationApi>(
+  const row = await portalRequest<CommunicationApi>(
     `/events/${eventId}/communications`,
     {
       method: "POST",
