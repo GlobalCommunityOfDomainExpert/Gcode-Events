@@ -16,7 +16,6 @@ import { useLookup } from "@/hooks/use-lookup";
 import { getModes } from "@/lib/api/lookups";
 import type { EventMode } from "@/lib/api/lookups";
 import { UpdateEventDetailData, EventDetailData } from "@/lib/zod/event";
-import { HybridStagesField } from "./hybrid-stages-field";
 
 // Known DB mode_name codes get friendlier copy; anything else falls back to the raw name.
 const KNOWN_MODE_LABEL: Record<string, string> = {
@@ -150,31 +149,31 @@ export function StepScheduleMode({ data, onChange }: StepScheduleModeProps) {
         </div>
       )}
 
-      {modeCode === "HYBRID" && (
-        <HybridStagesField
-          stages={data.stages}
-          venue={data.location}
-          onChange={(stages) => onChange("stages", stages)}
-        />
+      {data.stages.length > 0 && (
+        <p className="text-small text-text-secondary bg-bg-light rounded-md px-3 py-2">
+          This event is split into {data.stages.length} days in{" "}
+          <strong className="text-text-primary">Agenda</strong> — each day has
+          its own link, venue and button there.
+        </p>
       )}
 
-      {(modeCode === "ONLINE" ||
-        (modeCode === "HYBRID" && data.stages.length === 0)) && (
-        <FormField
-          label="Participation link"
-          htmlFor="event-participation-link"
-        >
-          <Input
-            id="event-participation-link"
-            icon={Link2}
-            value={data.participationLink}
-            onChange={(event) =>
-              onChange("participationLink", event.target.value)
-            }
-            placeholder="Shared with registrants after they sign up"
-          />
-        </FormField>
-      )}
+      {(modeCode === "ONLINE" || modeCode === "HYBRID") &&
+        data.stages.length === 0 && (
+          <FormField
+            label="Participation link"
+            htmlFor="event-participation-link"
+          >
+            <Input
+              id="event-participation-link"
+              icon={Link2}
+              value={data.participationLink}
+              onChange={(event) =>
+                onChange("participationLink", event.target.value)
+              }
+              placeholder="Shared with registrants after they sign up"
+            />
+          </FormField>
+        )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField

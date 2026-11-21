@@ -20,10 +20,12 @@ import {
   Wand2,
   type LucideIcon,
 } from "lucide-react";
-import { Button, Icon, Input } from "@/components/atoms";
+import { Icon, Input } from "@/components/atoms";
 import { FormField } from "@/components/molecules";
 import { stageWhen } from "@/lib/event-stages";
-import type { EventStageData } from "@/lib/zod/event";
+import type { EventDetailData, EventStageData } from "@/lib/zod/event";
+
+type AgendaItem = EventDetailData["timeline"][number];
 
 type Mode = EventStageData["mode"];
 type Cta = EventStageData["cta"];
@@ -60,12 +62,24 @@ function defaultLabel(stage: EventStageData): string | null {
   return null;
 }
 
-const newStage = (n: number, prev?: EventStageData): EventStageData => ({
+/** Event mode code (PHYSICAL/ONLINE/HYBRID) → the one format its days can have. */
+export function fixedModeFor(eventMode: string): Mode | undefined {
+  if (eventMode === "PHYSICAL") return "OFFLINE";
+  if (eventMode === "ONLINE") return "ONLINE";
+  return undefined;
+}
+
+export const newStage = (
+  n: number,
+  prev?: EventStageData,
+  fixed?: Mode,
+): EventStageData => ({
   label: `Day ${n}`,
   date: "",
+  endDate: "",
   time: prev?.time ?? "",
   // Alternate by default: online → in person is the common shape.
-  mode: prev?.mode === "ONLINE" ? "OFFLINE" : "ONLINE",
+  mode: fixed ?? (prev?.mode === "ONLINE" ? "OFFLINE" : "ONLINE"),
   link: "",
   venue: "",
   cta: "AUTO",
@@ -73,23 +87,53 @@ const newStage = (n: number, prev?: EventStageData): EventStageData => ({
   ctaUrl: "",
 });
 
+const inStage = (s: EventStageData, date: string) =>
+  !!s.date &&
+  date >= s.date &&
+  date <= (s.endDate > s.date ? s.endDate : s.date);
+
+const shortDate = (iso: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${iso}T00:00:00Z`));
+
 /**
- * Hybrid events rarely mean "online and in person at the same time". More
- * often it's Day 1 online, Day 2 at the venue — or a talent show whose first
- * round is an online video screening. Each stage is a collapsible card with
- * three groups — When, Where, Button — and the event page shows a picker
- * that opens on the current stage.
+ * The agenda split into days (Round 1 online, semi-finals at the venue…).
+ * Each day is a collapsible card — When, Where, Button — and owns every
+ * agenda session dated inside it, so the event page shows one row per day
+ * with its sessions folded in. Lives in the Agenda section; the Format
+ * picker only shows for hybrid events (otherwise every day shares the
+ * event's mode).
  */
 export function HybridStagesField({
   stages,
   venue,
+  eventMode = "HYBRID",
+  timeline = [],
+  renderSessions,
   onChange,
 }: {
   stages: EventStageData[];
   /** Event venue — the default for in-person stages. */
   venue: string;
+  /** Event mode code — PHYSICAL / ONLINE fix every day's format. */
+  eventMode?: string;
+  /** Agenda sessions, to show which day each one lands in. */
+  timeline?: AgendaItem[];
+  /** The day's own sessions editor, shown inside its card. */
+  renderSessions?: (stage: EventStageData, index: number) => React.ReactNode;
   onChange: (stages: EventStageData[]) => void;
 }) {
+  const fixed = fixedModeFor(eventMode);
+  const strays = [
+    ...new Set(
+      timeline
+        .map((t) => t.date)
+        .filter((d) => d && !stages.some((s) => inStage(s, d))),
+    ),
+  ].sort();
   const [open, setOpen] = useState<number | null>(stages.length > 0 ? 0 : null);
 
   const patch = (i: number, p: Partial<EventStageData>) =>
@@ -98,7 +142,7 @@ export function HybridStagesField({
   const add = () => {
     onChange([
       ...stages,
-      newStage(stages.length + 1, stages[stages.length - 1]),
+      newStage(stages.length + 1, stages[stages.length - 1], fixed),
     ]);
     setOpen(stages.length);
   };
@@ -121,20 +165,13 @@ export function HybridStagesField({
     <section className="border-border-light space-y-4 rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-body text-text-primary font-semibold">
-            Days &amp; format
-          </h3>
+          <h3 className="text-body text-text-primary font-semibold">Days</h3>
           <p className="text-small text-text-secondary">
-            Split the event into days or rounds — each online, in person or
-            both, with its own button.
+            {fixed
+              ? "Rounds or days, each with its own dates, sessions and button."
+              : "Rounds or days — each online, in person or both, with its own sessions, link, venue and button."}
           </p>
         </div>
-        {stages.length > 0 && (
-          <Button type="button" variant="secondary" size="sm" onClick={add}>
-            <Icon icon={Plus} size="sm" />
-            Add day
-          </Button>
-        )}
       </div>
 
       {stages.length === 0 ? (
@@ -158,8 +195,13 @@ export function HybridStagesField({
               key={i}
               index={i}
               count={stages.length}
-              stage={stage}
+              stage={{ ...stage, mode: fixed ?? stage.mode }}
+              fixed={!!fixed}
+              sessions={
+                timeline.filter((t) => t.date && inStage(stage, t.date)).length
+              }
               venue={venue}
+              sessionsSlot={renderSessions?.(stage, i)}
               open={open === i}
               onToggle={() => setOpen(open === i ? null : i)}
               onPatch={(p) => patch(i, p)}
@@ -167,7 +209,26 @@ export function HybridStagesField({
               onRemove={() => remove(i)}
             />
           ))}
+          {/* add sits where the next day will appear */}
+          <li>
+            <button
+              type="button"
+              onClick={add}
+              className="border-border-light text-text-secondary hover:border-primary hover:text-primary hover:bg-primary-light/40 text-small flex w-full items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 font-semibold transition-colors"
+            >
+              <Icon icon={Plus} size="sm" className="size-4" />
+              Add day {stages.length + 1}
+            </button>
+          </li>
         </ol>
+      )}
+
+      {stages.length > 0 && strays.length > 0 && (
+        <p className="text-small text-warning bg-warning-light rounded-md px-3 py-2">
+          Sessions on {strays.map(shortDate).join(", ")} aren&apos;t in any day
+          — they&apos;re listed under &ldquo;Not in any day&rdquo; below. Widen
+          a day&apos;s dates or change the session&apos;s date.
+        </p>
       )}
     </section>
   );
@@ -177,7 +238,10 @@ function StageCard({
   index: i,
   count,
   stage,
+  fixed,
+  sessions,
   venue,
+  sessionsSlot,
   open,
   onToggle,
   onPatch,
@@ -187,7 +251,10 @@ function StageCard({
   index: number;
   count: number;
   stage: EventStageData;
+  fixed: boolean;
+  sessions: number;
   venue: string;
+  sessionsSlot?: React.ReactNode;
   open: boolean;
   onToggle: () => void;
   onPatch: (p: Partial<EventStageData>) => void;
@@ -202,6 +269,8 @@ function StageCard({
   const buttonText = stage.ctaLabel.trim() || fallback;
   const modeIcon = MODES.find((m) => m.value === stage.mode)!.icon;
   const name = stage.label.trim() || `Day ${i + 1}`;
+  const multi = !!stage.date && stage.endDate > stage.date;
+  const endBad = !!stage.endDate && !!stage.date && stage.endDate < stage.date;
 
   return (
     <li
@@ -230,6 +299,14 @@ function StageCard({
               </span>
               <span aria-hidden>·</span>
               <span>{stageWhen(stage)}</span>
+              {sessions > 0 && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>
+                    {sessions} session{sessions === 1 ? "" : "s"}
+                  </span>
+                </>
+              )}
               {buttonText && (
                 <>
                   <span aria-hidden>·</span>
@@ -282,9 +359,9 @@ function StageCard({
                 placeholder={`Day ${i + 1}`}
               />
             </FormField>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 @md:grid-cols-3">
               <FormField
-                label="Date"
+                label={multi ? "Starts" : "Date"}
                 htmlFor={`${id}-date`}
                 hint="Blank = to be announced"
               >
@@ -296,7 +373,30 @@ function StageCard({
                   onChange={(e) => onPatch({ date: e.target.value })}
                 />
               </FormField>
-              <FormField label="Time" htmlFor={`${id}-time`}>
+              <FormField
+                label="Ends"
+                htmlFor={`${id}-end`}
+                hint={
+                  endBad
+                    ? "Must be after the start date"
+                    : "Optional — for rounds over several dates"
+                }
+              >
+                <Input
+                  id={`${id}-end`}
+                  icon={CalendarDays}
+                  type="date"
+                  min={stage.date || undefined}
+                  disabled={!stage.date}
+                  value={stage.endDate}
+                  onChange={(e) => onPatch({ endDate: e.target.value })}
+                  aria-invalid={endBad || undefined}
+                />
+              </FormField>
+              <FormField
+                label={multi ? "Time each day" : "Time"}
+                htmlFor={`${id}-time`}
+              >
                 <Input
                   id={`${id}-time`}
                   icon={Clock}
@@ -306,16 +406,26 @@ function StageCard({
                 />
               </FormField>
             </div>
+            {multi && (
+              <p className="text-small text-text-secondary">
+                Shown as one row ({stageWhen(stage)}). Give each session below
+                the date it happens on.
+              </p>
+            )}
           </Group>
 
+          {sessionsSlot && <Group title="Sessions">{sessionsSlot}</Group>}
+
           <Group title="Where">
-            <Segmented
-              id={`${id}-mode`}
-              label="Format"
-              options={MODES}
-              value={stage.mode}
-              onChange={(mode) => onPatch({ mode })}
-            />
+            {!fixed && (
+              <Segmented
+                id={`${id}-mode`}
+                label="Format"
+                options={MODES}
+                value={stage.mode}
+                onChange={(mode) => onPatch({ mode })}
+              />
+            )}
             {online && (
               <FormField
                 label="Meeting link"

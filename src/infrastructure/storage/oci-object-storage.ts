@@ -2,6 +2,7 @@ import "server-only";
 import * as common from "oci-common";
 import * as objectstorage from "oci-objectstorage";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -156,6 +157,31 @@ export async function uploadAudioObject(
   // another signed link if the bucket's visibility is set to "Public"
   // (read-only) in OCI. Same "anyone with the link" trust model as the old
   // Drive-link flow, just backed by the bucket setting instead.
+  return `${objectHost()}/n/${namespaceName}/b/${bucketName}/o/${encodeURIComponent(objectName)}`;
+}
+
+// Organizer images (gallery photos, partner logos). Random object names, so
+// nothing is overwritten or guessable; same public-bucket URL model as audio.
+export async function uploadImageObject(
+  folder: string,
+  extension: string,
+  body: Buffer,
+  contentType: string,
+): Promise<string> {
+  // Event-page media lives in its own bucket (OCI_MEDIA_BUCKET_NAME, e.g.
+  // "event-media-prod"), separate from the audio-submission bucket.
+  const namespaceName = requiredEnv("OCI_NAMESPACE");
+  const bucketName = requiredEnv("OCI_MEDIA_BUCKET_NAME");
+  const objectName = `${folder}/${randomUUID()}.${extension}`;
+  await getClient().putObject({
+    namespaceName,
+    bucketName,
+    objectName,
+    putObjectBody: body,
+    contentLength: body.length,
+    contentType,
+    cacheControl: "public, max-age=31536000, immutable",
+  });
   return `${objectHost()}/n/${namespaceName}/b/${bucketName}/o/${encodeURIComponent(objectName)}`;
 }
 

@@ -60,10 +60,11 @@ export interface EventColumns {
   audio_recording_applies_to?: "ATTENDEE" | "PARTICIPANT";
 }
 
-// One day/stage of a hybrid event, as stored in EVENTS.STAGES_JSON.
+// One day/stage of an event, as stored in EVENTS.STAGES_JSON.
 export interface StageJson {
   label: string; // organizer's own text — "Day 1", "Round 1 – Online Screening"
   date: string; // yyyy-mm-dd, "" = to be announced
+  end_date?: string; // yyyy-mm-dd last date of a multi-date day; absent/"" = one day
   time: string; // HH:mm, "" = TBD
   mode: "ONLINE" | "OFFLINE" | "BOTH"; // BOTH = same day, online and at the venue
   link: string; // ONLINE/BOTH — "" = nothing to join (e.g. video screening)
@@ -140,21 +141,20 @@ export function toEventColumns(data: EventDetailData): EventColumns {
   };
 }
 
-// D6: only Hybrid events with stages write the column. `undefined` leaves it
-// untouched (so a backend without STAGES_JSON never sees the key). To clear
-// stages saved earlier it returns "[]": a JSON null binds exactly like an
-// absent key in ORDS and update_event uses NVL(param, column), so null could
-// never clear the column. The backend turns "[]" into NULL.
+// Days work for every event mode. `undefined` leaves the column untouched.
+// To clear stages saved earlier it returns "[]": update_event uses
+// NVL(param, column), so null could never clear the column. The backend
+// turns "[]" into NULL.
 export function stagesJson(
   data: EventDetailData,
   hadStages = false,
-  isHybrid = true,
 ): string | null | undefined {
-  if (!isHybrid || data.stages.length === 0)
-    return hadStages ? "[]" : undefined;
+  if (data.stages.length === 0) return hadStages ? "[]" : undefined;
   const rows: StageJson[] = data.stages.map((s, i) => ({
     label: s.label.trim() || `Day ${i + 1}`,
     date: s.date,
+    // Only a real range is written; same day or earlier = one day.
+    end_date: s.date && s.endDate > s.date ? s.endDate : "",
     time: s.time,
     mode: s.mode,
     link: s.mode !== "OFFLINE" ? s.link.trim() : "",

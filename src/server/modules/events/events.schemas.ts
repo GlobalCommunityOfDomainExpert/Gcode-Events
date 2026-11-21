@@ -23,6 +23,8 @@ export interface EventSummary {
   ticketPrice: number;
   isFeatured: boolean;
   coverImageUrl: string | null;
+  // 16:7 image for cards and the phone event page; null = use the cover.
+  cardImageUrl: string | null;
   bannerImageUrl: string | null;
   participationLink: string | null;
   // Every active registration (both categories). On EventDetail it counts
@@ -103,6 +105,16 @@ export interface EventMediaItem {
 export interface EventSocialLink {
   platform: string;
   url: string;
+}
+
+// GCODE_EVENT_PARTNERS: brands shown with the organizer ("Powered by …").
+export interface EventPartnerItem {
+  name: string;
+  role: string;
+  logoUrl: string | null;
+  url: string | null;
+  about: string | null;
+  sortOrder: number;
 }
 
 const optionalId = z.coerce.number().int().positive().optional();

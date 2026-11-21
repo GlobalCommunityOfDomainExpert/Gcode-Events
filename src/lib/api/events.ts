@@ -6,6 +6,7 @@ import type {
   EventFaq,
   EventFilters,
   EventMediaItem,
+  EventPartnerItem,
   EventSocialLink,
   EventSummary,
   EventTimelineEntry,
@@ -18,6 +19,7 @@ export type {
   EventFaq,
   EventFilters,
   EventMediaItem,
+  EventPartnerItem,
   EventSocialLink,
   EventSummary,
   EventTimelineEntry,
@@ -76,6 +78,13 @@ export function listEventSocialLinks(
   return v1Request(`/events/${id}/social-links`);
 }
 
+// Co-branding partners, lead brand first.
+export function listEventPartners(
+  id: number | string,
+): Promise<EventPartnerItem[]> {
+  return v1Request(`/events/${id}/partners`);
+}
+
 // Custom questions plus the advanced follow-up tree, in one request.
 export function getEventQuestions(
   id: number | string,
@@ -124,6 +133,18 @@ export function uploadCoverImage(
   blob: Blob,
 ): Promise<void> {
   return v1Request(`/events/${id}/cover-image`, {
+    method: "PUT",
+    raw: { body: blob },
+  });
+}
+
+// Same as uploadCoverImage for the 16:7 card image (cards and the phone
+// event page; the cover is used when there isn't one).
+export function uploadCardImage(
+  id: number | string,
+  blob: Blob,
+): Promise<void> {
+  return v1Request(`/events/${id}/card-image`, {
     method: "PUT",
     raw: { body: blob },
   });

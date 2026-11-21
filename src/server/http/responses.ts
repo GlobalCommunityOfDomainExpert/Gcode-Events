@@ -34,3 +34,29 @@ export function fail(error: AppError) {
     { status: error.status },
   );
 }
+
+// Uploaded bytes served from our own origin: only plain raster images get
+// an image type. Anything else (HTML, SVG — both can run script) is sent
+// as a download so a malicious upload can't execute on this site.
+const SAFE_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
+
+export function storedImage(image: { bytes: Buffer; mime: string }) {
+  const mime = image.mime.toLowerCase();
+  const safe = SAFE_IMAGE_TYPES.has(mime);
+  return new Response(new Uint8Array(image.bytes), {
+    headers: {
+      "Content-Type": safe ? mime : "application/octet-stream",
+      ...(!safe && { "Content-Disposition": "attachment" }),
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      // Re-uploads keep the same URL, so keep the cache short.
+      "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
+    },
+  });
+}

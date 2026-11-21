@@ -54,6 +54,8 @@ interface Previous {
   questions: EventQuestion[];
   categoryIds: number[];
   faqCount: number;
+  partnerCount: number;
+  cardImageUrl: string | null;
 }
 
 const actor = (user: SessionUser) => user.email || user.fullName || user.userId;
@@ -74,7 +76,7 @@ export const eventsWriteService = {
       const id = await events.create(
         {
           ...toEventColumns(draft),
-          ...(await stagesColumn(events, draft, false)),
+          ...stagesColumn(draft, false),
           status_id: statusId,
         },
         { createdBy: actor(user), organizerId: user.userId },
@@ -99,12 +101,13 @@ export const eventsWriteService = {
 
       const saved = await events.getById(id);
       if (!saved) throw AppError.notFound("Event");
-      const [wasAdvanced, savedQuestions, categoryIds, faqCount] =
+      const [wasAdvanced, savedQuestions, categoryIds, faqCount, partnerCount] =
         await Promise.all([
           questions.advancedEnabled(id),
           listQuestions(id, questions),
           events.categoryIds(id),
           events.faqCount(id),
+          events.partnerCount(id),
         ]);
       const previous: Previous = {
         hadStages: stageCount(saved.stages_json) > 0,
@@ -112,13 +115,15 @@ export const eventsWriteService = {
         questions: savedQuestions,
         categoryIds,
         faqCount,
+        partnerCount,
+        cardImageUrl: saved.card_image_url ?? null,
       };
 
       await events.update(
         id,
         {
           ...toEventColumns(draft),
-          ...(await stagesColumn(events, draft, previous.hadStages)),
+          ...stagesColumn(draft, previous.hadStages),
           status_id: statusId,
         },
         actor(user),
@@ -169,21 +174,41 @@ export const eventsWriteService = {
     bytes: Buffer,
     contentType: string | null,
   ): Promise<void> {
-    const mime = (contentType ?? "").split(";")[0].trim().toLowerCase();
-    if (!COVER_TYPES.has(mime)) {
-      throw AppError.badRequest(
-        "Cover must be a JPEG, PNG, WebP, GIF or AVIF image",
-      );
-    }
-    if (bytes.length === 0) throw AppError.badRequest("The image is empty");
-    if (bytes.length > MAX_COVER_BYTES)
-      throw AppError.badRequest("Cover images must be 10 MB or smaller");
-
+    const mime = checkImage(bytes, contentType, "Cover");
     const events = createEventsRepository();
     if (!(await events.setCoverImage(id, bytes, mime)))
       throw AppError.notFound("Event");
   },
+
+  async uploadCard(
+    id: number,
+    bytes: Buffer,
+    contentType: string | null,
+  ): Promise<void> {
+    const mime = checkImage(bytes, contentType, "Card image");
+    const events = createEventsRepository();
+    if (!(await events.setCardImage(id, bytes, mime)))
+      throw AppError.notFound("Event");
+  },
 };
+
+// The normalized MIME type of an uploaded cover/card image, or a 400.
+function checkImage(
+  bytes: Buffer,
+  contentType: string | null,
+  what: string,
+): string {
+  const mime = (contentType ?? "").split(";")[0].trim().toLowerCase();
+  if (!COVER_TYPES.has(mime)) {
+    throw AppError.badRequest(
+      `${what} must be a JPEG, PNG, WebP, GIF or AVIF image`,
+    );
+  }
+  if (bytes.length === 0) throw AppError.badRequest("The image is empty");
+  if (bytes.length > MAX_COVER_BYTES)
+    throw AppError.badRequest(`${what} must be 10 MB or smaller`);
+  return mime;
+}
 
 function stageCount(raw: string | null): number {
   if (!raw) return 0;
@@ -195,18 +220,22 @@ function stageCount(raw: string | null): number {
   }
 }
 
-// Only Hybrid events with stages write STAGES_JSON; "[]" clears stages that
-// were saved earlier (update_event can't clear with NULL). Nothing to write
-// and nothing to clear → leave the column out entirely.
-async function stagesColumn(
-  events: EventsRepository,
+// Days work for every event mode. "[]" clears stages that were saved
+// earlier (update_event can't clear with NULL). Nothing to write and nothing
+// to clear → leave the column out entirely.
+function stagesColumn(
   draft: EventDetailData,
   hadStages: boolean,
-): Promise<Pick<EventColumns, "stages_json">> {
+): Pick<EventColumns, "stages_json"> {
   if (draft.stages.length === 0 && !hadStages) return {};
-  const isHybrid = (await events.modeCode(draft.mode)) === "HYBRID";
-  const value = stagesJson(draft, hadStages, isHybrid);
+  const value = stagesJson(draft, hadStages);
   return value === undefined ? {} : { stages_json: value };
+}
+
+// A local preview (blob:/data:) is never stored: the browser uploads the
+// bytes to /card-image after the save, which sets the URL itself.
+function isLocalPreview(url: string): boolean {
+  return /^(blob:|data:)/i.test(url);
 }
 
 async function saveChildren(
@@ -264,6 +293,30 @@ async function saveChildren(
     await events.replaceChildren(id, "faqs", JSON.stringify(faqs));
   }
 
+  // Co-branding partners: nameless rows dropped, blank role defaults. Only
+  // written when there's something to save or something to clear.
+  const partners = draft.partners
+    .map((p) => ({
+      name: p.name.trim(),
+      role: p.role.trim() || "In association with",
+      logoUrl: isLocalPreview(p.logoUrl) ? null : p.logoUrl.trim() || null,
+      url: p.url.trim() || null,
+      about: p.about.trim() || null,
+    }))
+    .filter((p) => p.name);
+  if (partners.length > 0 || (previous?.partnerCount ?? 0) > 0) {
+    await events.replacePartners(id, partners);
+  }
+
+  // A linked card image (or clearing it). Uploaded images keep the URL the
+  // upload set, which the editor sends back as /api/v1/events/:id/card-image.
+  const card = draft.cardImageUrl.trim();
+  if (!isLocalPreview(card) && !isServedCard(card, id)) {
+    const next = card || null;
+    if (next !== (previous?.cardImageUrl ?? null))
+      await events.setCardImageUrl(id, next);
+  }
+
   const before = new Set(previous?.categoryIds ?? []);
   const after = new Set(draft.categoryIds);
   for (const categoryId of after) {
@@ -272,6 +325,11 @@ async function saveChildren(
   for (const categoryId of before) {
     if (!after.has(categoryId)) await events.removeCategory(id, categoryId);
   }
+}
+
+// The uploaded card image, as the editor got it back from the mapper.
+function isServedCard(url: string, id: number): boolean {
+  return url === `/api/v1/events/${id}/card-image`;
 }
 
 // The saved questions in the same shape toQuestionsPayload produces, so the

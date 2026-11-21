@@ -51,16 +51,21 @@ function resetFakes() {
     "assignCategory",
     "removeCategory",
     "faqCount",
-    "modeCode",
+    "partnerCount",
+    "replacePartners",
+    "setCardImageUrl",
     "setCoverImage",
+    "setCardImage",
   ])
     events[n] = vi.fn(async () => null);
   events.create.mockResolvedValue(42);
   events.exists.mockResolvedValue(true);
   events.categoryIds.mockResolvedValue([]);
   events.faqCount.mockResolvedValue(0);
-  events.getById.mockResolvedValue({ stages_json: null });
+  events.partnerCount.mockResolvedValue(0);
+  events.getById.mockResolvedValue({ stages_json: null, card_image_url: null });
   events.setCoverImage.mockResolvedValue(true);
+  events.setCardImage.mockResolvedValue(true);
   for (const n of [
     "replace",
     "advancedEnabled",
@@ -134,24 +139,102 @@ describe("create", () => {
     expect(childCall("faqs")).toBeUndefined();
   });
 
-  it("only writes stages for a Hybrid event", async () => {
-    const stage = { label: "Day 1", date: "2026-12-01", mode: "ONLINE" };
-    events.modeCode.mockResolvedValue("ONLINE");
-    await eventsWriteService.create(
-      { draft: draft({ stages: [stage] as never }) },
-      admin,
-    );
+  it("writes stages for any event mode, with a multi-date day's end date", async () => {
+    await eventsWriteService.create({ draft: draft() }, admin);
     expect(events.create.mock.calls[0][0]).not.toHaveProperty("stages_json");
 
     resetFakes();
-    events.modeCode.mockResolvedValue("HYBRID");
+    const stages = [
+      {
+        label: "Day 1",
+        date: "2026-12-01",
+        endDate: "2026-12-03",
+        mode: "ONLINE",
+      },
+      // Same day or earlier is one day, not a range.
+      {
+        label: "Day 2",
+        date: "2026-12-05",
+        endDate: "2026-12-05",
+        mode: "ONLINE",
+      },
+    ];
     await eventsWriteService.create(
-      { draft: draft({ stages: [stage] as never }) },
+      { draft: draft({ stages: stages as never }) },
       admin,
     );
-    expect(
-      JSON.parse(events.create.mock.calls[0][0].stages_json)[0].label,
-    ).toBe("Day 1");
+    const saved = JSON.parse(events.create.mock.calls[0][0].stages_json);
+    expect(saved.map((s: { end_date: string }) => s.end_date)).toEqual([
+      "2026-12-03",
+      "",
+    ]);
+  });
+
+  it("saves partners in order, dropping nameless rows and local logo previews", async () => {
+    await eventsWriteService.create(
+      {
+        draft: draft({
+          partners: [
+            {
+              name: " Kay Koy ",
+              role: "",
+              logoUrl: "blob:x",
+              url: "",
+              about: "",
+            },
+            { name: "  ", role: "Venue", logoUrl: "", url: "", about: "" },
+            {
+              name: "GCODE",
+              role: "Powered by",
+              logoUrl: "https://cdn/logo.png",
+              url: "https://gcode.in",
+              about: "Hosts",
+            },
+          ],
+        }),
+      },
+      admin,
+    );
+    expect(events.replacePartners).toHaveBeenCalledWith(42, [
+      {
+        name: "Kay Koy",
+        role: "In association with",
+        logoUrl: null,
+        url: null,
+        about: null,
+      },
+      {
+        name: "GCODE",
+        role: "Powered by",
+        logoUrl: "https://cdn/logo.png",
+        url: "https://gcode.in",
+        about: "Hosts",
+      },
+    ]);
+  });
+
+  it("leaves partners and the card image alone when there's nothing to do", async () => {
+    await eventsWriteService.create({ draft: draft() }, admin);
+    expect(events.replacePartners).not.toHaveBeenCalled();
+    expect(events.setCardImageUrl).not.toHaveBeenCalled();
+  });
+
+  it("stores a linked card image but never a local preview", async () => {
+    await eventsWriteService.create(
+      { draft: draft({ cardImageUrl: "blob:preview" }) },
+      admin,
+    );
+    expect(events.setCardImageUrl).not.toHaveBeenCalled();
+
+    resetFakes();
+    await eventsWriteService.create(
+      { draft: draft({ cardImageUrl: "https://cdn/card.jpg" }) },
+      admin,
+    );
+    expect(events.setCardImageUrl).toHaveBeenCalledWith(
+      42,
+      "https://cdn/card.jpg",
+    );
   });
 });
 
@@ -231,9 +314,38 @@ describe("update", () => {
 
   it("clears saved stages with the '[]' marker", async () => {
     events.getById.mockResolvedValue({ stages_json: '[{"label":"Day 1"}]' });
-    events.modeCode.mockResolvedValue("HYBRID");
     await eventsWriteService.update(5, { draft: draft({ stages: [] }) }, admin);
     expect(events.update.mock.calls[0][1].stages_json).toBe("[]");
+  });
+
+  it("clears partners that were removed", async () => {
+    events.partnerCount.mockResolvedValue(2);
+    await eventsWriteService.update(
+      5,
+      { draft: draft({ partners: [] }) },
+      admin,
+    );
+    expect(events.replacePartners).toHaveBeenCalledWith(5, []);
+  });
+
+  it("keeps an uploaded card image and clears one that was removed", async () => {
+    events.getById.mockResolvedValue({
+      stages_json: null,
+      card_image_url: "/events/5/card-image-file",
+    });
+    await eventsWriteService.update(
+      5,
+      { draft: draft({ cardImageUrl: "/api/v1/events/5/card-image" }) },
+      admin,
+    );
+    expect(events.setCardImageUrl).not.toHaveBeenCalled();
+
+    await eventsWriteService.update(
+      5,
+      { draft: draft({ cardImageUrl: "" }) },
+      admin,
+    );
+    expect(events.setCardImageUrl).toHaveBeenCalledWith(5, null);
   });
 
   it("attaches follow-up choices to the freshly recreated option ids", async () => {

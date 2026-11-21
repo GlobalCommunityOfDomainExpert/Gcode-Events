@@ -16,6 +16,8 @@ const eventTimelineItemSchema = z.object({
 const eventStageSchema = z.object({
   label: z.string().default(""),
   date: z.string().default(""),
+  // Last date when the day spans several ("" = a single day).
+  endDate: z.string().default(""),
   time: z.string().default(""),
   mode: z.enum(["ONLINE", "OFFLINE", "BOTH"]).default("ONLINE"),
   link: z.string().default(""),
@@ -26,6 +28,15 @@ const eventStageSchema = z.object({
   ctaLabel: z.string().default(""),
   ctaUrl: z.string().default(""),
 });
+
+const eventPartnerSchema = z.object({
+  name: z.string().default(""),
+  role: z.string().default("In association with"),
+  logoUrl: z.string().default(""), // http(s) link or server path, never data:/blob:
+  url: z.string().default(""),
+  about: z.string().default(""),
+});
+export type EventPartnerData = z.infer<typeof eventPartnerSchema>;
 
 const eventFaqSchema = z.object({
   question: z.string(),
@@ -152,11 +163,13 @@ export const eventDetailDataSchema = z.object({
   participantRegistrationCloses: z.string().default(""),
   duration: z.string().default(""), // no backend column yet — derive from date/time later
   coverImageUrl: z.string().default(""), // local blob preview, uploaded via UPLOAD_COVER_IMAGE
+  cardImageUrl: z.string().default(""), // 16:7 card image, same blob-then-PUT flow
   mediaUrls: z.array(z.string()).default([]), // no backend column yet
   socialLinks: z.array(eventSocialLinkSchema).default([]), // no backend column yet
   timeline: z.array(eventTimelineItemSchema).default([]), // EVENT_TIMELINE rows
   // Hybrid only — which days/stages are online vs in person (STAGES_JSON).
   stages: z.array(eventStageSchema).default([]),
+  partners: z.array(eventPartnerSchema).default([]), // GCODE_EVENT_PARTNERS
   faqs: z.array(eventFaqSchema).default([]), // GCODE_EVENT_FAQS — contract-only
   rounds: z.array(eventRoundItemSchema).default([]), // GCODE_EVENT_ROUNDS rows — contract-only as of 2026-07-25
   certificate: z.boolean().default(false), // no backend column yet

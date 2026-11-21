@@ -59,7 +59,9 @@ GRANT SELECT ON wksp_gcode2.event_social_links       TO gcode_events_app;
 -- Organizer writes (src/server/modules/events, modules/questions). Writes go
 -- through the packages (EXECUTE above) except these direct statements:
 GRANT SELECT         ON wksp_gcode2.mode_of_events                  TO gcode_events_app;
-GRANT UPDATE         ON wksp_gcode2.events                          TO gcode_events_app; -- cover image upload
+GRANT UPDATE         ON wksp_gcode2.events                          TO gcode_events_app; -- cover/card image upload, linked card image
+-- Co-branding partners: full replace (DELETE + INSERT) in the save transaction.
+GRANT SELECT, INSERT, DELETE ON wksp_gcode2.gcode_event_partners    TO gcode_events_app;
 GRANT SELECT         ON wksp_gcode2.gcode_event_questions           TO gcode_events_app;
 GRANT SELECT         ON wksp_gcode2.gcode_event_question_options    TO gcode_events_app;
 GRANT SELECT         ON wksp_gcode2.gcode_event_adv_q_settings      TO gcode_events_app;

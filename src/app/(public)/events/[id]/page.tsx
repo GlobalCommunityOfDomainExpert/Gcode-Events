@@ -1,8 +1,8 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Compass, Info } from "lucide-react";
-import { Icon } from "@/components/atoms";
+import { ArrowLeft, ArrowRight, Compass, Info } from "lucide-react";
+import { Button, Icon } from "@/components/atoms";
 import { NotFoundState } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { useServerNow } from "@/hooks/use-server-now";
@@ -16,6 +16,7 @@ import {
   AboutSection,
   EventCover,
   EventHeading,
+  PartnersStrip,
   EventPills,
   HostCard,
   EthosSection,
@@ -29,6 +30,15 @@ import {
   WhoSection,
   getEventState,
 } from "./_components/event-sections";
+
+// Smooth-scrolls to the pass picker every time (a plain #hash link only
+// jumps once, and not at all when the hash is already set).
+function scrollToTickets() {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document
+    .getElementById("tickets")
+    ?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
 
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
@@ -59,6 +69,9 @@ export default function EventDetailPage() {
 
   const state = getEventState(event, now);
   const { isLive, isCancelled, weekday, dateLabel, venueName } = state;
+  // More than one pass on sale: the phone bar sends people to the picker.
+  const choosePass =
+    isLive && !state.ctaDisabledLabel && state.enabledPasses.length > 1;
 
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/events/${event.id}`;
   const interestButtonNode = isLive ? (
@@ -135,6 +148,10 @@ export default function EventDetailPage() {
             </div>
 
             <EventHeading event={event} state={state} className="mt-6" />
+            {/* Phones show partners in the booking bar instead. */}
+            <div className="hidden lg:block">
+              <PartnersStrip event={event} className="mt-5" />
+            </div>
           </div>
 
           <AboutSection event={event} />
@@ -170,17 +187,37 @@ export default function EventDetailPage() {
 
       {/* ---------------------------------------------- mobile booking bar */}
       <div className="border-border-light bg-surface-light/90 fixed inset-x-0 bottom-0 z-30 border-t px-4 py-3 shadow-lg backdrop-blur-xl lg:hidden">
+        <div className="mx-auto max-w-xl">
+          <PartnersStrip
+            event={event}
+            compact
+            className="border-border-light mb-2 border-b pb-2"
+          />
+        </div>
         <div className="mx-auto flex max-w-xl items-center gap-4">
           <div className="min-w-0">
             <p className="text-large text-text-primary leading-tight font-extrabold">
-              {state.priceLabel}
+              {choosePass ? "Choose your pass" : state.priceLabel}
             </p>
             <p className="text-small text-text-secondary truncate">
               {weekday ? `${weekday.slice(0, 3)}, ${event.date}` : event.date}
             </p>
           </div>
           <div className="ml-auto w-44 shrink-0">
-            <PrimaryCta state={state} />
+            {choosePass ? (
+              // Several passes: the price would be only the first one, so the
+              // button leads to the pass picker instead of one registration.
+              <Button
+                type="button"
+                variant="accent"
+                className="w-full"
+                onClick={scrollToTickets}
+              >
+                Get Tickets <Icon icon={ArrowRight} size="sm" />
+              </Button>
+            ) : (
+              <PrimaryCta state={state} />
+            )}
           </div>
         </div>
       </div>

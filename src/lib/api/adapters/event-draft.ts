@@ -5,6 +5,7 @@
 import { EventDetailData } from "@/lib/zod/event";
 import type {
   EventDetail,
+  EventPartnerItem,
   EventTimelineEntry,
 } from "@/server/modules/events/events.schemas";
 import type { EventRound as EventRoundDto } from "@/server/modules/rounds/rounds.schemas";
@@ -33,6 +34,7 @@ export function blankEventDetail(organizerName = "You"): EventDetail {
     ticketPrice: 0,
     isFeatured: false,
     coverImageUrl: null,
+    cardImageUrl: null,
     bannerImageUrl: null,
     participationLink: null,
     registeredCount: 0,
@@ -110,6 +112,8 @@ export function draftToPreviewDetail(
     maxAttendees: data.capacity || null,
     ticketPrice: data.priceAmount,
     coverImageUrl: data.coverImageUrl || null,
+    // A local preview shows as-is; the save uploads it.
+    cardImageUrl: data.cardImageUrl || null,
     registrationStart: isoOrNull(data.attendeeRegistrationOpens),
     registrationDeadline: isoOrNull(data.attendeeRegistrationCloses),
     participantRegistrationStart: participant
@@ -148,6 +152,7 @@ export function toEventDraft(
   socialLinks: { platform: string; url: string }[] = [],
   media: { url: string }[] = [],
   faqs: { question: string; answer: string }[] = [],
+  partners: EventPartnerItem[] = [],
 ): EventDetailData {
   const istDateOrBlank = (iso: string | null) => (iso ? istDate(iso) : "");
   return {
@@ -188,6 +193,7 @@ export function toEventDraft(
     ),
     duration: detail.durationText ?? "",
     coverImageUrl: resolveImageUrl(detail.coverImageUrl) ?? "",
+    cardImageUrl: resolveImageUrl(detail.cardImageUrl) ?? "",
     mediaUrls:
       media.length > 0
         ? media.map((m) => m.url)
@@ -197,6 +203,13 @@ export function toEventDraft(
     socialLinks: socialLinks.map(({ platform, url }) => ({ platform, url })),
     stages: parseStages(detail.stagesJson),
     faqs: faqs.map(({ question, answer }) => ({ question, answer })),
+    partners: partners.map((p) => ({
+      name: p.name,
+      role: p.role,
+      logoUrl: p.logoUrl ?? "",
+      url: p.url ?? "",
+      about: p.about ?? "",
+    })),
     timeline: timeline.map((row) => {
       const item = adaptTimelineItem(row);
       return {

@@ -73,6 +73,7 @@ export function parseStages(raw: string | null | undefined): EventStageData[] {
     return rows.map((r, i) => ({
       label: r.label?.trim() || `Day ${i + 1}`,
       date: r.date ?? "",
+      endDate: r.end_date ?? "",
       time: r.time ?? "",
       mode: r.mode === "OFFLINE" || r.mode === "BOTH" ? r.mode : "ONLINE",
       link: r.link ?? "",
@@ -187,6 +188,7 @@ export function adaptApiEvent(
     stages: parseStages(detail?.stagesJson).map((s): EventStage => ({
       label: s.label,
       date: s.date,
+      endDate: s.date && s.endDate > s.date ? s.endDate : undefined,
       time: s.time,
       mode:
         s.mode === "ONLINE"
@@ -219,6 +221,7 @@ export function adaptApiEvent(
     eligibility: splitBullets(detail?.eligibility ?? null, DEFAULT_ELIGIBILITY),
     tags: detail?.categoryNames.length ? detail.categoryNames : undefined,
     coverImageUrl: resolveImageUrl(event.coverImageUrl),
+    cardImageUrl: resolveImageUrl(event.cardImageUrl),
     mediaUrls: event.bannerImageUrl ? [event.bannerImageUrl] : [],
     participationLink: event.participationLink ?? undefined,
   };

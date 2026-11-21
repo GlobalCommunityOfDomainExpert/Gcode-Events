@@ -23,13 +23,14 @@ function jsonArray<T>(value: string | T[] | null | undefined): T[] {
   }
 }
 
-// Covers stored in the database are saved as the old ORDS path
-// "/events/:id/cover-image-file"; serve them from our own route instead.
-// Absolute URLs (and anything else) pass through untouched.
+// Cover and card images stored in the database are saved as the old ORDS
+// paths "/events/:id/cover-image-file" and "/events/:id/card-image-file";
+// serve them from our own routes instead. Absolute URLs (and anything else)
+// pass through untouched.
 export function publicImageUrl(url: string | null): string | null {
   if (!url) return null;
-  const dbHosted = url.match(/^\/events\/(\d+)\/cover-image-file$/);
-  return dbHosted ? `/api/v1/events/${dbHosted[1]}/cover-image` : url;
+  const dbHosted = url.match(/^\/events\/(\d+)\/(cover|card)-image-file$/);
+  return dbHosted ? `/api/v1/events/${dbHosted[1]}/${dbHosted[2]}-image` : url;
 }
 
 export function toEventSummary(r: EventSummaryRow): EventSummary {
@@ -47,6 +48,7 @@ export function toEventSummary(r: EventSummaryRow): EventSummary {
     ticketPrice: r.ticket_price ?? 0,
     isFeatured: Number(r.is_featured) === 1,
     coverImageUrl: publicImageUrl(r.cover_image_url),
+    cardImageUrl: publicImageUrl(r.card_image_url ?? null),
     bannerImageUrl: r.banner_image_url ?? null,
     participationLink: r.participation_link ?? null,
     registeredCount: r.registered_count ?? 0,

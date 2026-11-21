@@ -23,6 +23,7 @@ export interface EventSummaryRow {
   ticket_price: number | null;
   is_featured: number | null;
   cover_image_url: string | null;
+  card_image_url?: string | null;
   banner_image_url: string | null;
   participation_link: string | null;
   registered_count: number;
@@ -121,7 +122,8 @@ export function createEventsRepository(source: DbSource = standalone) {
         `SELECT e.id, e.title AS event_name, e.event_type_id, e.mode_of_event_id,
               e.status_id, e.city, e.venue_address AS address, e.start_date,
               e.end_date, e.max_attendees, e.ticket_price, e.is_featured,
-              e.cover_image_url, e.banner_image_url, e.participation_link,
+              e.cover_image_url, e.card_image_url, e.banner_image_url,
+              e.participation_link,
               (SELECT NVL(SUM(p.quantity), 0) FROM gcode_event_participants p
                 WHERE p.event_id = e.id AND p.active = 'Y') AS registered_count,
               COUNT(*) OVER () AS total_count
@@ -141,7 +143,17 @@ export function createEventsRepository(source: DbSource = standalone) {
         "BEGIN gcode_events_api.get_event(:id, :rows); END;",
         { id, rows: { out: "cursor" } },
       );
-      return (rows[0] as EventDetailRow | undefined) ?? null;
+      const row = (rows[0] as EventDetailRow | undefined) ?? null;
+      // get_event's cursor predates the card image; read it directly when
+      // the procedure doesn't return it.
+      if (row && !("card_image_url" in row)) {
+        const card = await db.queryOne<{ card_image_url: string | null }>(
+          "SELECT card_image_url FROM events WHERE id = :id",
+          { id },
+        );
+        row.card_image_url = card?.card_image_url ?? null;
+      }
+      return row;
     },
 
     async timeline(eventId: number): Promise<TimelineRow[]> {
@@ -189,6 +201,105 @@ export function createEventsRepository(source: DbSource = standalone) {
         { eventId },
       );
       return rows;
+    },
+
+    async partners(eventId: number) {
+      const db = await source();
+      const { rows } = await db.query<{
+        name: string;
+        role: string;
+        logo_url: string | null;
+        url: string | null;
+        about: string | null;
+        sort_order: number | null;
+      }>(
+        `SELECT name, role, logo_url, url, about, sort_order
+         FROM gcode_event_partners
+        WHERE event_id = :eventId ORDER BY sort_order NULLS LAST, id`,
+        { eventId },
+      );
+      return rows;
+    },
+
+    async partnerCount(eventId: number): Promise<number> {
+      const db = await source();
+      const row = await db.queryOne<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM gcode_event_partners WHERE event_id = :eventId",
+        { eventId },
+      );
+      return row?.n ?? 0;
+    },
+
+    // Full replace, in the caller's transaction. Order = sort_order.
+    async replacePartners(
+      eventId: number,
+      items: {
+        name: string;
+        role: string;
+        logoUrl: string | null;
+        url: string | null;
+        about: string | null;
+      }[],
+    ): Promise<void> {
+      const db = await source();
+      await db.execute(
+        "DELETE FROM gcode_event_partners WHERE event_id = :eventId",
+        { eventId },
+      );
+      for (const [sortOrder, p] of items.entries()) {
+        await db.execute(
+          `INSERT INTO gcode_event_partners
+             (event_id, name, role, logo_url, url, about, sort_order)
+           VALUES (:eventId, :name, :role, :logoUrl, :url, :about, :sortOrder)`,
+          { eventId, ...p, sortOrder },
+        );
+      }
+    },
+
+    async cardImageUrl(eventId: number): Promise<string | null> {
+      const db = await source();
+      const row = await db.queryOne<{ card_image_url: string | null }>(
+        "SELECT card_image_url FROM events WHERE id = :eventId",
+        { eventId },
+      );
+      return row?.card_image_url ?? null;
+    },
+
+    // A linked (not uploaded) card image, or null to clear it.
+    async setCardImageUrl(eventId: number, url: string | null): Promise<void> {
+      const db = await source();
+      await db.execute(
+        "UPDATE events SET card_image_url = :url WHERE id = :eventId",
+        { eventId, url },
+      );
+    },
+
+    async cardImage(eventId: number) {
+      const db = await source();
+      return db.queryOne<{
+        card_image: Buffer | null;
+        card_image_mime: string | null;
+      }>("SELECT card_image, card_image_mime FROM events WHERE id = :eventId", {
+        eventId,
+      });
+    },
+
+    // Same storage model as setCoverImage.
+    async setCardImage(
+      eventId: number,
+      bytes: Buffer,
+      mime: string,
+    ): Promise<boolean> {
+      const db = await source();
+      const updated = await db.execute(
+        `UPDATE events
+          SET card_image = :bytes, card_image_mime = :mime,
+              card_image_url = '/events/' || id || '/card-image-file',
+              updated_on = SYSTIMESTAMP
+        WHERE id = :eventId`,
+        { eventId, bytes, mime },
+      );
+      return updated > 0;
     },
 
     async coverImage(eventId: number) {
@@ -327,15 +438,6 @@ export function createEventsRepository(source: DbSource = standalone) {
         { eventId },
       );
       return row?.n ?? 0;
-    },
-
-    async modeCode(modeId: number): Promise<string | null> {
-      const db = await source();
-      const row = await db.queryOne<{ mode_name: string }>(
-        "SELECT mode_name FROM mode_of_events WHERE id = :modeId",
-        { modeId },
-      );
-      return row?.mode_name ?? null;
     },
 
     // Stores the cover in the database. cover_image_url keeps the old ORDS

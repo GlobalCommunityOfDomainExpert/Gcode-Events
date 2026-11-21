@@ -38,9 +38,17 @@ Decisions made with the user:
 | 5 | Payments: coupons, UPI claims, Cashfree + webhook; Razorpay removed | done: grants applied, 27 unit tests, E2E 45/45 on `gcdev01` 2026-11-20. Real ₹1 payment blocked by Cashfree domain whitelisting (localhost) — run it as the first smoke test on the deployed, whitelisted domain |
 | 6 | Rounds, ratings, panelists, live state, reactions + 2 SSE streams | done: 25 unit tests (147 total), E2E 51/51 on `gcdev01` 2026-11-20 (throwaway event 683 created and removed) |
 | 7 | Interest + enquiries; ORDS client code removed — **Phase 1 complete** | done: 7 unit tests (154 total), E2E 13/13 on `gcdev01` 2026-11-21 (throwaway event 701 created and removed). `apiRequest`, `API_BASE_URL` and the `resolveImageUrl` ORDS fallback are gone; no `oraclecloudapps`/`/ords/` left outside docs |
+| 8 | Merged `dev` (66 commits) and ported its ORDS-era features onto `/api/v1` | done 2026-11-21, unit-tested (179 total); **not verified against the DB** (see below). Partners: `GET /events/:id/partners`, saved with the event (direct SQL on `GCODE_EVENT_PARTNERS`). Card image: `GET`/`PUT /events/:id/card-image`, stored like the cover (`CARD_IMAGE`, `CARD_IMAGE_MIME`, `CARD_IMAGE_URL`). Multi-date days: `end_date` in `STAGES_JSON`, days for every mode. Image upload moved to `POST /api/v1/uploads/image` (cookie auth) |
 | — | Phase 2 (port PL/SQL → TS), email adapter, secrets out of `GCODE_APP_SECRETS` | todo |
 
 ### Next actions
+
+0. Verify the step 8 schema assumptions on `gcdev01` before deploying:
+   `EVENTS.CARD_IMAGE_URL`, `EVENTS.CARD_IMAGE` (BLOB), `EVENTS.CARD_IMAGE_MIME`
+   and `GCODE_EVENT_PARTNERS (event_id, name, role, logo_url, url, about,
+   sort_order)` with a generated `id`. The event list selects
+   `card_image_url`, so a missing column breaks every listing. Then apply the
+   new `gcode_event_partners` grant from the app-user script.
 
 1. Deployment checklist (with the user):
    - Real ₹1 Cashfree payment from the whitelisted production domain

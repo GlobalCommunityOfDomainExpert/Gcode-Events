@@ -55,6 +55,16 @@ export interface EventTimelineItem {
 
 // GCODE_EVENT_FAQS (contract-only) — organizer-written question + answer,
 // shown on the public page and offered in "Ask a question" before sending.
+// Co-branding (GCODE_EVENT_PARTNERS): brands shown with the organizer on the
+// event page, e.g. "Presented by KAY KOY | Powered by GCODE".
+export interface EventPartner {
+  name: string;
+  role: string; // "Powered by", "In association with", "Venue partner"…
+  logoUrl?: string;
+  url?: string;
+  about?: string; // one line, shown in the host card for the lead brand
+}
+
 export interface EventFaq {
   question: string;
   answer: string;
@@ -205,6 +215,7 @@ export interface MyTicket {
   time: string;
   location: string;
   coverImageUrl?: string;
+  cardImageUrl?: string; // 16:7 card image (EventListItem.card_image_url)
   price: "Free" | string;
   quantity: number;
   amountPaid?: number;
@@ -317,6 +328,7 @@ export function googleCalendarUrl(
 export interface EventStage {
   label: string;
   date: string; // yyyy-mm-dd, "" = to be announced
+  endDate?: string; // yyyy-mm-dd, only when the day spans several dates
   time: string; // HH:mm, "" = TBD
   mode: "Online" | "In-Person" | "Both";
   link?: string; // online/both — absent = nothing to join live
@@ -373,9 +385,11 @@ export interface Event {
   terms: string[]; // EventDetail.terms, split on newline — falls back to DEFAULT_TERMS when blank
   eligibility: string[]; // EventDetail.eligibility, split on newline — falls back to DEFAULT_ELIGIBILITY when blank
   tags?: string[]; // EventDetail.categories (detail fetch only)
+  partners?: EventPartner[]; // GCODE_EVENT_PARTNERS, served at /events/:id/partners; first = lead
   faqs?: EventFaq[]; // GCODE_EVENT_FAQS — contract-only, served at /events/:id/faqs
   socialLinks?: EventSocialLink[]; // no backend column — adapter never sets this
   coverImageUrl?: string; // EventSummary.coverImageUrl
+  cardImageUrl?: string; // EventSummary.cardImageUrl — cards and the phone event page use it, cover when empty
   mediaUrls?: string[]; // EventSummary.bannerImageUrl, wrapped in array
   participationLink?: string; // EventSummary.participationLink — column exists, not yet mapped in adapter
   // Contract-only — EVENTS has no RATING_MODE column yet as of 2026-07-21.
