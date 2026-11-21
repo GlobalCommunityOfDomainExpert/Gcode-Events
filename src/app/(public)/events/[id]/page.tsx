@@ -2,7 +2,7 @@
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Compass, Info } from "lucide-react";
-import { ButtonLink, Icon } from "@/components/atoms";
+import { Button, Icon } from "@/components/atoms";
 import { NotFoundState } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { useServerNow } from "@/hooks/use-server-now";
@@ -30,6 +30,15 @@ import {
   WhoSection,
   getEventState,
 } from "./_components/event-sections";
+
+// Smooth-scrolls to the pass picker every time (a plain #hash link only
+// jumps once, and not at all when the hash is already set).
+function scrollToTickets() {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document
+    .getElementById("tickets")
+    ?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
 
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
@@ -198,9 +207,14 @@ export default function EventDetailPage() {
             {choosePass ? (
               // Several passes: the price would be only the first one, so the
               // button leads to the pass picker instead of one registration.
-              <ButtonLink href="#tickets" variant="accent" className="w-full">
+              <Button
+                type="button"
+                variant="accent"
+                className="w-full"
+                onClick={scrollToTickets}
+              >
                 Get Tickets <Icon icon={ArrowRight} size="sm" />
-              </ButtonLink>
+              </Button>
             ) : (
               <PrimaryCta state={state} />
             )}
