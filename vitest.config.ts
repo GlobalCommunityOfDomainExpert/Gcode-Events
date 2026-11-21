@@ -17,6 +17,22 @@ export default defineConfig({
   test: {
     projects: [
       {
+        // Plain Node unit tests: `npm test` (src/**/*.test.ts).
+        resolve: {
+          alias: {
+            "@": path.join(dirname, "src"),
+            // server-only throws outside a React Server bundle; under test
+            // we're the server, so resolve it to its no-op build.
+            "server-only": path.join(dirname, "node_modules/server-only/empty.js"),
+          },
+        },
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
         extends: true,
         plugins: [
           // The plugin will run tests for the stories defined in your Storybook config
