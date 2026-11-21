@@ -293,7 +293,7 @@ export function EventHeading({
 }) {
   return (
     <div className={className}>
-      <h1 className="text-text-primary text-xl leading-snug font-bold sm:text-3xl sm:leading-tight sm:font-extrabold">
+      <h1 className="text-text-primary text-2xl leading-snug font-extrabold sm:text-3xl sm:leading-tight">
         {event.title}
       </h1>
       {event.summary && (
