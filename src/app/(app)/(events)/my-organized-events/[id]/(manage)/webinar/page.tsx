@@ -927,7 +927,7 @@ function LivePhase({
             onClick={() =>
               void run(
                 "record",
-                { on: !status.recording },
+                { enabled: !status.recording },
                 status.recording ? "Recording stopped" : "Recording started",
               )
             }
@@ -943,7 +943,7 @@ function LivePhase({
               onClick={() =>
                 void run(
                   "captions",
-                  { on: !config.captions },
+                  { enabled: !config.captions },
                   config.captions ? "Captions off" : "Captions on for everyone",
                 )
               }
