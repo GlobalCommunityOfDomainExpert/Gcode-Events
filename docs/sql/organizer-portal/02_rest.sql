@@ -1,25 +1,33 @@
 -- Script 2 of 2: let the Next.js server reach the tables from 01_tables.sql
 -- over REST. Run in WKSP_GCODE2 after 01_tables.sql. Re-runnable.
 --
--- What this does:
---   1. Turns on ORDS AutoREST for the Handover 7 tables and views, under the
---      paths /portal_<name>/ (for example /portal_team/).
---   2. Locks every /portal_* path behind an OAuth2 client, so only a caller that
---      holds the client secret (the Next.js server, never a browser) can use
---      them. These tables hold token hashes and attendee emails.
---   3. Creates that OAuth2 client. Read its id and secret with the query at the
---      bottom, and put them in Vercel as ORDS_CLIENT_ID and ORDS_CLIENT_SECRET.
+-- The first version of this script failed with ORA-01031 (insufficient
+-- privileges) because it asked ORDS for UNPROTECTED access. This version keeps
+-- ORDS's default, which is "authorization required", and then gives one OAuth2
+-- client the privileges ORDS created for these objects. Only a caller holding
+-- that client's secret (the Next.js server, never a browser) can read or write.
+--
+-- Every step runs even if an earlier one fails, and the script ends by listing
+-- what failed (one error), so you see everything in one run.
 
 DECLARE
+  v_failed VARCHAR2(4000);
+  v_privs  VARCHAR2(4000);
+
+  PROCEDURE step(p_label IN VARCHAR2, p_sql IN VARCHAR2) IS
+  BEGIN
+    EXECUTE IMMEDIATE p_sql;
+  EXCEPTION WHEN OTHERS THEN
+    v_failed := v_failed || CHR(10) || p_label || ': ' || SUBSTR(SQLERRM, 1, 150);
+  END step;
+
   PROCEDURE rest(p_object IN VARCHAR2, p_type IN VARCHAR2, p_alias IN VARCHAR2) IS
   BEGIN
-    ORDS.ENABLE_OBJECT(
-      p_enabled        => TRUE,
-      p_schema         => USER,
-      p_object         => p_object,
-      p_object_type    => p_type,
-      p_object_alias   => p_alias,
-      p_auto_rest_auth => FALSE);   -- protected by the /portal_* privilege below
+    -- default authorization (required) is deliberate
+    step('enable ' || p_alias,
+      'BEGIN ORDS.ENABLE_OBJECT(p_enabled => TRUE, p_schema => USER, p_object => '''
+      || p_object || ''', p_object_type => ''' || p_type
+      || ''', p_object_alias => ''' || p_alias || '''); END;');
   END rest;
 BEGIN
   -- tables the server writes
@@ -36,51 +44,44 @@ BEGIN
   rest('GCODE_PORTAL_V_EVENTS',       'VIEW',  'portal_v_events');
   rest('GCODE_PORTAL_V_PARTICIPANTS', 'VIEW',  'portal_v_participants');
   rest('GCODE_PORTAL_V_MONEY',        'VIEW',  'portal_v_money');
-  BEGIN
-    rest('GCODE_PORTAL_V_PANELISTS',  'VIEW',  'portal_v_panelists');
-  EXCEPTION WHEN OTHERS THEN
-    DBMS_OUTPUT.PUT_LINE('Skipped panelists view (create it first, see 01_tables.sql): ' || SQLERRM);
-  END;
+  rest('GCODE_PORTAL_V_PANELISTS',    'VIEW',  'portal_v_panelists');
 
-  -- role + privilege covering every /portal_* path
+  -- the privileges ORDS created for exactly these aliases
   BEGIN
-    ORDS.CREATE_ROLE(p_role_name => 'gcode_portal_server');
-  EXCEPTION WHEN OTHERS THEN NULL;   -- already exists
-  END;
-  DECLARE
-    v_roles  OWA.VC_ARR;
-    v_pats   OWA.VC_ARR;
-  BEGIN
-    v_roles(1) := 'gcode_portal_server';
-    v_pats(1)  := '/portal_*';
-    ORDS.DEFINE_PRIVILEGE(
-      p_privilege_name => 'gcode.portal.server',
-      p_roles          => v_roles,
-      p_patterns       => v_pats,
-      p_modules        => OWA.VC_ARR(),
-      p_label          => 'GCODE portal server',
-      p_description    => 'Server-side access to the organizer portal and live room tables',
-      p_comments       => NULL);
+    EXECUTE IMMEDIATE
+      'SELECT LISTAGG(name, '','') WITHIN GROUP (ORDER BY name) FROM user_ords_privileges '
+      || 'WHERE name LIKE ''oracle.dbtools.autorest.privilege.%'' '
+      || 'AND REGEXP_LIKE(UPPER(name), ''\.PORTAL_[A-Z_]+$'')'
+      INTO v_privs;
+  EXCEPTION WHEN OTHERS THEN
+    v_failed := v_failed || CHR(10) || 'list privileges: ' || SUBSTR(SQLERRM, 1, 150);
   END;
 
   -- the OAuth2 client the Next.js server signs in with
-  BEGIN
-    OAUTH.DELETE_CLIENT(p_name => 'gcode_portal_server');
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  OAUTH.CREATE_CLIENT(
-    p_name            => 'gcode_portal_server',
-    p_grant_type      => 'client_credentials',
-    p_owner           => 'GCODE',
-    p_description     => 'Next.js server routes for the organizer portal and live room',
-    p_support_email   => 'shashwat@gcode.in',
-    p_privilege_names => 'gcode.portal.server');
-  OAUTH.GRANT_CLIENT_ROLE(p_client_name => 'gcode_portal_server',
-                          p_role_name   => 'gcode_portal_server');
+  step('remove old client', 'BEGIN OAUTH.DELETE_CLIENT(p_name => ''gcode_portal_server''); END;');
+  IF v_privs IS NULL THEN
+    v_failed := v_failed || CHR(10) || 'client: no AutoREST privileges were found to grant';
+  ELSE
+    step('create client',
+      'BEGIN OAUTH.CREATE_CLIENT(p_name => ''gcode_portal_server'', '
+      || 'p_grant_type => ''client_credentials'', '
+      || 'p_owner => ''GCODE'', '
+      || 'p_description => ''Next.js server routes for the organizer portal and live room'', '
+      || 'p_support_email => ''shashwat@gcode.in'', '
+      || 'p_privilege_names => ''' || v_privs || '''); END;');
+  END IF;
   COMMIT;
+
+  IF v_failed IS NOT NULL THEN
+    RAISE_APPLICATION_ERROR(-20001, 'Some steps failed:' || v_failed);
+  END IF;
 END;
 /
 
--- Run this on its own (SQL Commands) to read the client id and secret. Keep the
--- secret out of git and out of any NEXT_PUBLIC_ variable.
-SELECT name, client_id, client_secret FROM user_ords_clients WHERE name = 'gcode_portal_server';
+-- Run each of these on its own in SQL Commands.
+-- 1. What was enabled (expect 13 rows):
+--      SELECT object_name, object_alias, auto_rest_auth FROM user_ords_enabled_objects
+--       WHERE object_alias LIKE 'portal\_%' ESCAPE '\';
+-- 2. The client id and secret for Vercel (never in git, never NEXT_PUBLIC_):
+--      SELECT name, client_id, client_secret FROM user_ords_clients
+--       WHERE name = 'gcode_portal_server';
