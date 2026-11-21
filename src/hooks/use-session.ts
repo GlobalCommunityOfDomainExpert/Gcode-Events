@@ -18,15 +18,17 @@ function getServerSnapshot(): Session | null {
 // getSession() builds a new object literal every call — useSyncExternalStore
 // requires getSnapshot to return a referentially stable value when nothing
 // actually changed, or it re-renders forever trying to "settle". Cache the
-// last object and only replace it when the underlying token actually differs.
-let cachedToken: string | null = null;
+// last object and only replace it when the session actually differs.
+let cachedKey: string | null = null;
 let cachedSession: Session | null = null;
 
 function getSnapshot(): Session | null {
   const session = getSession();
-  const token = session?.token ?? null;
-  if (token !== cachedToken) {
-    cachedToken = token;
+  const key = session
+    ? `${session.userId}|${session.roleName}|${session.expiresAt}`
+    : null;
+  if (key !== cachedKey) {
+    cachedKey = key;
     cachedSession = session;
   }
   return cachedSession;

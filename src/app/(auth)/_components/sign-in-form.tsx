@@ -6,8 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Divider, Input, PasswordInput } from "@/components/atoms";
 import { FormField } from "@/components/molecules";
 import { GoogleButton } from "./google-button";
-import { oauthLoginGoogle, signIn } from "@/lib/api/auth";
-import { setSession } from "@/lib/auth/session";
+import { signIn, signInWithGoogle } from "@/lib/api/auth";
 import {
   decodeGoogleEmail,
   useGoogleIdToken,
@@ -45,8 +44,7 @@ export function SignInForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const { token } = await signIn(email, await hashPassword(password));
-      setSession(token);
+      await signIn(email, await hashPassword(password));
       router.push(redirectTo);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not sign in");
@@ -59,12 +57,11 @@ export function SignInForm() {
     setError(null);
     try {
       const idToken = await requestGoogleIdToken();
-      const { user_id, role_name, token } = await oauthLoginGoogle(idToken);
-      setSession(token);
-      if (role_name === "NONE") {
+      const { user, needsRole } = await signInWithGoogle(idToken);
+      if (needsRole) {
         const email = encodeURIComponent(decodeGoogleEmail(idToken));
         router.push(
-          `/sign-up?oauth=1&userId=${user_id}&email=${email}&redirect=${encodeURIComponent(redirectTo)}`,
+          `/sign-up?oauth=1&userId=${user.userId}&email=${email}&redirect=${encodeURIComponent(redirectTo)}`,
         );
       } else {
         router.push(redirectTo);
