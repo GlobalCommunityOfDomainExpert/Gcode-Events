@@ -1,4 +1,5 @@
 import { hasEventEnded, type Event } from "@/lib/event";
+import { hasLiveRoom } from "@/lib/live-room";
 
 // What an organizer needs for a given event, decided from its type, mode and
 // passes — so hackathons get judging, paid events
@@ -11,6 +12,8 @@ export interface EventTools {
   money: boolean;
   /** Door check-in — anything with a physical venue. */
   checkIn: boolean;
+  /** GCODE live room — online events (hybrid once the server flags it). */
+  liveRoom: boolean;
 }
 
 const COMPETITIVE = ["Hackathon", "Cultural Event"];
@@ -26,6 +29,7 @@ export function eventTools(event: Event): EventTools {
       (event.participantRegistration.enabled &&
         event.participantRegistration.price > 0),
     checkIn: event.mode !== "Online",
+    liveRoom: hasLiveRoom(event),
   };
 }
 

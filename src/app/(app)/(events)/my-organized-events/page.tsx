@@ -9,6 +9,7 @@ import {
   Copy,
   Ellipsis,
   ExternalLink,
+  MonitorPlay,
   PencilLine,
   SearchX,
   Trophy,
@@ -352,9 +353,11 @@ function NextUp({ event, now }: { event: Event; now: Date }) {
   const pct = cap
     ? Math.min(100, Math.round((totalRegistered(event) / cap) * 100))
     : null;
-  const special = tools.judging
-    ? { href: `${base}/rounds`, label: "Judging", icon: Trophy }
-    : { href: `${base}/attendees`, label: "Attendees", icon: Users };
+  const special = tools.liveRoom
+    ? { href: `${base}/webinar`, label: "Live room", icon: MonitorPlay }
+    : tools.judging
+      ? { href: `${base}/rounds`, label: "Judging", icon: Trophy }
+      : { href: `${base}/attendees`, label: "Attendees", icon: Users };
   return (
     <div className="border-border-light bg-surface-light flex overflow-hidden rounded-lg border shadow-sm">
       <div

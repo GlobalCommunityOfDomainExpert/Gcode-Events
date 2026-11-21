@@ -35,7 +35,7 @@ export function NextSteps({
   // judges count once at least one has accepted the invite
   const [judges, setJudges] = useState<{ accepted: number; invited: number }>();
   useEffect(() => {
-    if (!tools.judging) return;
+    if (!tools.judging && !tools.liveRoom) return;
     let live = true;
     void listEventPanelists(event.id).then((rows) => {
       if (live)
@@ -47,7 +47,7 @@ export function NextSteps({
     return () => {
       live = false;
     };
-  }, [event.id, tools.judging]);
+  }, [event.id, tools.judging, tools.liveRoom]);
 
   if (past) {
     steps.push({
@@ -57,6 +57,14 @@ export function NextSteps({
       href: `${base}/attendees`,
       cta: "Open attendees",
     });
+    if (tools.liveRoom)
+      steps.push({
+        label: "Publish the replay",
+        hint: "Make the recording visible to registrants.",
+        done: false,
+        href: `${base}/webinar`,
+        cta: "Live room",
+      });
     if (tools.judging)
       steps.push({
         label: "Announce winners",
@@ -103,6 +111,19 @@ export function NextSteps({
           cta: judges?.accepted ? "Panel" : "Invite judges",
         },
       );
+    }
+    if (tools.liveRoom) {
+      // Speakers come from the real panelist invites, not a fixture.
+      const pending = judges?.invited ?? 0;
+      steps.push({
+        label: "Confirm speakers",
+        hint: pending
+          ? `${pending} speaker invite${pending > 1 ? "s" : ""} still pending.`
+          : "Everyone on stage has accepted.",
+        done: judges !== undefined && pending === 0,
+        href: `${base}/panelists`,
+        cta: "Panelists",
+      });
     }
     if (tools.money) {
       const pendingClaims = claims.filter((c) => c.status === "PENDING").length;

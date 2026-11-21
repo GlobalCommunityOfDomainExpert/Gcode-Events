@@ -11,9 +11,12 @@ import {
   CalendarPlus,
   LayoutDashboard,
   LayoutGrid,
+  Mail,
+  MonitorPlay,
   PencilLine,
   Receipt,
   Settings,
+  ShieldCheck,
   Tag,
   Ticket,
   Trophy,
@@ -25,6 +28,7 @@ import { useSidebarOpen } from "@/hooks/use-sidebar-open";
 import { ProfileMenu, ProfileMenuUser } from "@/components/molecules";
 import { clearSession, isAdmin, Session } from "@/lib/auth/session";
 import { initials } from "@/lib/auth/format";
+import { ORGANIZER_PORTAL_ENABLED } from "@/lib/feature-flags";
 
 // "My Events" only shown to admins (Attending/Organizing) — hidden for
 // everyone else for now, including signed-in non-admins.
@@ -90,7 +94,12 @@ function buildOrganizerLinks(
   const base = `${ORGANIZER_ROOT}/${eventId}`;
   // Sections follow the event type: judging for competitive formats, money
   // tools only when something is paid.
-  const tools = nav.tools ?? { judging: nav.showRounds, money: true };
+  const tools = nav.tools ?? {
+    judging: nav.showRounds,
+    money: true,
+    checkIn: false,
+    liveRoom: false,
+  };
   const event: SidebarLink[] = [
     {
       label: "Overview",
@@ -122,6 +131,16 @@ function buildOrganizerLinks(
           },
         ] as SidebarLink[])
       : []),
+    ...(tools.liveRoom
+      ? ([
+          {
+            label: "Live room",
+            href: `${base}/webinar`,
+            icon: MonitorPlay,
+            ...(tools.judging ? {} : { groupLabel: "Run the event" }),
+          },
+        ] as SidebarLink[])
+      : []),
     ...(tools.money
       ? ([
           {
@@ -135,11 +154,27 @@ function buildOrganizerLinks(
           { label: "Coupons", href: `${base}/coupons`, icon: Tag },
         ] as SidebarLink[])
       : []),
+    ...(ORGANIZER_PORTAL_ENABLED
+      ? ([
+          {
+            label: "Communication",
+            href: `${base}/communication`,
+            icon: Mail,
+            groupLabel: "Engage",
+          },
+          {
+            label: "Team & access",
+            href: `${base}/team`,
+            icon: ShieldCheck,
+            groupLabel: "Manage",
+          },
+        ] as SidebarLink[])
+      : []),
     {
       label: "Settings",
       href: `${base}/settings`,
       icon: Settings,
-      groupLabel: "Manage",
+      ...(ORGANIZER_PORTAL_ENABLED ? {} : { groupLabel: "Manage" }),
     },
   ];
   return [
