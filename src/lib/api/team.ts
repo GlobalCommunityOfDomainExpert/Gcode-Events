@@ -1,6 +1,5 @@
 import { apiRequest } from "./client";
 import { ApiListResponse } from "./types";
-import { getSession } from "@/lib/auth/session";
 import type {
   SharedAccess,
   SharedData,
@@ -33,10 +32,8 @@ export interface ShareLinkApi {
   views: number;
 }
 
-// Same trust level as the other organizer calls (panelists, rounds): the
-// backend does not verify bearer tokens, so the handler must treat this id
-// as untrusted until ORDS can read the verified JWT.
-const actor = () => getSession()?.userId ?? "";
+// The acting user is never sent in a body or query: the ORDS handler decodes
+// the bearer token itself, like /participants/me does.
 
 const member = (r: TeamMemberApi): TeamMember => ({
   id: String(r.id),
@@ -63,7 +60,7 @@ const link = (r: ShareLinkApi): ShareLink => ({
 export async function listTeam(eventId: string): Promise<TeamMember[]> {
   try {
     const { items } = await apiRequest<ApiListResponse<TeamMemberApi>>(
-      `/events/${eventId}/team?actor_id=${actor()}`,
+      `/events/${eventId}/team`,
     );
     return items.map(member);
   } catch {
@@ -79,25 +76,25 @@ export function inviteTeamMember(
 ): Promise<{ token: string }> {
   return apiRequest<{ token: string }>(`/events/${eventId}/team`, {
     method: "POST",
-    body: { email, role, actor_id: actor() },
+    body: { email, role },
   });
 }
 
 export function changeTeamRole(id: string, role: TeamRole): Promise<unknown> {
   return apiRequest(`/team/${id}`, {
     method: "PUT",
-    body: { role, actor_id: actor() },
+    body: { role },
   });
 }
 
 export function removeTeamMember(id: string): Promise<unknown> {
-  return apiRequest(`/team/${id}?actor_id=${actor()}`, { method: "DELETE" });
+  return apiRequest(`/team/${id}`, { method: "DELETE" });
 }
 
 export async function listShareLinks(eventId: string): Promise<ShareLink[]> {
   try {
     const { items } = await apiRequest<ApiListResponse<ShareLinkApi>>(
-      `/events/${eventId}/share-links?actor_id=${actor()}`,
+      `/events/${eventId}/share-links`,
     );
     return items.map(link);
   } catch {
@@ -120,7 +117,6 @@ export async function createShareLink(
         label: payload.label,
         role: payload.role,
         expiry: payload.expiry,
-        actor_id: actor(),
       },
     },
   );
@@ -128,7 +124,7 @@ export async function createShareLink(
 }
 
 export function revokeShareLink(id: string): Promise<unknown> {
-  return apiRequest(`/share-links/${id}?actor_id=${actor()}`, {
+  return apiRequest(`/share-links/${id}`, {
     method: "DELETE",
   });
 }
@@ -184,11 +180,9 @@ export async function getSharedData(token: string): Promise<SharedData> {
 
 /** Counts a link view / activates an invite. Deliberately a POST. */
 export function openShared(token: string): Promise<unknown> {
-  const userId = getSession()?.userId;
-  return apiRequest(`/shared/${token}/open`, {
-    method: "POST",
-    body: userId ? { user_id: userId } : {},
-  });
+  // A signed-in caller is identified by the bearer token, which a
+  // co-organizer invite needs; view-only roles open it anonymously.
+  return apiRequest(`/shared/${token}/open`, { method: "POST", body: {} });
 }
 
 /** Door check-in: participant ids marked as arrived. */
@@ -197,12 +191,9 @@ export async function listCheckIns(
   token?: string,
 ): Promise<string[]> {
   try {
-    const q = token
-      ? `token=${encodeURIComponent(token)}`
-      : `actor_id=${actor()}`;
     const { items } = await apiRequest<
       ApiListResponse<{ participant_id: number }>
-    >(`/events/${eventId}/check-ins?${q}`);
+    >(`/events/${eventId}/check-ins`, { query: { token } });
     return items.map((r) => String(r.participant_id));
   } catch {
     return [];
@@ -220,7 +211,7 @@ export function setCheckIn(
     body: {
       participant_id: Number(participantId),
       arrived,
-      ...(token ? { token } : { actor_id: actor() }),
+      token,
     },
   });
 }

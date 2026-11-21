@@ -29,7 +29,7 @@ import {
 import { hasLiveRoom } from "@/lib/live-room";
 import { useMyTickets } from "@/hooks/use-my-tickets";
 import { AgendaTimeline } from "./agenda-timeline";
-import { OnlineInfoCard } from "./online-info-card";
+import { OnlineJoinPanel } from "./online-join-panel";
 import { groupByDay, to12Hour } from "./format";
 import { MapEmbed, directionsUrl } from "./venue-map";
 
@@ -390,7 +390,7 @@ function DayBody({
           {note.text}
         </p>
       )}
-      {liveRoom && <OnlineInfoCard />}
+      {liveRoom && <OnlineJoinPanel event={event} />}
 
       {/* the detail, only on request */}
       {(row.sessions.length > 0 || inPerson) && (

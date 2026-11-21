@@ -1,6 +1,5 @@
 import { apiRequest } from "./client";
 import { ApiListResponse } from "./types";
-import { getSession } from "@/lib/auth/session";
 import { CommunicationLog, RecipientGroup } from "@/lib/communications";
 
 // GCODE_EVENT_COMMUNICATIONS (docs/sql/organizer-portal). One row per email
@@ -31,7 +30,7 @@ export async function listCommunications(
 ): Promise<CommunicationLog[]> {
   try {
     const { items } = await apiRequest<ApiListResponse<CommunicationApi>>(
-      `/events/${eventId}/communications?actor_id=${getSession()?.userId ?? ""}`,
+      `/events/${eventId}/communications`,
     );
     return items.map(adapt);
   } catch {
@@ -61,7 +60,6 @@ export async function sendCommunication(
           payload.group === "CUSTOM"
             ? (payload.participantIds ?? []).map(Number)
             : undefined,
-        actor_id: getSession()?.userId ?? "",
       },
     },
   );

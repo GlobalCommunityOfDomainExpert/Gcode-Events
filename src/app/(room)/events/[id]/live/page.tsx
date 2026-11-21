@@ -1,0 +1,198 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { LiveRoom } from "@/components/live-room";
+import { useEvent } from "@/hooks/use-event";
+import { useSession } from "@/hooks/use-session";
+import {
+  getLiveAccess,
+  requestJoinCredential,
+  type LiveAccess,
+} from "@/lib/api/webinar";
+import { LIVE_ROOM_ENABLED } from "@/lib/feature-flags";
+import { formatTimeRange, formatWeekday } from "@/lib/event";
+import { RoomFrame, RoomPanel, btnLight } from "./_components/room-frame";
+import {
+  EarlyScreen,
+  EndedScreen,
+  LeftScreen,
+  NotRegisteredScreen,
+} from "./_components/screens";
+import { WaitingRoom } from "./_components/waiting-room";
+
+// The one door to a webinar: /events/<id>/live.
+//
+// Who the viewer is, whether they are registered, and what state the room is
+// in all come from the server (live-access). Nothing in the URL can change
+// them: there is no role or demo override, and a copied link only works for
+// the signed-in person whose registration it belongs to.
+//
+//  1. Not signed in / not registered → sign in or register first.
+//  2. Before the doors open → countdown (speakers and host can go backstage).
+//  3. Doors open / live → waiting room → the room, with a credential the
+//     server mints for this person's registration.
+//  4. Left → rejoin while it is running. Ended → replay, if published.
+export default function WebinarLivePage() {
+  const params = useParams<{ id: string }>();
+  const session = useSession();
+  const { event, status } = useEvent(params.id);
+  const [access, setAccess] = useState<LiveAccess | null>();
+  const [stage, setStage] = useState<
+    { kind: "door" } | { kind: "room"; credential: string } | { kind: "left" }
+  >({ kind: "door" });
+
+  const refresh = useCallback(async () => {
+    try {
+      setAccess(await getLiveAccess(params.id));
+    } catch {
+      setAccess(null);
+    }
+  }, [params.id]);
+
+  // The door opens, goes live and ends on the server's clock: poll so a
+  // waiting page moves on by itself.
+  useEffect(() => {
+    if (!session) return;
+    let live = true;
+    const load = () =>
+      getLiveAccess(params.id)
+        .then((a) => live && setAccess(a))
+        .catch(() => live && setAccess(null));
+    void load();
+    const id = setInterval(() => void load(), 20_000);
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, [session, params.id]);
+
+  if (!LIVE_ROOM_ENABLED) {
+    return (
+      <RoomFrame title="Live room">
+        <RoomPanel>
+          <h1 className="text-display leading-tight font-extrabold">
+            The live room isn&apos;t available yet
+          </h1>
+          <p className="text-white/70">It is switched off for now.</p>
+        </RoomPanel>
+      </RoomFrame>
+    );
+  }
+
+  if (status === "loading" || !event) {
+    return (
+      <RoomFrame title={status === "loading" ? "Loading…" : "Webinar"}>
+        <RoomPanel>
+          <p className="text-white/70">
+            {status === "loading"
+              ? "Opening the room…"
+              : "We couldn’t find this webinar."}
+          </p>
+        </RoomPanel>
+      </RoomFrame>
+    );
+  }
+
+  const range = formatTimeRange(event.startDateIso, event.endDateIso);
+  const weekday = formatWeekday(event.startDateIso);
+  const when = `${weekday ? `${weekday}, ` : ""}${event.date}${range ? ` · ${range} IST` : ""}`;
+  const frame = (body: React.ReactNode) => (
+    <RoomFrame title={event.title} subtitle={when}>
+      {body}
+    </RoomFrame>
+  );
+
+  if (!session) {
+    return frame(
+      <RoomPanel>
+        <h1 className="text-display leading-tight font-extrabold">
+          Sign in to join
+        </h1>
+        <p className="text-body text-white/70">
+          Your seat is tied to your registration, so we need to know it&apos;s
+          you.
+        </p>
+        <a
+          href={`/sign-in?redirect=${encodeURIComponent(`/events/${event.id}/live`)}`}
+          className={btnLight}
+        >
+          Sign in
+        </a>
+      </RoomPanel>,
+    );
+  }
+
+  if (access === undefined) {
+    return frame(
+      <RoomPanel>
+        <p className="text-white/70">Checking your ticket…</p>
+      </RoomPanel>,
+    );
+  }
+  if (access === null) {
+    return frame(
+      <RoomPanel>
+        <h1 className="text-display leading-tight font-extrabold">
+          We couldn&apos;t open the room
+        </h1>
+        <p className="text-body text-white/70">
+          Something went wrong checking your ticket. Try again in a moment.
+        </p>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className={btnLight}
+        >
+          Try again
+        </button>
+      </RoomPanel>,
+    );
+  }
+
+  const { role, state } = access;
+
+  // ---- in the room
+  if (stage.kind === "room" && state !== "ENDED") {
+    return (
+      <RoomFrame title={event.title} subtitle={when}>
+        <LiveRoom
+          eventId={event.id}
+          credential={stage.credential}
+          role={role}
+          onLeave={() => setStage({ kind: "left" })}
+        />
+      </RoomFrame>
+    );
+  }
+  if (state === "ENDED") {
+    return frame(<EndedScreen event={event} replay={access.replay} />);
+  }
+  if (stage.kind === "left") {
+    return frame(
+      <LeftScreen event={event} onRejoin={() => setStage({ kind: "door" })} />,
+    );
+  }
+
+  // ---- before joining
+  if (!access.registered && role === "attendee") {
+    return frame(<NotRegisteredScreen event={event} when={when} />);
+  }
+  if (state === "EARLY") {
+    return frame(<EarlyScreen event={event} role={role} when={when} />);
+  }
+  return frame(
+    <WaitingRoom
+      event={event}
+      role={role}
+      notice={access.notice}
+      name={session.fullName || "Guest"}
+      when={when}
+      backstage={state === "BACKSTAGE"}
+      onJoin={async () => {
+        const credential = await requestJoinCredential(event.id);
+        setStage({ kind: "room", credential });
+      }}
+    />,
+  );
+}
