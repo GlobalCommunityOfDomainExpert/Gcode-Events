@@ -76,6 +76,7 @@ const filterChips = [
   { value: "In-Person", label: "In-Person", icon: MapPin },
 ] as const;
 
+// Never used
 const whyJoinItems = [
   {
     icon: GraduationCap,

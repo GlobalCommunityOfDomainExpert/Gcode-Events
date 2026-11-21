@@ -29,7 +29,7 @@ export function useAttendees(
       // list here.
       setAttendees(
         rows
-          .filter((row) => row.active === "Y")
+          .filter((row) => row.active)
           .map((row) => adaptParticipant(row, prices)),
       );
       setStatus("ready");

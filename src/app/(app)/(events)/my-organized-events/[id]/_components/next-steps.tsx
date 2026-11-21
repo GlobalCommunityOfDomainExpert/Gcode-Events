@@ -37,13 +37,15 @@ export function NextSteps({
   useEffect(() => {
     if (!tools.judging) return;
     let live = true;
-    void listEventPanelists(event.id).then((rows) => {
-      if (live)
-        setJudges({
-          accepted: rows.filter((r) => r.status === "ACCEPTED").length,
-          invited: rows.filter((r) => r.status === "INVITED").length,
-        });
-    });
+    void listEventPanelists(event.id)
+      .then((rows) => {
+        if (live)
+          setJudges({
+            accepted: rows.filter((r) => r.status === "ACCEPTED").length,
+            invited: rows.filter((r) => r.status === "INVITED").length,
+          });
+      })
+      .catch(() => {}); // the judges step just stays hidden
     return () => {
       live = false;
     };

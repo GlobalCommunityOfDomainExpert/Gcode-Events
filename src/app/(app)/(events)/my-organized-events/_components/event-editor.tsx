@@ -36,7 +36,7 @@ import {
   draftToPreviewDetail,
 } from "@/lib/api/adapters";
 import { ApiError } from "@/lib/api/client";
-import type { EventDetail } from "@/lib/api/types";
+import type { EventDetail } from "@/lib/api/events";
 import type { Event } from "@/lib/event";
 import { EventDetailData, initialEventData } from "@/lib/zod/event";
 import {
@@ -338,12 +338,12 @@ export function EventEditor(props: EventEditorProps) {
   const { data: modes } = useLookup(getModes);
   const { data: statuses } = useLookup(getStatuses);
   const statusCodes = useMemo(
-    () => Object.fromEntries(statuses.map((s) => [s.id, s.status_code])),
+    () => Object.fromEntries(statuses.map((s) => [s.id, s.code])),
     [statuses],
   );
   const statusId = (code: string) =>
-    statuses.find((s) => s.status_code === code)?.id;
-  const isDraft = !isEdit || statusCodes[baseDetail.status_id] === "DRAFT";
+    statuses.find((s) => s.code === code)?.id;
+  const isDraft = !isEdit || statusCodes[baseDetail.statusId] === "DRAFT";
 
   // ---------------------------------------------- changes + required fields
   const changedKeys = useMemo(
@@ -375,7 +375,7 @@ export function EventEditor(props: EventEditorProps) {
   const toEvent = useMemo(() => {
     if (!types.length || !modes.length) return undefined;
     const typeNames = Object.fromEntries(types.map((t) => [t.id, t.name]));
-    const modeNames = Object.fromEntries(modes.map((m) => [m.id, m.mode_name]));
+    const modeNames = Object.fromEntries(modes.map((m) => [m.id, m.code]));
     return (draft: EventDetailData): Event => {
       const event = adaptApiEvent(
         draftToPreviewDetail(baseDetail, draft),
@@ -428,11 +428,11 @@ export function EventEditor(props: EventEditorProps) {
           ? statusId("OPEN")
           : kind === "draft"
             ? statusId("DRAFT")
-            : baseDetail.status_id;
+            : baseDetail.statusId;
       let id = eventId;
       let result: SaveResult;
       if (isEdit && eventId) {
-        result = await updateEventFromDraft(eventId, data, status, initialData);
+        result = await updateEventFromDraft(eventId, data, status);
       } else {
         result = await createEventFromDraft(data, status);
       }

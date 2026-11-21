@@ -45,9 +45,9 @@ export function AddParticipantsPanel({
     setError("");
     setNotice("");
     try {
-      const { participant_id } = await registerForEvent(event.id, {
+      const { participantId } = await registerForEvent(event.id, {
         email: trimmedEmail,
-        full_name: trimmedName,
+        fullName: trimmedName,
         phone: phone.trim() || undefined,
         quantity: 1,
         category: "PARTICIPANT",
@@ -55,8 +55,8 @@ export function AddParticipantsPanel({
         // OTP-verification requirement on purpose — that's the whole point
         // of this form existing. Capacity is still enforced server-side
         // regardless.
-        skip_window_check: "Y",
-        skip_email_verification: "Y",
+        skipWindowCheck: true,
+        skipEmailVerification: true,
       });
 
       // Backfilled, not a real judge decision — notify=false so they don't
@@ -64,7 +64,7 @@ export function AddParticipantsPanel({
       // actually competed in.
       await Promise.all(
         priorRounds.map((round) =>
-          decideRoundStatus(participant_id, round.id, "SHORTLISTED", false),
+          decideRoundStatus(participantId, round.id, "SHORTLISTED", false),
         ),
       );
 

@@ -14,7 +14,7 @@ import { Icon, Input } from "@/components/atoms";
 import { FormField } from "@/components/molecules";
 import { useLookup } from "@/hooks/use-lookup";
 import { getModes } from "@/lib/api/lookups";
-import { EventModeLookup } from "@/lib/api/types";
+import type { EventMode } from "@/lib/api/lookups";
 import { UpdateEventDetailData, EventDetailData } from "@/lib/zod/event";
 import { HybridStagesField } from "./hybrid-stages-field";
 
@@ -42,7 +42,7 @@ export interface StepScheduleModeProps {
 export function StepScheduleMode({ data, onChange }: StepScheduleModeProps) {
   const { status, data: modes } = useLookup(getModes);
   const activeMode = modes.find((mode) => mode.id === data.mode);
-  const modeCode = activeMode?.mode_name ?? "";
+  const modeCode = activeMode?.code ?? "";
 
   return (
     <div className="space-y-5">
@@ -70,10 +70,10 @@ export function StepScheduleMode({ data, onChange }: StepScheduleModeProps) {
           {[...modes]
             .sort(
               (a, b) =>
-                MODE_ORDER.indexOf(a.mode_name) -
-                MODE_ORDER.indexOf(b.mode_name),
+                MODE_ORDER.indexOf(a.code) -
+                MODE_ORDER.indexOf(b.code),
             )
-            .map((mode: EventModeLookup) => {
+            .map((mode: EventMode) => {
               const active = mode.id === data.mode;
               return (
                 <button
@@ -88,10 +88,10 @@ export function StepScheduleMode({ data, onChange }: StepScheduleModeProps) {
                       : "text-text-secondary hover:text-text-primary border border-transparent"
                   }`}
                 >
-                  {MODE_ICON[mode.mode_name] && (
-                    <Icon icon={MODE_ICON[mode.mode_name]} size="sm" />
+                  {MODE_ICON[mode.code] && (
+                    <Icon icon={MODE_ICON[mode.code]} size="sm" />
                   )}
-                  {KNOWN_MODE_LABEL[mode.mode_name] ?? mode.mode_name}
+                  {KNOWN_MODE_LABEL[mode.code] ?? mode.code}
                 </button>
               );
             })}

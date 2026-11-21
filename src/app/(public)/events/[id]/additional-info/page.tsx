@@ -33,15 +33,14 @@ import {
 import { useEvent } from "@/hooks/use-event";
 import {
   getParticipant,
-  listParticipantAnswers,
-  replaceParticipantAnswers,
-  listParticipantAdvancedAnswers,
-  replaceParticipantAdvancedAnswers,
+  getParticipantAnswers,
+  saveParticipantAnswers,
   submitParticipantAudio,
+  type SaveAnswersBody,
   uploadParticipantAudio,
 } from "@/lib/api/participants";
 import { ApiError } from "@/lib/api/client";
-import { ParticipantApi } from "@/lib/api/types";
+import type { ParticipantSummary } from "@/lib/api/participants";
 import { EventQuestion } from "@/lib/event";
 
 const SUBMISSION_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -111,7 +110,7 @@ export default function AdditionalInfoPage() {
   const participantId = searchParams.get("pid");
   const { event } = useEvent(params.id);
 
-  const [participant, setParticipant] = useState<ParticipantApi | undefined>();
+  const [participant, setParticipant] = useState<ParticipantSummary | undefined>();
   const [participantStatus, setParticipantStatus] = useState<
     "loading" | "error" | "ready"
   >(participantId ? "loading" : "error");
@@ -150,38 +149,36 @@ export default function AdditionalInfoPage() {
           return;
         }
         setParticipant(row);
-        setSubmittedUrl(row.audio_submission_url ?? null);
+        setSubmittedUrl(row.audioSubmissionUrl ?? null);
         setParticipantStatus("ready");
 
-        const answerRows = await listParticipantAnswers(row.id);
+        const saved = await getParticipantAnswers(row.id);
         if (cancelled) return;
-        // A TEXT question only ever produces an answer_text row; a
-        // RADIO/CHECKBOX question only ever produces option_id rows — so
+        // A TEXT question only ever produces an answerText row; a
+        // RADIO/CHECKBOX question only ever produces optionId rows — so
         // this splits cleanly without needing to know each question's type.
         const initialText: Record<string, string> = {};
         const initialOptions: Record<string, Set<string>> = {};
-        for (const answer of answerRows) {
-          const questionId = String(answer.question_id);
-          if (answer.option_id !== null) {
+        for (const answer of saved.answers) {
+          const questionId = String(answer.questionId);
+          if (answer.optionId !== null) {
             const set = initialOptions[questionId] ?? new Set<string>();
-            set.add(String(answer.option_id));
+            set.add(String(answer.optionId));
             initialOptions[questionId] = set;
-          } else if (answer.answer_text !== null) {
-            initialText[questionId] = answer.answer_text;
+          } else if (answer.answerText !== null) {
+            initialText[questionId] = answer.answerText;
           }
         }
         setTextAnswers(initialText);
         setOptionAnswers(initialOptions);
-        const advancedRows = await listParticipantAdvancedAnswers(row.id).catch(() => []);
-        if (cancelled) return;
         const initialFollowups: Record<string, Set<string>> = {};
         const initialOthers: Record<string, string> = {};
-        for (const answer of advancedRows) {
-          if (Number(answer.is_other) === 1) initialOthers[String(answer.question_id)] = answer.answer_text ?? "";
-          else if (answer.source_option_id !== null && answer.advanced_option_id !== null) {
-            const key = String(answer.setting_id);
+        for (const answer of saved.advancedAnswers) {
+          if (answer.isOther) initialOthers[String(answer.questionId)] = answer.answerText ?? "";
+          else if (answer.sourceOptionId !== null && answer.advancedOptionId !== null) {
+            const key = String(answer.settingId);
             const selected = initialFollowups[key] ?? new Set<string>();
-            selected.add(String(answer.advanced_option_id)); initialFollowups[key] = selected;
+            selected.add(String(answer.advancedOptionId)); initialFollowups[key] = selected;
           }
         }
         setFollowupAnswers(initialFollowups);
@@ -228,12 +225,13 @@ export default function AdditionalInfoPage() {
 
   // Window closes 24h after this registration's own category deadline
   // (Participant or Attendee), not 24h after this participant applied —
-  // falls back to applied_on if the organizer hasn't set one.
+  // falls back to appliedOn if the organizer hasn't set one.
   const registrationClosesAt =
     (category === "PARTICIPANT"
       ? event.participantRegistration.registrationDeadlineIso
       : event.attendeeRegistration.registrationDeadlineIso) ??
-    participant.applied_on;
+    participant.appliedOn ??
+    now.toISOString();
   const deadline = new Date(
     new Date(registrationClosesAt).getTime() + SUBMISSION_WINDOW_MS,
   );
@@ -382,35 +380,38 @@ export default function AdditionalInfoPage() {
           }
         }
       }
-      if (applicableQuestions.length) {
-        await replaceParticipantAnswers(participant!.id, items);
-      }
+      // Base and follow-up answers are saved together (one transaction).
+      const toSave: SaveAnswersBody = {};
+      if (applicableQuestions.length) toSave.answers = items;
       if (event?.advancedAdditionalQuestionsEnabled) {
-        const advancedItems: { questionId: number; settingId: number; sourceOptionId?: number; parentAdvancedOptionId?: number; advancedOptionId?: number; isOther: 1 | 0; answerText?: string }[] = [];
+        const advancedItems: NonNullable<SaveAnswersBody["advancedAnswers"]> = [];
         for (const question of applicableQuestions) {
           const otherOption = question.options.find((o) => isOtherChoice(o.label));
           if (question.allowOther && otherOption && optionAnswers[question.id]?.has(otherOption.id)) {
             if (otherOption.settingId) advancedItems.push({ questionId: Number(question.id), settingId: otherOption.settingId,
-              sourceOptionId: Number(otherOption.id), isOther: 1, answerText: otherAnswers[question.id]?.trim() });
+              sourceOptionId: Number(otherOption.id), isOther: true, answerText: otherAnswers[question.id]?.trim() });
           }
           const collect = (parent: EventQuestion["options"][number], sourceOptionId: number, parentAdvancedOptionId: number | undefined) => {
             if (!parent.advancedEnabled || !parent.settingId) return;
             for (const advancedOptionId of followupAnswers[String(parent.settingId)] ?? []) {
               advancedItems.push({ questionId: Number(question.id), settingId: parent.settingId, sourceOptionId,
-                parentAdvancedOptionId, advancedOptionId: Number(advancedOptionId), isOther: 0 });
+                parentAdvancedOptionId, advancedOptionId: Number(advancedOptionId), isOther: false });
               const child = parent.advancedOptions.find((option) => Number(option.id) === Number(advancedOptionId));
               if (child) collect(child, sourceOptionId, Number(advancedOptionId));
             }
           };
           for (const option of question.options) if (optionAnswers[question.id]?.has(option.id)) collect(option, Number(option.id), undefined);
         }
-        await replaceParticipantAdvancedAnswers(participant!.id, advancedItems);
+        toSave.advancedAnswers = advancedItems;
+      }
+      if (toSave.answers || toSave.advancedAnswers) {
+        await saveParticipantAnswers(participant!.id, toSave);
       }
       if (audioAppliesToMe && !isPastDeadline && hasAudioReplacement) {
-        const { audio_submission_url } = audioBlob
+        const { audioSubmissionUrl } = audioBlob
           ? await uploadParticipantAudio(participant!.id, audioBlob)
           : await submitParticipantAudio(participant!.id, audioUrl.trim());
-        setSubmittedUrl(audio_submission_url);
+        setSubmittedUrl(audioSubmissionUrl);
       }
       router.replace(`/events/${event!.id}/registered?pid=${participant!.id}&info=complete`);
     } catch (err) {

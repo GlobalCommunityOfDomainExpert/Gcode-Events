@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/atoms";
 import { Banner } from "@/components/molecules";
 import { listEventRounds, replaceEventRounds } from "@/lib/api/rounds";
-import { toRoundsDraft, toRoundsPayload } from "@/lib/api/adapters";
+import { toRoundsDraft } from "@/lib/api/adapters";
+import { toRoundsPayload } from "@/lib/event-draft/payloads";
 import { ApiError } from "@/lib/api/client";
 import { EventDetailData, initialEventData } from "@/lib/zod/event";
 import { RoundsEditor, roundProblems } from "./rounds-editor";
@@ -33,12 +34,16 @@ export function RoundsConfig({
 
   useEffect(() => {
     let cancelled = false;
-    void listEventRounds(eventId).then((rows) => {
-      if (cancelled) return;
-      const draft = toRoundsDraft(rows);
-      setInitial(draft);
-      setRounds(draft);
-    });
+    void listEventRounds(eventId)
+      .then((rows) => {
+        if (cancelled) return;
+        const draft = toRoundsDraft(rows);
+        setInitial(draft);
+        setRounds(draft);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load the rounds. Refresh to try again.");
+      });
     return () => {
       cancelled = true;
     };

@@ -1,11 +1,24 @@
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { getEvent } from "@/lib/api/events";
-import { resolveImageUrl } from "@/lib/api/adapters";
+import { eventsService } from "@/server/modules/events/events.service";
 
 export const alt = "GCODE Events";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/jpeg";
+
+// The card renders server-side, where a relative URL can't be fetched: a
+// database-stored cover is inlined as a data URI; absolute URLs load as-is.
+async function coverSource(
+  eventId: number,
+  url: string | null,
+): Promise<string | undefined> {
+  if (!url) return undefined;
+  if (url.startsWith("http")) return url;
+  const cover = await eventsService.coverImage(eventId);
+  return cover
+    ? `data:${cover.mime};base64,${cover.bytes.toString("base64")}`
+    : undefined;
+}
 
 // Social crawlers crop to ~1.91:1, but organizer covers are arbitrary shapes
 // (e.g. 2048x768). Render a fixed 1200x630 card and fit the cover inside it
@@ -20,9 +33,9 @@ export default async function Image({
   let title = "GCODE Events";
   let cover: string | undefined;
   try {
-    const detail = await getEvent(id);
-    title = detail.event_name;
-    cover = resolveImageUrl(detail.cover_image_url);
+    const detail = await eventsService.get(Number(id));
+    title = detail.title;
+    cover = await coverSource(detail.id, detail.coverImageUrl);
   } catch {
     // fall through to the text-only card
   }

@@ -7,10 +7,7 @@ import {
   listEventMedia,
   listEventSocialLinks,
   listEventTimeline,
-  listEventQuestions,
-  getEventAdvancedEnabled,
-  listAdvancedOptionSettings,
-  listAdvancedOptions,
+  getEventQuestions,
 } from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
 import { getEventTypes, getModes, getStatuses } from "@/lib/api/lookups";
@@ -53,8 +50,9 @@ export function useEvent(id: string | undefined) {
         ] = await Promise.all([
           getEvent(id),
           listEventTimeline(id),
-          listEventRounds(id),
-          listEventQuestions(id),
+          // Rounds are optional extras; never let them take the page down.
+          listEventRounds(id).catch(() => []),
+          getEventQuestions(id),
           listEventSocialLinks(id),
           listEventMedia(id),
           listEventFaqs(id),
@@ -62,42 +60,27 @@ export function useEvent(id: string | undefined) {
           getModes(),
           getStatuses(),
         ]);
-        let advancedEnabled = false;
-        let optionSettings: Awaited<
-          ReturnType<typeof listAdvancedOptionSettings>
-        > = [];
-        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> =
-          [];
-        advancedEnabled = await getEventAdvancedEnabled(id).catch(() => false);
-        if (advancedEnabled) {
-          [optionSettings, advancedOptions] = await Promise.all([
-            listAdvancedOptionSettings(id),
-            listAdvancedOptions(id),
-          ]);
-        }
         const typeNames = Object.fromEntries(types.map((t) => [t.id, t.name]));
-        const modeNames = Object.fromEntries(
-          modes.map((m) => [m.id, m.mode_name]),
-        );
+        const modeNames = Object.fromEntries(modes.map((m) => [m.id, m.code]));
         const statusCodes = Object.fromEntries(
-          statuses.map((s) => [s.id, s.status_code]),
+          statuses.map((s) => [s.id, s.code]),
         );
         const adapted = adaptApiEvent(
           detail,
           typeNames,
           modeNames,
           statusCodes,
-          questions,
+          questions.questions,
         );
         // Fall back to timeline span when the event has no explicit end date.
         let duration = adapted.duration;
         if (!duration && timeline.length > 0) {
           const starts = timeline
-            .filter((t) => t.start_time)
-            .map((t) => new Date(t.start_time as string).getTime());
+            .filter((t) => t.startTime)
+            .map((t) => new Date(t.startTime as string).getTime());
           const ends = timeline
-            .filter((t) => t.end_time)
-            .map((t) => new Date(t.end_time as string).getTime());
+            .filter((t) => t.endTime)
+            .map((t) => new Date(t.endTime as string).getTime());
           if (starts.length > 0 && ends.length > 0) {
             duration = formatDuration(
               new Date(Math.min(...starts)).toISOString(),
@@ -107,12 +90,12 @@ export function useEvent(id: string | undefined) {
         }
         const enrichedQuestions = attachAdvancedQuestionConfiguration(
           adapted.questions,
-          optionSettings,
-          advancedOptions,
+          questions.advanced.settings,
+          questions.advanced.options,
         );
         setEvent({
           ...adapted,
-          advancedAdditionalQuestionsEnabled: advancedEnabled,
+          advancedAdditionalQuestionsEnabled: questions.advanced.enabled,
           questions: enrichedQuestions,
           timeline: timeline.map(adaptTimelineItem),
           rounds: rounds.map(adaptEventRound),

@@ -14,12 +14,13 @@ import { getParticipant } from "@/lib/api/participants";
 import {
   getLivePerformer,
   LivePerformer,
+  liveStateStreamUrl,
   REACTION_EMOJIS,
   submitRating,
   submitReaction,
 } from "@/lib/api/ratings";
 import { ApiError } from "@/lib/api/client";
-import { ParticipantApi } from "@/lib/api/types";
+import type { ParticipantSummary } from "@/lib/api/participants";
 import { getDeviceToken } from "@/lib/reactions/device-token";
 
 // Client-side cooldown after any emoji tap, on top of the server's own
@@ -35,7 +36,7 @@ export default function RateEventPage() {
   const attendeeId = searchParams.get("aid");
   const { event } = useEvent(params.id);
 
-  const [attendee, setAttendee] = useState<ParticipantApi | undefined>();
+  const [attendee, setAttendee] = useState<ParticipantSummary | undefined>();
   const [attendeeStatus, setAttendeeStatus] = useState<
     "loading" | "error" | "ready"
   >(attendeeId ? "loading" : "error");
@@ -79,13 +80,14 @@ export default function RateEventPage() {
 
   useEffect(() => {
     if (!params.id || !event) return;
-    // Anonymous (Casual) viewers subscribe with no attendee_id at all —
-    // already_rated just stays meaningless/unused for them, everything else
+    // Anonymous (Casual) viewers subscribe without an attendee id —
+    // alreadyRated just stays meaningless/unused for them, everything else
     // about the live-performer state is public.
-    const query =
-      requiresAttendee && attendeeId ? `?attendee_id=${attendeeId}` : "";
     const source = new EventSource(
-      `/api/events/${params.id}/live-performer/stream${query}`,
+      liveStateStreamUrl(
+        params.id,
+        requiresAttendee && attendeeId ? attendeeId : undefined,
+      ),
     );
     source.onmessage = (e) => {
       const data: LivePerformer = JSON.parse(e.data);
@@ -128,8 +130,8 @@ export default function RateEventPage() {
     );
   }
 
-  const windowClosesAtMs = live?.window_closes_at
-    ? new Date(live.window_closes_at).getTime()
+  const windowClosesAtMs = live?.windowClosesAt
+    ? new Date(live.windowClosesAt).getTime()
     : null;
   const secondsLeft = windowClosesAtMs
     ? Math.max(0, Math.ceil((windowClosesAtMs - now) / 1000))
@@ -141,26 +143,26 @@ export default function RateEventPage() {
   // only: reactions (Casual) are anonymous and don't have a "window" concept
   // at all — the organizer's Live tab doesn't even show a Start Rating
   // button for Casual rounds (see live-round-panel.tsx), so gating on
-  // window_closes_at here would leave reactions permanently unreachable.
+  // windowClosesAt here would leave reactions permanently unreachable.
   const ratingNotStarted =
     event.ratingMode === "Competitive" &&
-    !!live?.participant_id &&
-    !live?.window_closes_at;
+    !!live?.participantId &&
+    !live?.windowClosesAt;
   // Casual never expires — once started, reactions stay open until a new
   // performer is selected. Only Competitive's 2-minute window actually closes.
   const windowClosed =
     event.ratingMode === "Competitive" &&
-    !!live?.participant_id &&
-    !!live?.window_closes_at &&
+    !!live?.participantId &&
+    !!live?.windowClosesAt &&
     secondsLeft <= 0;
 
   async function handleSubmit() {
-    if (!live?.participant_id || !attendeeId) return;
+    if (!live?.participantId || !attendeeId) return;
     setSubmitting(true);
     setError("");
     try {
-      await submitRating(attendeeId, live.participant_id, rating);
-      setLive({ ...live, already_rated: true });
+      await submitRating(attendeeId, live.participantId, rating);
+      setLive({ ...live, alreadyRated: true });
     } catch (err) {
       setError(
         err instanceof ApiError || err instanceof Error
@@ -173,11 +175,11 @@ export default function RateEventPage() {
   }
 
   function handleReactionTap(emoji: string) {
-    if (!live?.participant_id || reactionCooldown) return;
+    if (!live?.participantId || reactionCooldown) return;
     deviceTokenRef.current ??= getDeviceToken();
     void submitReaction(
       event!.id,
-      live.participant_id,
+      live.participantId,
       emoji,
       deviceTokenRef.current,
     );
@@ -198,7 +200,7 @@ export default function RateEventPage() {
         </p>
       </div>
 
-      {!live?.participant_id ? (
+      {!live?.participantId ? (
         <Card padding="md" className="flex items-center gap-4">
           <div className="bg-border-light flex size-10 shrink-0 items-center justify-center rounded-full">
             <Icon icon={Mic} size="md" className="text-text-secondary" />
@@ -214,7 +216,7 @@ export default function RateEventPage() {
               Now performing
             </p>
             <p className="text-heading text-text-primary font-extrabold">
-              {live.participant_name}
+              {live.participantName}
             </p>
           </div>
 
@@ -230,16 +232,16 @@ export default function RateEventPage() {
           ) : windowClosed ? (
             <div className="border-border-light bg-surface-light flex items-center gap-3 rounded-md border p-4">
               <Icon
-                icon={live.already_rated ? Check : AlertTriangle}
+                icon={live.alreadyRated ? Check : AlertTriangle}
                 size="md"
                 className={
-                  live.already_rated
+                  live.alreadyRated
                     ? "text-success shrink-0"
                     : "text-danger shrink-0"
                 }
               />
               <p className="text-body text-text-primary">
-                {live.already_rated
+                {live.alreadyRated
                   ? "Rating locked in for this performance."
                   : "Rating window closed — this performance can no longer be rated."}
               </p>
@@ -263,7 +265,7 @@ export default function RateEventPage() {
                 ))}
               </div>
             </div>
-          ) : live.already_rated ? (
+          ) : live.alreadyRated ? (
             <div className="border-border-light bg-surface-light flex items-center gap-3 rounded-md border p-4">
               <Icon icon={Check} size="md" className="text-success shrink-0" />
               <p className="text-body text-text-primary">

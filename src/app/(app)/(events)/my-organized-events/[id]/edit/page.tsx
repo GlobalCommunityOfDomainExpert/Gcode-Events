@@ -10,10 +10,7 @@ import {
   listEventMedia,
   listEventSocialLinks,
   listEventTimeline,
-  listEventQuestions,
-  getEventAdvancedEnabled,
-  listAdvancedOptionSettings,
-  listAdvancedOptions,
+  getEventQuestions,
 } from "@/lib/api/events";
 import { listEventRounds } from "@/lib/api/rounds";
 import {
@@ -21,7 +18,7 @@ import {
   attachAdvancedQuestionConfiguration,
 } from "@/lib/api/adapters";
 import { EventEditor } from "@/app/(app)/(events)/my-organized-events/_components/event-editor";
-import type { EventDetail } from "@/lib/api/types";
+import type { EventDetail } from "@/lib/api/events";
 import { EventDetailData } from "@/lib/zod/event";
 
 type LoadStatus = "loading" | "error" | "ready";
@@ -45,43 +42,30 @@ export default function EditOrganizedEventPage() {
           links,
           media,
           faqs,
-          advancedEnabled,
         ] = await Promise.all([
           getEvent(params.id),
           listEventTimeline(params.id),
           listEventRounds(params.id),
-          listEventQuestions(params.id),
+          getEventQuestions(params.id),
           listEventSocialLinks(params.id),
           listEventMedia(params.id),
           listEventFaqs(params.id),
-          getEventAdvancedEnabled(params.id).catch(() => false),
         ]);
-        let optionSettings: Awaited<
-          ReturnType<typeof listAdvancedOptionSettings>
-        > = [];
-        let advancedOptions: Awaited<ReturnType<typeof listAdvancedOptions>> =
-          [];
-        if (advancedEnabled) {
-          [optionSettings, advancedOptions] = await Promise.all([
-            listAdvancedOptionSettings(params.id),
-            listAdvancedOptions(params.id),
-          ]);
-        }
         if (cancelled) return;
         const draft = toEventDraft(
           detail,
           timeline,
           rounds,
-          questions,
+          questions.questions,
           links,
           media,
           faqs,
         );
-        draft.advancedAdditionalQuestionsEnabled = advancedEnabled;
+        draft.advancedAdditionalQuestionsEnabled = questions.advanced.enabled;
         draft.questions = attachAdvancedQuestionConfiguration(
           draft.questions,
-          optionSettings,
-          advancedOptions,
+          questions.advanced.settings,
+          questions.advanced.options,
         );
         setDetail(detail);
         setDraft(draft);

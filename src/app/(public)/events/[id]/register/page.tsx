@@ -30,27 +30,16 @@ import {
 } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { registerForEvent } from "@/lib/api/participants";
-import {
-  createCashfreeOrder,
-  createRazorpayOrder,
-  verifyCashfreeOrder,
-  verifyRazorpayPayment,
-} from "@/lib/api/payments";
-import { validateCoupon } from "@/lib/api/coupons";
+import { createPaymentOrder, verifyPaymentOrder } from "@/lib/api/payments";
+import { validateCoupon, type CouponQuote } from "@/lib/api/coupons";
 import { submitUpiClaim } from "@/lib/api/upi-claims";
-import { ValidateCouponResponse } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
 import { isRegistrationOpen, RegistrationCategory } from "@/lib/event";
 import {
-  loadRazorpayCheckout,
-  openRazorpayCheckout,
-} from "@/lib/payments/razorpay";
-import {
   loadCashfreeCheckout,
   openCashfreeCheckout,
 } from "@/lib/payments/cashfree";
-import { PAYMENT_PROVIDER } from "@/lib/payments/provider";
 import { VerifyEmailModal } from "./_components/verify-email-modal";
 import { RegisterSkeleton } from "./_components/register-skeleton";
 
@@ -74,9 +63,9 @@ async function confirmCashfreeOrder(
   { attempts }: { attempts: number },
 ): Promise<CashfreeOutcome> {
   for (let i = 0; i < attempts; i++) {
-    const result = await verifyCashfreeOrder(orderId);
-    if (result.status === "PAID" && result.participant_id) {
-      return { kind: "paid", participantId: result.participant_id };
+    const result = await verifyPaymentOrder(orderId);
+    if (result.status === "PAID" && result.participantId) {
+      return { kind: "paid", participantId: result.participantId };
     }
     if (result.status === "PAID_UNREGISTERED") return { kind: "unregistered" };
     if (result.status === "FAILED") break;
@@ -92,8 +81,8 @@ function cashfreeUnregisteredMessage(orderId: string): string {
   return `Your payment was received but we couldn't complete your registration (for example, the event just sold out). You will be refunded — please contact support and quote reference ${orderId}.`;
 }
 
-// Signed-in users book by user_id (from the JWT) — the backend already has
-// their account, so there's nothing to ask. Guests (no session) go through
+// Signed-in users register as their session's account — the server already
+// has it, so there's nothing to ask. Guests (no session) go through
 // find-or-create-by-email, same as always, so full name + email are only
 // collected in that branch.
 export default function EventRegisterPage() {
@@ -123,7 +112,7 @@ export default function EventRegisterPage() {
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] =
-    useState<ValidateCouponResponse | null>(null);
+    useState<CouponQuote | null>(null);
   const [couponError, setCouponError] = useState("");
   const [applyingCoupon, setApplyingCoupon] = useState(false);
 
@@ -304,7 +293,6 @@ export default function EventRegisterPage() {
   const isPaid = selected.price > 0;
   // Cashfree needs a phone for every payer, signed in or not (platform
   // onboarding doesn't collect one), so the field is asked at registration.
-  const useCashfree = isPaid && PAYMENT_PROVIDER === "cashfree";
   const currentQuantity = clampQuantity(Number(quantityInput));
   const total = selected.price * currentQuantity;
   // A coupon only counts while it's still priced for the current
@@ -316,7 +304,7 @@ export default function EventRegisterPage() {
     (couponValidatedFor.quantity !== currentQuantity ||
       couponValidatedFor.category !== category);
   const effectiveCoupon = couponIsStale ? null : appliedCoupon;
-  const displayTotal = effectiveCoupon ? effectiveCoupon.final_amount : total;
+  const displayTotal = effectiveCoupon ? effectiveCoupon.finalAmount : total;
 
   async function handleApplyCoupon() {
     const trimmed = couponCode.trim();
@@ -328,13 +316,13 @@ export default function EventRegisterPage() {
     setApplyingCoupon(true);
     setCouponError("");
     try {
-      const result = await validateCoupon(
-        params.id,
-        trimmed,
-        identityPayload(),
+      // Signed in: priced for the session's account.
+      const result = await validateCoupon(params.id, {
+        code: trimmed,
+        quantity: currentQuantity,
         category,
-        currentQuantity,
-      );
+        ...(session ? {} : { email: email.trim() }),
+      });
       setAppliedCoupon(result);
       setCouponValidatedFor({ quantity: currentQuantity, category });
     } catch (err) {
@@ -364,9 +352,9 @@ export default function EventRegisterPage() {
     try {
       await submitUpiClaim(params.id, {
         email: claimEmail,
-        full_name: claimName,
+        fullName: claimName,
         utr: trimmedUtr,
-        amount_claimed: displayTotal,
+        amountClaimed: displayTotal,
       });
       setUpiClaimSubmitted(true);
     } catch (err) {
@@ -378,21 +366,16 @@ export default function EventRegisterPage() {
     }
   }
 
-  // Signed-in -> book by user_id, nothing else needed. Guest -> full name +
-  // email + phone, same as always.
-  function identityPayload():
-    | { user_id: string; phone?: string }
-    | { email: string; full_name: string; phone: string } {
-    if (session) {
-      return useCashfree
-        ? { user_id: session.userId, phone: phone.trim() }
-        : { user_id: session.userId };
-    }
-    return {
-      email: email.trim(),
-      full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-      phone: phone.trim(),
-    };
+  // Signed in: the server uses the session's account, so only the phone
+  // (Cashfree needs one) is sent. Guests send who they are.
+  function payerDetails() {
+    return session
+      ? { phone: phone.trim() }
+      : {
+          email: email.trim(),
+          fullName: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          phone: phone.trim(),
+        };
   }
 
   function submit() {
@@ -405,7 +388,7 @@ export default function EventRegisterPage() {
       if (!email.trim()) nextFieldErrors.email = "Email address is required.";
       if (!phone.trim()) nextFieldErrors.phone = "Phone number is required.";
     }
-    if (useCashfree && !nextFieldErrors.phone && !isValidPhone(phone)) {
+    if (isPaid && !nextFieldErrors.phone && !isValidPhone(phone)) {
       nextFieldErrors.phone = phone.trim()
         ? "Enter a valid 10-digit phone number."
         : "Phone number is required.";
@@ -445,17 +428,22 @@ export default function EventRegisterPage() {
     setSubmitting(true);
     setError("");
     try {
-      if (useCashfree) {
+      if (isPaid) {
         await payWithCashfree(quantity);
-      } else if (isPaid) {
-        await payWithRazorpay(quantity);
       } else {
-        const { participant_id } = await registerForEvent(params.id, {
-          ...identityPayload(),
+        // Signed in: the server registers the session's own account.
+        const { participantId } = await registerForEvent(params.id, {
+          ...(session
+            ? {}
+            : {
+                email: email.trim(),
+                fullName: `${firstName.trim()} ${lastName.trim()}`.trim(),
+                phone: phone.trim(),
+              }),
           quantity,
           category,
         });
-        router.push(`/events/${params.id}/registered?pid=${participant_id}`);
+        router.push(`/events/${params.id}/registered?pid=${participantId}`);
       }
     } catch (err) {
       setError(
@@ -473,81 +461,27 @@ export default function EventRegisterPage() {
     proceed();
   }
 
-  // Order is created (and later verified) server-side, where the Razorpay
-  // key secret lives — this only opens Checkout and hands the signed
-  // response back for the backend to verify before it creates the ticket.
-  // A coupon that fully covers the price makes the backend skip Razorpay
-  // and register the participant directly (see FreeRegistrationApi) — that
-  // branch is handled here before ever touching Checkout.js.
-  async function payWithRazorpay(quantity: number) {
-    const order = await createRazorpayOrder(params.id, {
-      ...identityPayload(),
-      quantity,
-      category,
-      coupon_code: effectiveCoupon ? couponCode.trim() : undefined,
-    });
-
-    if ("free" in order) {
-      router.push(`/events/${params.id}/registered?pid=${order.participant_id}`);
-      return;
-    }
-
-    await loadRazorpayCheckout();
-    const prefillName = session ? session.fullName : firstName.trim();
-    const prefillEmail = session?.email ?? (email.trim() || undefined);
-    await new Promise<void>((resolve, reject) => {
-      openRazorpayCheckout({
-        key: order.key_id,
-        order_id: order.order_id,
-        amount: order.amount,
-        currency: order.currency,
-        name: "GCODE",
-        description: event!.title,
-        prefill: { name: prefillName, email: prefillEmail },
-        handler: (response) => {
-          verifyRazorpayPayment({
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          })
-            .then(({ participant_id }) => {
-              router.push(
-                `/events/${params.id}/registered?pid=${participant_id}`,
-              );
-              resolve();
-            })
-            .catch(reject);
-        },
-        modal: {
-          // User closed the Checkout modal without paying — not an error.
-          ondismiss: () => {
-            setSubmitting(false);
-            resolve();
-          },
-        },
-      });
-    });
-  }
-
-  // Same shape as payWithRazorpay, but nothing the browser reports is trusted:
-  // once checkout closes we ask the backend, which asks Cashfree, whether the
-  // order is really paid. A closed tab is covered by the backend webhook.
+  // Order is created (and later verified) server-side. Nothing the browser
+  // reports is trusted: once checkout closes we ask the backend, which asks
+  // Cashfree, whether the order is really paid. A closed tab is covered by
+  // the backend webhook. A coupon that covers the whole price registers
+  // straight away, without checkout.
   async function payWithCashfree(quantity: number) {
-    const order = await createCashfreeOrder(params.id, {
-      ...identityPayload(),
+    const order = await createPaymentOrder(params.id, {
+      ...payerDetails(),
       quantity,
       category,
-      coupon_code: effectiveCoupon ? couponCode.trim() : undefined,
+      couponCode: effectiveCoupon ? couponCode.trim() : undefined,
     });
 
-    if ("free" in order) {
-      router.push(`/events/${params.id}/registered?pid=${order.participant_id}`);
+    if (order.free) {
+      router.push(`/events/${params.id}/registered?pid=${order.participantId}`);
       return;
     }
 
     await loadCashfreeCheckout();
     const result = await openCashfreeCheckout(
-      order.payment_session_id,
+      order.paymentSessionId,
       order.env,
     );
     // Checkout redirected away (some UPI/bank flows) — the ?cf_order_id return
@@ -557,7 +491,7 @@ export default function EventRegisterPage() {
     // The modal reported success: give Cashfree a few seconds to settle. If it
     // reported an error/dismissal, one check is enough (a payment can still
     // have gone through, which this catches).
-    const outcome = await confirmCashfreeOrder(order.order_id, {
+    const outcome = await confirmCashfreeOrder(order.orderId, {
       attempts: result.paymentDetails ? 5 : 1,
     });
     if (outcome.kind === "paid") {
@@ -566,7 +500,7 @@ export default function EventRegisterPage() {
     }
     setSubmitting(false);
     if (outcome.kind === "unregistered") {
-      setError(cashfreeUnregisteredMessage(order.order_id));
+      setError(cashfreeUnregisteredMessage(order.orderId));
     } else if (result.paymentDetails) {
       setError(CASHFREE_UNCONFIRMED_MESSAGE);
     } else {
@@ -683,7 +617,7 @@ export default function EventRegisterPage() {
                     Registering as{" "}
                     <span className="font-semibold">{session.fullName}</span>
                   </p>
-                  {useCashfree && (
+                  {isPaid && (
                     <FormField
                       label="Phone Number"
                       htmlFor="phone"
@@ -887,9 +821,9 @@ export default function EventRegisterPage() {
                 {effectiveCoupon && (
                   <p className="text-small text-success">
                     Coupon applied —{" "}
-                    {effectiveCoupon.final_amount === 0
+                    {effectiveCoupon.finalAmount === 0
                       ? "your registration is free!"
-                      : `₹${effectiveCoupon.original_amount - effectiveCoupon.final_amount} off`}
+                      : `₹${effectiveCoupon.originalAmount - effectiveCoupon.finalAmount} off`}
                   </p>
                 )}
               </Card>
@@ -906,7 +840,7 @@ export default function EventRegisterPage() {
                   ? [
                       {
                         label: `Coupon (${couponCode.trim()})`,
-                        value: `-₹${effectiveCoupon.original_amount - effectiveCoupon.final_amount}`,
+                        value: `-₹${effectiveCoupon.originalAmount - effectiveCoupon.finalAmount}`,
                       },
                     ]
                   : []),

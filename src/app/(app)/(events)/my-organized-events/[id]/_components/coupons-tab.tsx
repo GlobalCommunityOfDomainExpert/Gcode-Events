@@ -150,11 +150,11 @@ export function CouponsTab({ eventId }: CouponsTabProps) {
     try {
       await createCoupon(eventId, {
         code,
-        discount_type: form.type,
-        discount_value: value,
-        max_redemptions: form.max.trim() ? Number(form.max) : undefined,
-        valid_from: form.from || undefined,
-        valid_to: form.to || undefined,
+        discountType: form.type,
+        discountValue: value,
+        maxRedemptions: form.max.trim() ? Number(form.max) : undefined,
+        validFrom: form.from || undefined,
+        validTo: form.to || undefined,
       });
       setCreating(false);
       notify(`Coupon ${code} created`);

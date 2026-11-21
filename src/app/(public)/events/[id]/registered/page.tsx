@@ -28,7 +28,7 @@ import {
 } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { getParticipant } from "@/lib/api/participants";
-import { ParticipantApi } from "@/lib/api/types";
+import type { ParticipantSummary } from "@/lib/api/participants";
 import { getSession } from "@/lib/auth/session";
 import { renderTicketPng } from "@/lib/ticket-image";
 import { RegisteredSkeleton } from "./_components/registered-skeleton";
@@ -42,7 +42,7 @@ export default function EventRegisteredPage() {
   const { event, status: eventStatus } = useEvent(params.id);
   const session = getSession();
 
-  const [participant, setParticipant] = useState<ParticipantApi | undefined>();
+  const [participant, setParticipant] = useState<ParticipantSummary | undefined>();
   const [participantStatus, setParticipantStatus] = useState<
     "loading" | "error" | "ready"
   >("loading");
