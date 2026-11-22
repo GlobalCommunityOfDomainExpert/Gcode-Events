@@ -26,6 +26,7 @@ DECLARE
   END try;
 BEGIN
   -- 1. REST leftovers
+  try('BEGIN ORDS.DELETE_MODULE(p_module_name => ''gcode.portal.v1''); END;');
   try('BEGIN ORDS.DELETE_MODULE(p_module_name => ''gcode.team.v1''); END;');
   try('BEGIN ORDS.DELETE_MODULE(p_module_name => ''gcode.share-links.v1''); END;');
   try('BEGIN ORDS.DELETE_MODULE(p_module_name => ''gcode.shared.v1''); END;');
@@ -64,6 +65,7 @@ BEGIN
   try('DROP TABLE GCODE_EVENT_LIVE_ATTENDANCE CASCADE CONSTRAINTS PURGE');
   try('DROP TABLE GCODE_EVENT_WEBINAR CASCADE CONSTRAINTS PURGE');
   try('DROP TABLE GCODE_PORTAL_SETTINGS CASCADE CONSTRAINTS PURGE');
+  try('DROP TABLE GCODE_PORTAL_KEY CASCADE CONSTRAINTS PURGE');
 
   -- 4. the column the first version added to EVENTS
   try('ALTER TABLE EVENTS DROP CONSTRAINT CK_EVENTS_LIVE_ROOM');
@@ -80,5 +82,5 @@ SELECT object_name, object_type FROM user_objects
                        'GCODE_EVENT_COMMUNICATIONS', 'GCODE_EVENT_COMM_RECIPIENTS',
                        'GCODE_EVENT_WEBINAR', 'GCODE_EVENT_LIVE_ATTENDANCE',
                        'GCODE_EVENT_LIVE_EVENTS', 'GCODE_EVENT_LIVE_BLOCKS',
-                       'GCODE_EVENT_LIVE_COMMANDS', 'GCODE_PORTAL_SETTINGS')
+                       'GCODE_EVENT_LIVE_COMMANDS', 'GCODE_PORTAL_SETTINGS', 'GCODE_PORTAL_KEY')
     OR object_name LIKE 'GCODE\_PORTAL\_V\_%' ESCAPE '\';

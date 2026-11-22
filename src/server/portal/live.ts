@@ -217,7 +217,7 @@ export async function saveSettings(
 // --------------------------------------------------------- the door
 /** Short-lived, ticket-bound URL for the replay video (a <video> tag cannot send a bearer token). */
 function replaySecret() {
-  const s = process.env.REPLAY_SECRET ?? process.env.ORDS_CLIENT_SECRET;
+  const s = process.env.REPLAY_SECRET ?? process.env.ORDS_PORTAL_KEY;
   if (!s) throw new Error("REPLAY_SECRET is not set");
   return s;
 }

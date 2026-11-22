@@ -1,53 +1,39 @@
 import { API_BASE_URL } from "@/lib/api/client";
 import { HttpError } from "./http";
 
-// ORDS AutoREST client for the Handover 7 tables (docs/sql/organizer-portal).
-// Server-only: it signs in with an OAuth2 client secret that must never reach
-// a browser. APEX holds tables only; every decision is made in the callers.
+// Client for the small ORDS module in docs/sql/organizer-portal/02_rest.sql.
+// Server-only: every request carries ORDS_PORTAL_KEY, which must never reach a
+// browser. APEX holds tables only; the module is plain SELECT / INSERT /
+// UPDATE / DELETE on them, and every decision is made in the callers.
 
-const root = (
+const base = `${(
   process.env.ORDS_ROOT ?? API_BASE_URL.replace(/\/v1\/?$/, "")
-).replace(/\/$/, "");
+).replace(/\/$/, "")}/v1/portal`;
 
-let cached: { token: string; expires: number } | null = null;
-
-async function accessToken(): Promise<string> {
-  if (cached && cached.expires > Date.now() + 30_000) return cached.token;
-  const id = process.env.ORDS_CLIENT_ID;
-  const secret = process.env.ORDS_CLIENT_SECRET;
-  if (!id || !secret)
-    throw new Error("ORDS_CLIENT_ID / ORDS_CLIENT_SECRET are not set");
-  const res = await fetch(`${root}/oauth/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`ORDS token request failed (${res.status})`);
-  const j = (await res.json()) as { access_token: string; expires_in: number };
-  cached = { token: j.access_token, expires: Date.now() + j.expires_in * 1000 };
-  return j.access_token;
+function key(): string {
+  const k = process.env.ORDS_PORTAL_KEY;
+  if (!k) throw new Error("ORDS_PORTAL_KEY is not set");
+  return k;
 }
 
 async function call(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = await accessToken();
-  const res = await fetch(`${root}/${path}`, {
+  return fetch(`${base}/${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
+      "X-Portal-Key": key(),
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
     cache: "no-store",
   });
-  if (res.status === 401) cached = null; // token revoked: sign in again next time
-  return res;
 }
 
 export type Row = Record<string, unknown> & { id?: number };
+
+const query = (where: Record<string, string | number>) =>
+  new URLSearchParams(
+    Object.entries(where).map(([k, v]) => [k, String(v)]),
+  ).toString();
 
 /** All rows matching an equality filter, across pages. */
 export async function list<T = Row>(
@@ -56,8 +42,8 @@ export async function list<T = Row>(
 ): Promise<T[]> {
   const out: T[] = [];
   for (let offset = 0; offset < 20_000; offset += 500) {
-    const q = encodeURIComponent(JSON.stringify(where));
-    const res = await call(`${table}/?q=${q}&limit=500&offset=${offset}`);
+    const qs = query({ ...where, limit: 500, offset });
+    const res = await call(`${table}?${qs}`);
     if (!res.ok) throw new Error(`ORDS ${table} list failed (${res.status})`);
     const j = (await res.json()) as { items: T[]; hasMore?: boolean };
     out.push(...j.items);
@@ -70,35 +56,35 @@ export async function first<T = Row>(
   table: string,
   where: Record<string, string | number>,
 ): Promise<T | null> {
-  const q = encodeURIComponent(JSON.stringify(where));
-  const res = await call(`${table}/?q=${q}&limit=1`);
+  const res = await call(`${table}?${query({ ...where, limit: 1 })}`);
   if (!res.ok) throw new Error(`ORDS ${table} lookup failed (${res.status})`);
   const j = (await res.json()) as { items: T[] };
   return j.items[0] ?? null;
+}
+
+// The module answers HTTP 200 with {"error": "..."} when it refuses or a unique
+// key is hit, the same convention as the rest of this API.
+async function write<T>(res: Response, what: string): Promise<T> {
+  const text = await res.text();
+  if (!res.ok) throw new Error(`ORDS ${what} failed (${res.status})`);
+  const j = JSON.parse(text) as T & { error?: string };
+  if (j.error === "duplicate") throw new HttpError(409, "That already exists");
+  if (j.error) throw new Error(`ORDS ${what} refused: ${j.error}`);
+  return j;
 }
 
 export async function insert<T = Row>(
   table: string,
   row: Record<string, unknown>,
 ): Promise<T> {
-  const res = await call(`${table}/`, {
-    method: "POST",
-    body: JSON.stringify(row),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    // A unique key was hit (a second invite for the same email, a replayed
-    // webhook, a repeated check-in).
-    if (/ORA-00001|unique constraint/i.test(text))
-      throw new HttpError(409, "That already exists");
-    throw new Error(
-      `ORDS ${table} insert failed (${res.status}): ${text.slice(0, 300)}`,
-    );
-  }
-  return JSON.parse(text) as T;
+  const res = await call(table, { method: "POST", body: JSON.stringify(row) });
+  return write<T>(res, `${table} insert`);
 }
 
-/** Full-row replace: omitted columns become NULL, so pass the whole row. */
+/**
+ * Update a row by id. Each table's route changes only its mutable columns, so
+ * passing the whole row (as the callers do) is safe.
+ */
 export async function replace(
   table: string,
   id: number | string,
@@ -110,7 +96,8 @@ export async function replace(
     method: "PUT",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`ORDS ${table} update failed (${res.status})`);
+  const j = await write<{ ok?: boolean }>(res, `${table} update`);
+  if (j.ok === false) throw new Error(`ORDS ${table} update matched no row`);
 }
 
 export async function remove(
@@ -118,10 +105,9 @@ export async function remove(
   id: number | string,
 ): Promise<void> {
   const res = await call(`${table}/${id}`, { method: "DELETE" });
-  if (!res.ok && res.status !== 404)
-    throw new Error(`ORDS ${table} delete failed (${res.status})`);
+  await write(res, `${table} delete`);
 }
 
-/** ISO text ORDS accepts for a TIMESTAMP column. */
+/** ISO text the module turns into a TIMESTAMP. */
 export const ts = (d: Date = new Date()) =>
   d.toISOString().replace(/\.\d+Z$/, "Z");

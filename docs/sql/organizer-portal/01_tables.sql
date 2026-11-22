@@ -29,12 +29,20 @@ BEGIN
                                   'GCODE_EVENT_TEAM', 'GCODE_EVENT_LIVE_BLOCKS',
                                   'GCODE_EVENT_LIVE_EVENTS', 'GCODE_EVENT_LIVE_COMMANDS',
                                   'GCODE_EVENT_LIVE_ATTENDANCE', 'GCODE_EVENT_WEBINAR',
-                                  'GCODE_PORTAL_SETTINGS')
+                                  'GCODE_PORTAL_SETTINGS', 'GCODE_PORTAL_KEY')
              ORDER BY CASE table_name WHEN 'GCODE_EVENT_COMM_RECIPIENTS' THEN 0 ELSE 1 END) LOOP
     EXECUTE IMMEDIATE 'DROP TABLE ' || t.table_name || ' CASCADE CONSTRAINTS PURGE';
   END LOOP;
 END;
 /
+
+-- ----------------------------------------------------------------- access key
+-- One row: the secret the Next.js server sends in the X-Portal-Key header. Every
+-- route in 02_rest.sql checks it. Fill it in before running 02_rest.sql (see
+-- the top of that script). Never expose this table through REST.
+CREATE TABLE GCODE_PORTAL_KEY (
+  API_KEY VARCHAR2(100) NOT NULL
+);
 
 -- ------------------------------------------------------------- team & access
 -- Tokens are 256-bit random values made by the server; only their SHA-256 hash

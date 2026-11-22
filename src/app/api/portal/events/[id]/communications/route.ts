@@ -21,7 +21,7 @@ export const POST = handle<P>(async (req, { id }) => {
     : [];
   return sendComm(intParam(id), requireUser(req), {
     subject: str(b.subject, 200),
-    message: str(b.message, 20_000),
+    message: str(b.message, 4000),
     group: str(b.recipient_group, 12),
     participantIds: ids,
   });
