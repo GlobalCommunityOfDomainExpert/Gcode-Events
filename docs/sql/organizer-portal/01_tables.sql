@@ -37,12 +37,9 @@ END;
 /
 
 -- ----------------------------------------------------------------- access key
--- One row: the secret the Next.js server sends in the X-Portal-Key header. Every
--- route in 02_rest.sql checks it. Fill it in before running 02_rest.sql (see
--- the top of that script). Never expose this table through REST.
-CREATE TABLE GCODE_PORTAL_KEY (
-  API_KEY VARCHAR2(100) NOT NULL
-);
+-- No table here: the key the Next.js server sends in the X-Portal-Key header
+-- lives in your existing GCODE_APP_SECRETS (secret_name 'ORDS_PORTAL_KEY').
+-- Insert it before running 02_rest.sql (see the top of that script).
 
 -- ------------------------------------------------------------- team & access
 -- Tokens are 256-bit random values made by the server; only their SHA-256 hash

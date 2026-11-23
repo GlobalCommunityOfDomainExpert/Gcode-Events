@@ -11,9 +11,10 @@ security privileges (AutoREST and OAuth clients were tried and blocked with ORA-
 0. `99_revert.sql` (only if an earlier attempt left objects behind).
 1. `01_tables.sql`: the tables and read-only views. Re-runnable: it first drops
    the Handover 7 objects of an earlier attempt.
-2. Make a key and store it (see the top of `02_rest.sql`): generate 64 hex
-   characters, then `DELETE FROM gcode_portal_key; INSERT INTO gcode_portal_key
-   (api_key) VALUES ('<key>'); COMMIT;`
+2. Make a key and store it in your existing `GCODE_APP_SECRETS` (see the top of
+   `02_rest.sql`): generate 64 hex characters, then `DELETE FROM gcode_app_secrets
+   WHERE secret_name = 'ORDS_PORTAL_KEY'; INSERT INTO gcode_app_secrets
+   (secret_name, secret_value) VALUES ('ORDS_PORTAL_KEY', '<key>'); COMMIT;`
 3. `02_rest.sql`: creates the module `gcode.portal.v1` (base `/v1/portal/`) with
    plain SELECT / INSERT / UPDATE / DELETE routes. Every route checks the key in
    the `X-Portal-Key` header, so nothing answers without it. It lists every step

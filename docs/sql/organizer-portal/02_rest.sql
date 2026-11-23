@@ -7,15 +7,15 @@
 --
 -- It holds NO logic: each route is a plain SELECT, INSERT, UPDATE or DELETE on one
 -- table or view. Every route first checks a secret key sent in the X-Portal-Key
--- header against the single row in GCODE_PORTAL_KEY, so nothing answers without it
+-- header against the ORDS_PORTAL_KEY row in GCODE_APP_SECRETS, so nothing answers without it
 -- (a wrong key gets no rows and writes nothing). The key lives only in Vercel and
 -- in that table, never in the browser.
 --
--- Before running: put your key in the table (once). Make one with
+-- Before running: put your key in GCODE_APP_SECRETS (once). Make one with
 --     node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 -- then run, on its own:
---     DELETE FROM gcode_portal_key;
---     INSERT INTO gcode_portal_key (api_key) VALUES ('PASTE_THE_64_CHARACTERS_HERE');
+--     DELETE FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY';
+--     INSERT INTO gcode_app_secrets (secret_name, secret_value) VALUES ('ORDS_PORTAL_KEY', 'PASTE_THE_64_CHARACTERS_HERE');
 --     COMMIT;
 -- and set the same value in Vercel as ORDS_PORTAL_KEY.
 --
@@ -60,10 +60,10 @@ BEGIN
 
   -- portal_team -> GCODE_EVENT_TEAM
   route('portal_team', 'GET', 'json/query', q'~SELECT id,event_id,email,user_id,role,status,token_hash,invited_by,invited_on,activated_on FROM GCODE_EVENT_TEAM
-    WHERE (:id IS NULL OR id = :id) AND (:event_id IS NULL OR event_id = :event_id) AND (:token_hash IS NULL OR token_hash = :token_hash) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:id IS NULL OR id = :id) AND (:event_id IS NULL OR event_id = :event_id) AND (:token_hash IS NULL OR token_hash = :token_hash) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_team', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_TEAM (event_id, email, role, token_hash, invited_by) VALUES (:event_id, :email, :role, :token_hash, :invited_by) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -73,21 +73,21 @@ BEGIN
   route('portal_team/:id', 'PUT', 'plsql/block', q'~BEGIN
     UPDATE GCODE_EVENT_TEAM SET role = :role, status = :status, user_id = :user_id, activated_on = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:activated_on, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
      WHERE id = :id
-       AND (SELECT COUNT(*) FROM gcode_portal_key WHERE api_key = :portal_key) > 0;
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
   route('portal_team/:id', 'DELETE', 'plsql/block', q'~BEGIN
     DELETE FROM GCODE_EVENT_TEAM WHERE id = :id
-       AND (SELECT COUNT(*) FROM gcode_portal_key WHERE api_key = :portal_key) > 0;
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
 
   -- portal_share_links -> GCODE_EVENT_SHARE_LINKS
   route('portal_share_links', 'GET', 'json/query', q'~SELECT id,event_id,label,role,token_hash,created_by,created_on,expires_on,revoked_on,views FROM GCODE_EVENT_SHARE_LINKS
-    WHERE (:id IS NULL OR id = :id) AND (:event_id IS NULL OR event_id = :event_id) AND (:token_hash IS NULL OR token_hash = :token_hash) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:id IS NULL OR id = :id) AND (:event_id IS NULL OR event_id = :event_id) AND (:token_hash IS NULL OR token_hash = :token_hash) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_share_links', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_SHARE_LINKS (event_id, label, role, token_hash, created_by, expires_on) VALUES (:event_id, :label, :role, :token_hash, :created_by, TO_TIMESTAMP_TZ(REGEXP_REPLACE(:expires_on, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -97,16 +97,16 @@ BEGIN
   route('portal_share_links/:id', 'PUT', 'plsql/block', q'~BEGIN
     UPDATE GCODE_EVENT_SHARE_LINKS SET revoked_on = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:revoked_on, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), views = :views
      WHERE id = :id
-       AND (SELECT COUNT(*) FROM gcode_portal_key WHERE api_key = :portal_key) > 0;
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
 
   -- portal_checkins -> GCODE_EVENT_CHECKINS
   route('portal_checkins', 'GET', 'json/query', q'~SELECT id,event_id,participant_id,checked_in_on,checked_in_by FROM GCODE_EVENT_CHECKINS
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (:participant_id IS NULL OR participant_id = :participant_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (:participant_id IS NULL OR participant_id = :participant_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_checkins', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_CHECKINS (event_id, participant_id, checked_in_by) VALUES (:event_id, :participant_id, :checked_in_by) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -115,16 +115,16 @@ BEGIN
   END;~');
   route('portal_checkins/:id', 'DELETE', 'plsql/block', q'~BEGIN
     DELETE FROM GCODE_EVENT_CHECKINS WHERE id = :id
-       AND (SELECT COUNT(*) FROM gcode_portal_key WHERE api_key = :portal_key) > 0;
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
 
   -- portal_communications -> GCODE_EVENT_COMMUNICATIONS
   route('portal_communications', 'GET', 'json/query', q'~SELECT id,event_id,subject,message,recipient_group,recipient_count,sent_by,sent_on,status FROM GCODE_EVENT_COMMUNICATIONS
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_communications', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_COMMUNICATIONS (event_id, subject, message, recipient_group, recipient_count, sent_by) VALUES (:event_id, :subject, :message, :recipient_group, :recipient_count, :sent_by) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -135,7 +135,7 @@ BEGIN
   -- portal_comm_recipients -> GCODE_EVENT_COMM_RECIPIENTS
   route('portal_comm_recipients', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_COMM_RECIPIENTS (communication_id, participant_id, email) VALUES (:communication_id, :participant_id, :email) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -145,10 +145,10 @@ BEGIN
 
   -- portal_webinar -> GCODE_EVENT_WEBINAR
   route('portal_webinar', 'GET', 'json/query', q'~SELECT event_id,audience,recording,chat,hand_raise,captions,notice,restream_url,slides_url,replay_published,is_live,is_recording,is_ended,provider,room_ref,recording_url,updated_on FROM GCODE_EVENT_WEBINAR
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (:room_ref IS NULL OR room_ref = :room_ref) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (:room_ref IS NULL OR room_ref = :room_ref) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_webinar', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_WEBINAR (event_id) VALUES (:event_id);
     APEX_JSON.open_object; APEX_JSON.write('event_id', :event_id); APEX_JSON.close_object;
@@ -158,16 +158,16 @@ BEGIN
   route('portal_webinar/:id', 'PUT', 'plsql/block', q'~BEGIN
     UPDATE GCODE_EVENT_WEBINAR SET audience = :audience, recording = :recording, chat = :chat, hand_raise = :hand_raise, captions = :captions, notice = :notice, restream_url = :restream_url, slides_url = :slides_url, replay_published = :replay_published, is_live = :is_live, is_recording = :is_recording, is_ended = :is_ended, room_ref = :room_ref, recording_url = :recording_url, updated_on = SYSTIMESTAMP
      WHERE event_id = :id
-       AND (SELECT COUNT(*) FROM gcode_portal_key WHERE api_key = :portal_key) > 0;
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
 
   -- portal_live_attendance -> GCODE_EVENT_LIVE_ATTENDANCE
   route('portal_live_attendance', 'GET', 'json/query', q'~SELECT id,event_id,participant_id,first_joined,last_joined,last_left,seconds_in FROM GCODE_EVENT_LIVE_ATTENDANCE
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (:participant_id IS NULL OR participant_id = :participant_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (:participant_id IS NULL OR participant_id = :participant_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_live_attendance', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_LIVE_ATTENDANCE (event_id, participant_id, first_joined, last_joined) VALUES (:event_id, :participant_id, TO_TIMESTAMP_TZ(REGEXP_REPLACE(:first_joined, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), TO_TIMESTAMP_TZ(REGEXP_REPLACE(:last_joined, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -177,14 +177,14 @@ BEGIN
   route('portal_live_attendance/:id', 'PUT', 'plsql/block', q'~BEGIN
     UPDATE GCODE_EVENT_LIVE_ATTENDANCE SET last_joined = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:last_joined, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), last_left = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:last_left, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), seconds_in = :seconds_in
      WHERE id = :id
-       AND (SELECT COUNT(*) FROM gcode_portal_key WHERE api_key = :portal_key) > 0;
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
 
   -- portal_live_events -> GCODE_EVENT_LIVE_EVENTS
   route('portal_live_events', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_LIVE_EVENTS (event_id, provider_event_id, kind, participant_id) VALUES (:event_id, :provider_event_id, :kind, :participant_id) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -194,10 +194,10 @@ BEGIN
 
   -- portal_live_blocks -> GCODE_EVENT_LIVE_BLOCKS
   route('portal_live_blocks', 'GET', 'json/query', q'~SELECT id,event_id,participant_id FROM GCODE_EVENT_LIVE_BLOCKS
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_live_blocks', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_portal_key WHERE api_key = :portal_key;
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
     INSERT INTO GCODE_EVENT_LIVE_BLOCKS (event_id, participant_id) VALUES (:event_id, :participant_id) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
@@ -207,19 +207,19 @@ BEGIN
 
   -- portal_v_events -> GCODE_PORTAL_V_EVENTS
   route('portal_v_events', 'GET', 'json/query', q'~SELECT id,title,organizer_id,organizer_name,start_ist,end_ist FROM GCODE_PORTAL_V_EVENTS
-    WHERE (:id IS NULL OR id = :id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:id IS NULL OR id = :id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
 
   -- portal_v_participants -> GCODE_PORTAL_V_PARTICIPANTS
   route('portal_v_participants', 'GET', 'json/query', q'~SELECT id,event_id,user_id,category,active,full_name,email FROM GCODE_PORTAL_V_PARTICIPANTS
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
 
   -- portal_v_money -> GCODE_PORTAL_V_MONEY
   route('portal_v_money', 'GET', 'json/query', q'~SELECT event_id,pending_claims,pending_amount,active_coupons FROM GCODE_PORTAL_V_MONEY
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
 
   -- portal_v_panelists -> GCODE_PORTAL_V_PANELISTS
   route('portal_v_panelists', 'GET', 'json/query', q'~SELECT id,event_id,user_id,invited_email,status,panelist_role,full_name FROM GCODE_PORTAL_V_PANELISTS
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_portal_key k WHERE k.api_key = :portal_key) > 0~');
+    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
 
   COMMIT;
   IF v_failed IS NOT NULL THEN
