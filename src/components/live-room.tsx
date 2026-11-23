@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Loader, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Icon } from "@/components/atoms";
 import type { WebinarRole } from "@/lib/webinar";
-import type { JoinInfo } from "@/lib/api/webinar";
+import { removeFromRoom, type JoinInfo } from "@/lib/api/webinar";
 
 // The one place the video provider's room lives. Pages never import vendor
 // code: they hand this component what our server issued and a role. Switching
@@ -59,12 +59,39 @@ export function LiveRoom({
   refresh: () => Promise<JoinInfo>;
   onLeave: () => void;
 }) {
+  const [current, setCurrent] = useState(join);
+
+  // Interactive attendees wait here until the host has gone live.
+  useEffect(() => {
+    if (current.mode !== "wait") return;
+    let live = true;
+    const t = setInterval(() => {
+      void refresh()
+        .then((r) => live && r.mode !== "wait" && setCurrent(r))
+        .catch(() => undefined);
+    }, 6000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [current.mode, refresh]);
+
   return (
     <main className="mx-auto grid w-full max-w-5xl flex-1 gap-4 px-4 pb-10 sm:px-6">
-      {join.mode === "watch" ? (
-        <Watcher initial={join} refresh={refresh} />
+      {current.mode === "wait" ? (
+        <Waiting
+          title="Waiting for the host"
+          body="The host has not started the session yet. You will be let in by itself as soon as they do."
+        />
+      ) : current.mode === "watch" ? (
+        <Watcher initial={current} refresh={refresh} />
       ) : (
-        <Publisher credential={join.credential} name={name} role={role} />
+        <Publisher
+          eventId={eventId}
+          credential={current.credential}
+          name={name}
+          role={role}
+        />
       )}
       <div className="flex flex-wrap gap-3">
         <button
@@ -185,10 +212,12 @@ interface Tile {
 
 /** Host or speaker: publishes through the SDK. */
 function Publisher({
+  eventId,
   credential,
   name,
   role,
 }: {
+  eventId: string;
   credential: string;
   name: string;
   role: WebinarRole;
@@ -198,6 +227,9 @@ function Publisher({
   const [mic, setMic] = useState(true);
   const [cam, setCam] = useState(true);
   const meeting = useRef<Sdk>(null);
+  const people = useRef(new Map<string, Sdk>());
+  const [toRemove, setToRemove] = useState<Tile | null>(null);
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     let gone = false;
@@ -246,6 +278,7 @@ function Publisher({
         });
         meeting.current = m;
         const watch = (p: Sdk, self: boolean) => {
+          people.current.set(p.id, p);
           push(p.id, p.displayName ?? p.id, self);
           p.on("stream-enabled", (s: Sdk) =>
             track(p.id, p.displayName ?? p.id, self, s),
@@ -260,9 +293,10 @@ function Publisher({
           watch(m.localParticipant, true);
         });
         m.on("participant-joined", (p: Sdk) => watch(p, false));
-        m.on("participant-left", (p: Sdk) =>
-          setTiles((all) => all.filter((t) => t.id !== p.id)),
-        );
+        m.on("participant-left", (p: Sdk) => {
+          people.current.delete(p.id);
+          setTiles((all) => all.filter((t) => t.id !== p.id));
+        });
         m.on("error", () => !gone && setState("error"));
         m.join();
       } catch {
@@ -294,7 +328,28 @@ function Publisher({
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         {tiles.map((t) => (
-          <TileView key={t.id} tile={t} />
+          <TileView
+            key={t.id}
+            tile={t}
+            // Only the host moderates, and only attendees (their id is the
+            // registration number); the host and speakers have "u<id>" ids.
+            onMute={
+              role === "host" && !t.self
+                ? () => {
+                    try {
+                      people.current.get(t.id)?.disableMic();
+                    } catch {
+                      /* already muted or gone */
+                    }
+                  }
+                : undefined
+            }
+            onRemove={
+              role === "host" && !t.self && /^\d+$/.test(t.id)
+                ? () => setToRemove(t)
+                : undefined
+            }
+          />
         ))}
       </div>
       <div className="flex items-center gap-2">
@@ -324,14 +379,71 @@ function Publisher({
           {cam ? "Camera off" : "Camera on"}
         </button>
         <span className="text-xs text-white/60">
-          You are {role === "host" ? "the host" : "a speaker"}
+          You are{" "}
+          {role === "host"
+            ? "the host"
+            : role === "speaker"
+              ? "a speaker"
+              : "a participant"}
         </span>
       </div>
+      {note && <p className="text-small text-white/70">{note}</p>}
+      {toRemove && (
+        <div
+          role="alertdialog"
+          aria-label="Remove from the session"
+          className="max-w-md space-y-3 rounded-md border border-white/20 bg-black/40 p-4"
+        >
+          <p className="text-body font-semibold text-white">
+            Remove {toRemove.name}?
+          </p>
+          <p className="text-small text-white/70">
+            They leave now and cannot rejoin this session.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const who = toRemove;
+                setToRemove(null);
+                void removeFromRoom(eventId, who.id)
+                  .then(() => {
+                    try {
+                      people.current.get(who.id)?.remove();
+                    } catch {
+                      /* the server already blocked them */
+                    }
+                    setNote(`${who.name} was removed`);
+                  })
+                  .catch(() => setNote("Could not remove them. Try again"));
+              }}
+              className="inline-flex h-9 items-center rounded-sm bg-red-600 px-3 text-sm font-semibold text-white hover:bg-red-500"
+            >
+              Remove
+            </button>
+            <button
+              type="button"
+              onClick={() => setToRemove(null)}
+              className="inline-flex h-9 items-center rounded-sm border border-white/25 px-3 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              Keep
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function TileView({ tile }: { tile: Tile }) {
+function TileView({
+  tile,
+  onMute,
+  onRemove,
+}: {
+  tile: Tile;
+  onMute?: () => void;
+  onRemove?: () => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = tile.stream;
@@ -348,6 +460,30 @@ function TileView({ tile }: { tile: Tile }) {
       <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
         {tile.self ? "You" : tile.name}
       </span>
+      {(onMute || onRemove) && (
+        <span className="absolute top-2 right-2 flex gap-1">
+          {onMute && (
+            <button
+              type="button"
+              onClick={onMute}
+              aria-label={`Mute ${tile.name}`}
+              className="rounded bg-black/60 px-2 py-1 text-xs font-semibold text-white hover:bg-black/80"
+            >
+              Mute
+            </button>
+          )}
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label={`Remove ${tile.name}`}
+              className="rounded bg-red-600/80 px-2 py-1 text-xs font-semibold text-white hover:bg-red-600"
+            >
+              Remove
+            </button>
+          )}
+        </span>
+      )}
     </div>
   );
 }

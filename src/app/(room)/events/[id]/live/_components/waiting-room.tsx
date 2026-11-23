@@ -175,10 +175,12 @@ export function WaitingRoom({
   name,
   when,
   backstage,
+  audience,
   onJoin,
 }: {
   event: Event;
   role: WebinarRole;
+  audience: "interactive" | "livestream";
   notice?: string;
   name: string;
   when: string;
@@ -186,7 +188,8 @@ export function WaitingRoom({
   /** Asks the server for a credential; rejects when not allowed. */
   onJoin: () => Promise<void>;
 }) {
-  const onStage = ROLE_CAN[role].publish;
+  // Interactive: every attendee publishes too, so they get the camera check.
+  const onStage = ROLE_CAN[role].publish || audience === "interactive";
   const media = useLocalMedia(onStage);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");

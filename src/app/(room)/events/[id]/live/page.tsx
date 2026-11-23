@@ -188,6 +188,7 @@ export default function WebinarLivePage() {
     <WaitingRoom
       event={event}
       role={role}
+      audience={access.audience}
       notice={access.notice}
       name={session.fullName || "Guest"}
       when={when}

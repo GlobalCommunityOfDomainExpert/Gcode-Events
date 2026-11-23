@@ -76,8 +76,9 @@ Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL
   (`GCODE_EVENT_WEBINAR.HLS_URL`, server-only, returned only while live) and play it with hls.js. Only the host and
   speakers join the meeting.
 - The HLS address has no token or expiry; anyone holding it can watch. It is handed out only to ticket holders.
-- **The Interactive format is not safe yet.** Its attendees still get a meeting token and so could publish by
-  changing their client. Use Webinar until the room has a receive-only custom viewer (or hide Interactive).
+- **Interactive format:** attendees are meant to publish (it is the Meet/Zoom model, up to 50 people), so a
+  meeting token for them is correct. They get none until the host has gone live, they never carry `allow_mod`,
+  and the host can mute or remove anyone from the room (removal also blocks new tokens).
 - Door times: `events.start_date` / `end_date` are stored as UTC; the portal view's `start_ist` / `end_ist` names
   are misleading and the server reads them as UTC.
 - Not tested: the webhook signature and payload mapping (VideoSDK cannot reach localhost; needs a public

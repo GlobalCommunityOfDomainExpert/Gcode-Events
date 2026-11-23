@@ -139,6 +139,8 @@ export interface LiveAccess {
   registered: boolean;
   role: WebinarRole;
   state: WebinarState;
+  /** Interactive: everyone may publish. Livestream: attendees only watch. */
+  audience: "interactive" | "livestream";
   live: boolean;
   notice?: string;
   /** Present only for ticket holders, and only when the replay is published. */
@@ -149,6 +151,7 @@ export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
   const r = await portalRequest<{
     registered: boolean;
     role: "HOST" | "SPEAKER" | "ATTENDEE";
+    audience?: "interactive" | "livestream";
     state: WebinarState;
     live: boolean;
     notice?: string | null;
@@ -162,6 +165,7 @@ export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
         : r.role === "SPEAKER"
           ? "speaker"
           : "attendee",
+    audience: r.audience ?? "livestream",
     state: r.state,
     live: r.live,
     notice: r.notice ?? undefined,
@@ -178,7 +182,8 @@ export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
  */
 export type JoinInfo =
   | { mode: "room"; credential: string }
-  | { mode: "watch"; watchUrl: string | null };
+  | { mode: "watch"; watchUrl: string | null }
+  | { mode: "wait" };
 
 export function requestJoinCredential(eventId: string): Promise<JoinInfo> {
   return portalRequest<JoinInfo>(`/events/${eventId}/live/token`, {

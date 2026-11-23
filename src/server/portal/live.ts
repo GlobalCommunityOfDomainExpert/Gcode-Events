@@ -263,6 +263,7 @@ export async function liveAccess(eventId: number, userId: string | null) {
   return {
     registered: holder,
     role: role.toUpperCase(),
+    audience: w.audience,
     state,
     live: !!w.is_live,
     notice: w.notice,
@@ -297,6 +298,10 @@ export async function joinCredential(eventId: number, userId: string) {
       mode: "watch" as const,
       watchUrl: w.is_live ? w.hls_url : null,
     };
+  // Interactive format: attendees may publish (that is the format), but they
+  // get no credential until the host has gone live, so nobody sits in or opens
+  // an empty room.
+  if (role === "attendee" && !w.is_live) return { mode: "wait" as const };
   const room = await ensureRoom(w, ev);
   const end = (utcMs(ev.end_ist) ?? Date.now()) + CLOSES_AFTER_MIN * 60_000;
   // Short expiry: until the room closes plus 15 minutes, never over 12 hours.
