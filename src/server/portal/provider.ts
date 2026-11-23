@@ -23,7 +23,7 @@ const BASE = "https://api.videosdk.live/v2";
 
 function creds() {
   const key = process.env.VIDEOSDK_API_KEY;
-  const secret = process.env.VIDEOSDK_SECRET;
+  const secret = process.env.VIDEOSDK_API_SECRET ?? process.env.VIDEOSDK_SECRET;
   if (!key || !secret) throw new Error("The video provider is not configured");
   return { key, secret };
 }
