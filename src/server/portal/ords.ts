@@ -74,11 +74,20 @@ async function write<T>(res: Response, what: string): Promise<T> {
   return j;
 }
 
+// ORDS binds a JSON string that ends in "Z" as a timestamp the module's SQL
+// cannot read (HTTP 555), but takes the same time without the "Z". Times read
+// back from ORDS carry a "Z" and a fraction, so every body is cleaned here.
+const ISO_Z = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
+const body = (row: Record<string, unknown>) =>
+  JSON.stringify(row, (_k, v) =>
+    typeof v === "string" && ISO_Z.test(v) ? v.slice(0, 19) : v,
+  );
+
 export async function insert<T = Row>(
   table: string,
   row: Record<string, unknown>,
 ): Promise<T> {
-  const res = await call(table, { method: "POST", body: JSON.stringify(row) });
+  const res = await call(table, { method: "POST", body: body(row) });
   return write<T>(res, `${table} insert`);
 }
 
@@ -91,11 +100,11 @@ export async function replace(
   id: number | string,
   row: Record<string, unknown>,
 ): Promise<void> {
-  const body = { ...row };
-  delete body.links;
+  const clean = { ...row };
+  delete clean.links;
   const res = await call(`${table}/${id}`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body: body(clean),
   });
   const j = await write<{ ok?: boolean }>(res, `${table} update`);
   if (j.ok === false) throw new Error(`ORDS ${table} update matched no row`);
@@ -109,6 +118,5 @@ export async function remove(
   await write(res, `${table} delete`);
 }
 
-/** ISO text the module turns into a TIMESTAMP. */
-export const ts = (d: Date = new Date()) =>
-  d.toISOString().replace(/\.\d+Z$/, "Z");
+/** UTC time as ISO text without the "Z" (see `body`). */
+export const ts = (d: Date = new Date()) => d.toISOString().slice(0, 19);
