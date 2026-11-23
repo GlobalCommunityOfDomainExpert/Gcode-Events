@@ -21,7 +21,8 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
     ...init,
     headers: {
       "X-Portal-Key": key(),
-      "Content-Type": "application/json",
+      // ORDS answers 400 to a DELETE or GET that declares a body it does not have.
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
     cache: "no-store",

@@ -77,7 +77,7 @@ BEGIN
     WHEN DUP_VAL_ON_INDEX THEN APEX_JSON.open_object; APEX_JSON.write('error', 'duplicate'); APEX_JSON.close_object;
   END;~');
   route('portal_team/:id', 'PUT', 'plsql/block', q'~BEGIN
-    UPDATE GCODE_EVENT_TEAM SET role = :role, status = :status, user_id = :user_id, activated_on = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:activated_on, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+    UPDATE GCODE_EVENT_TEAM SET role = :role, status = :status, user_id = :user_id, activated_on = TO_TIMESTAMP(REPLACE(SUBSTR(:activated_on, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS')
      WHERE id = :id
        AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
@@ -95,13 +95,13 @@ BEGIN
   BEGIN
     SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
-    INSERT INTO GCODE_EVENT_SHARE_LINKS (event_id, label, role, token_hash, created_by, expires_on) VALUES (:event_id, :label, :role, :token_hash, :created_by, TO_TIMESTAMP_TZ(REGEXP_REPLACE(:expires_on, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) RETURNING id INTO v_id;
+    INSERT INTO GCODE_EVENT_SHARE_LINKS (event_id, label, role, token_hash, created_by, expires_on) VALUES (:event_id, :label, :role, :token_hash, :created_by, TO_TIMESTAMP(REPLACE(SUBSTR(:expires_on, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS')) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
   EXCEPTION
     WHEN DUP_VAL_ON_INDEX THEN APEX_JSON.open_object; APEX_JSON.write('error', 'duplicate'); APEX_JSON.close_object;
   END;~');
   route('portal_share_links/:id', 'PUT', 'plsql/block', q'~BEGIN
-    UPDATE GCODE_EVENT_SHARE_LINKS SET revoked_on = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:revoked_on, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), views = :views
+    UPDATE GCODE_EVENT_SHARE_LINKS SET revoked_on = TO_TIMESTAMP(REPLACE(SUBSTR(:revoked_on, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS'), views = :views
      WHERE id = :id
        AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
@@ -175,13 +175,13 @@ BEGIN
   BEGIN
     SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
     IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
-    INSERT INTO GCODE_EVENT_LIVE_ATTENDANCE (event_id, participant_id, first_joined, last_joined) VALUES (:event_id, :participant_id, TO_TIMESTAMP_TZ(REGEXP_REPLACE(:first_joined, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), TO_TIMESTAMP_TZ(REGEXP_REPLACE(:last_joined, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) RETURNING id INTO v_id;
+    INSERT INTO GCODE_EVENT_LIVE_ATTENDANCE (event_id, participant_id, first_joined, last_joined) VALUES (:event_id, :participant_id, TO_TIMESTAMP(REPLACE(SUBSTR(:first_joined, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS'), TO_TIMESTAMP(REPLACE(SUBSTR(:last_joined, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS')) RETURNING id INTO v_id;
     APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
   EXCEPTION
     WHEN DUP_VAL_ON_INDEX THEN APEX_JSON.open_object; APEX_JSON.write('error', 'duplicate'); APEX_JSON.close_object;
   END;~');
   route('portal_live_attendance/:id', 'PUT', 'plsql/block', q'~BEGIN
-    UPDATE GCODE_EVENT_LIVE_ATTENDANCE SET last_joined = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:last_joined, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), last_left = TO_TIMESTAMP_TZ(REGEXP_REPLACE(:last_left, '\.\d+Z$', 'Z'), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), seconds_in = :seconds_in
+    UPDATE GCODE_EVENT_LIVE_ATTENDANCE SET last_joined = TO_TIMESTAMP(REPLACE(SUBSTR(:last_joined, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS'), last_left = TO_TIMESTAMP(REPLACE(SUBSTR(:last_left, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS'), seconds_in = :seconds_in
      WHERE id = :id
        AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
