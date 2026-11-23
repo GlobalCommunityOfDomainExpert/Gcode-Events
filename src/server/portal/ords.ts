@@ -36,28 +36,28 @@ const query = (where: Record<string, string | number>) =>
     Object.entries(where).map(([k, v]) => [k, String(v)]),
   ).toString();
 
-/** All rows matching an equality filter, across pages. */
+// ORDS answers an empty list as soon as a limit or offset parameter is sent to
+// these routes, so no paging is requested: the module returns up to 10,000
+// rows per call (02_rest.sql) and a longer result is an error, not a silent cut.
+/** All rows matching an equality filter. */
 export async function list<T = Row>(
   table: string,
   where: Record<string, string | number> = {},
 ): Promise<T[]> {
-  const out: T[] = [];
-  for (let offset = 0; offset < 20_000; offset += 500) {
-    const qs = query({ ...where, limit: 500, offset });
-    const res = await call(`${table}?${qs}`);
-    if (!res.ok) throw new Error(`ORDS ${table} list failed (${res.status})`);
-    const j = (await res.json()) as { items: T[]; hasMore?: boolean };
-    out.push(...j.items);
-    if (!j.hasMore) break;
-  }
-  return out;
+  const qs = query(where);
+  const res = await call(`${table}${qs ? `?${qs}` : ""}`);
+  if (!res.ok) throw new Error(`ORDS ${table} list failed (${res.status})`);
+  const j = (await res.json()) as { items: T[]; hasMore?: boolean };
+  if (j.hasMore)
+    throw new Error(`ORDS ${table} list has more than 10,000 rows`);
+  return j.items;
 }
 
 export async function first<T = Row>(
   table: string,
   where: Record<string, string | number>,
 ): Promise<T | null> {
-  const res = await call(`${table}?${query({ ...where, limit: 1 })}`);
+  const res = await call(`${table}?${query(where)}`);
   if (!res.ok) throw new Error(`ORDS ${table} lookup failed (${res.status})`);
   const j = (await res.json()) as { items: T[] };
   return j.items[0] ?? null;

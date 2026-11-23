@@ -62,7 +62,7 @@ BEGIN
   v_failed := NULL;   -- nothing to drop the first time
   step('create module',
     'BEGIN ORDS.DEFINE_MODULE(p_module_name => ''gcode.portal.v1'', p_base_path => ''/v1/portal/'', '
-    || 'p_items_per_page => 500, p_status => ''PUBLISHED'', p_comments => NULL); END;');
+    || 'p_items_per_page => 10000, p_status => ''PUBLISHED'', p_comments => NULL); END;');
 
   -- portal_team -> GCODE_EVENT_TEAM
   route('portal_team', 'GET', 'json/query', q'~SELECT id,event_id,email,user_id,role,status,token_hash,invited_by,invited_on,activated_on FROM GCODE_EVENT_TEAM
