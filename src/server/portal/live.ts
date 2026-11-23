@@ -380,7 +380,12 @@ export async function hostAction(
     if (w.is_live) return;
     let hls: string | null = null;
     if (w.audience === "livestream")
-      hls = await provider.startStream(room, hook);
+      hls = await provider.startStream(room, hook).catch((e: unknown) => {
+        // The provider only streams a session someone is in.
+        if (/No active session/i.test(String(e)))
+          throw badRequest("Join the room first, then go live");
+        throw e;
+      });
     let recording = 0;
     if (w.recording) {
       await provider.startRecording(room, hook);
