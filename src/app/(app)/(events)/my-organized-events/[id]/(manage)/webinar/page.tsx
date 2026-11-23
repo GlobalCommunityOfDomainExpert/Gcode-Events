@@ -382,11 +382,6 @@ function SetupPhase({
       : roomLimit.webinarViewers;
   const ready = [
     {
-      label: "Room created",
-      ok: true,
-      hint: "Created by the server when the session is set up",
-    },
-    {
       label: "A host is assigned",
       ok: hosts > 0,
       hint: hosts ? "" : "Someone has to go live and moderate.",
