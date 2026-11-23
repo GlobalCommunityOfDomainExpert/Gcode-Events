@@ -126,7 +126,7 @@ BEGIN
   END;~');
 
   -- portal_webinar -> GCODE_EVENT_WEBINAR
-  route('portal_webinar', 'GET', 'json/query', q'~SELECT event_id,audience,recording,chat,hand_raise,captions,notice,restream_url,slides_url,replay_published,is_live,is_recording,is_ended,provider,room_ref,recording_url,updated_on FROM GCODE_EVENT_WEBINAR
+  route('portal_webinar', 'GET', 'json/query', q'~SELECT event_id,audience,recording,chat,hand_raise,captions,notice,restream_url,slides_url,replay_published,is_live,is_recording,is_ended,provider,room_ref,recording_url,hls_url,updated_on FROM GCODE_EVENT_WEBINAR
     WHERE (:event_id IS NULL OR event_id = :event_id) AND (:room_ref IS NULL OR room_ref = :room_ref) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
   route('portal_webinar', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER;
   BEGIN
@@ -138,7 +138,7 @@ BEGIN
     WHEN DUP_VAL_ON_INDEX THEN APEX_JSON.open_object; APEX_JSON.write('error', 'duplicate'); APEX_JSON.close_object;
   END;~');
   route('portal_webinar/:id', 'PUT', 'plsql/block', q'~BEGIN
-    UPDATE GCODE_EVENT_WEBINAR SET audience = :audience, recording = :recording, chat = :chat, hand_raise = :hand_raise, captions = :captions, notice = :notice, restream_url = :restream_url, slides_url = :slides_url, replay_published = :replay_published, is_live = :is_live, is_recording = :is_recording, is_ended = :is_ended, room_ref = :room_ref, recording_url = :recording_url, updated_on = SYSTIMESTAMP
+    UPDATE GCODE_EVENT_WEBINAR SET audience = :audience, recording = :recording, chat = :chat, hand_raise = :hand_raise, captions = :captions, notice = :notice, restream_url = :restream_url, slides_url = :slides_url, replay_published = :replay_published, is_live = :is_live, is_recording = :is_recording, is_ended = :is_ended, room_ref = :room_ref, recording_url = :recording_url, hls_url = :hls_url, updated_on = SYSTIMESTAMP
      WHERE event_id = :id
        AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;

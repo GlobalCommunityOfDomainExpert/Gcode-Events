@@ -112,6 +112,7 @@ CREATE TABLE GCODE_EVENT_WEBINAR (
   PROVIDER         VARCHAR2(20) DEFAULT 'VIDEOSDK' NOT NULL,
   ROOM_REF         VARCHAR2(200),
   RECORDING_URL    VARCHAR2(1000),   -- OUR storage, set after the recording is copied
+  HLS_URL          VARCHAR2(1000),   -- the live watch address; secret, server-only, cleared when the stream stops
   UPDATED_ON       TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
   CONSTRAINT CK_WEBINAR_AUDIENCE CHECK (AUDIENCE IN ('interactive','livestream'))
 );
@@ -159,6 +160,7 @@ CREATE TABLE GCODE_EVENT_LIVE_BLOCKS (
 CREATE OR REPLACE VIEW GCODE_PORTAL_V_EVENTS AS
   SELECT e.id AS id, e.title AS title, TO_CHAR(e.organizer_id) AS organizer_id,
          o.full_name AS organizer_name,
+         -- NB: despite the _ist names these are UTC wall-clock, as stored.
          TO_CHAR(e.start_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS start_ist,
          TO_CHAR(NVL(e.end_date, e.start_date), 'YYYY-MM-DD"T"HH24:MI:SS') AS end_ist
     FROM events e

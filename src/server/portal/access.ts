@@ -43,9 +43,13 @@ export interface LinkRow extends db.Row {
   views: number;
 }
 
-/** events.start_date / end_date are India wall-clock time. */
-export const istMs = (s: string | null | undefined): number | null =>
-  s ? Date.parse(`${s}+05:30`) : null;
+/**
+ * events.start_date / end_date are stored as UTC wall-clock (the API returns
+ * them with +00:00), whatever the portal view's start_ist / end_ist names say.
+ * Reading them as India time put every door window 5.5 hours off.
+ */
+export const utcMs = (s: string | null | undefined): number | null =>
+  s ? Date.parse(`${s}Z`) : null;
 
 export async function getEvent(eventId: number): Promise<EventRow> {
   const ev = await db.first<EventRow>("portal_v_events", { id: eventId });

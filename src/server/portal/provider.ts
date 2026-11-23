@@ -106,7 +106,8 @@ export function credentialFor(
   const now = Math.floor(Date.now() / 1000);
   return sign({
     apikey: key,
-    permissions: [role === "host" ? "allow_mod" : "allow_join"],
+    // Proven in the spike: allow_mod alone cannot join, so the host needs both.
+    permissions: role === "host" ? ["allow_join", "allow_mod"] : ["allow_join"],
     version: 2,
     roomId,
     participantId,
@@ -115,9 +116,25 @@ export function credentialFor(
   });
 }
 
-export const startStream = (roomId: string, webhookUrl: string) =>
-  rest("/hls/start", { roomId, webhookUrl });
-export const stopStream = (roomId: string) => rest("/hls/stop", { roomId });
+/**
+ * Starts HLS and returns the watch URL. Proven in the spike: the response
+ * carries playbackHlsUrl at once, and the CDN serves it with no token or
+ * expiry, so the URL is a secret: only the server may hand it out.
+ */
+export async function startStream(
+  roomId: string,
+  webhookUrl: string,
+): Promise<string> {
+  const r = await rest<{ playbackHlsUrl?: string }>("/hls/start", {
+    roomId,
+    webhookUrl,
+  });
+  if (!r.playbackHlsUrl)
+    throw new Error("The provider did not return a stream");
+  return r.playbackHlsUrl;
+}
+// The stop path is /hls/end (the spike got 404 on /hls/stop).
+export const stopStream = (roomId: string) => rest("/hls/end", { roomId });
 export const startRecording = (roomId: string, webhookUrl: string) =>
   rest("/recordings/start", { roomId, webhookUrl });
 export const stopRecording = (roomId: string) =>

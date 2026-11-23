@@ -172,14 +172,17 @@ export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
 }
 
 /**
- * A short-lived credential for this viewer's role, tied to their registration.
- * 403 when not registered or outside the window. The string is opaque: the
- * LiveRoom component hands it to the provider.
+ * What the server lets this viewer do: a short-lived meeting credential (host
+ * and speakers) or, for a Webinar attendee, the stream address. 403 when not
+ * registered or outside the window.
  */
-export async function requestJoinCredential(eventId: string): Promise<string> {
-  const r = await portalRequest<{ credential: string }>(
-    `/events/${eventId}/live/token`,
-    { method: "POST", body: {} },
-  );
-  return r.credential;
+export type JoinInfo =
+  | { mode: "room"; credential: string }
+  | { mode: "watch"; watchUrl: string | null };
+
+export function requestJoinCredential(eventId: string): Promise<JoinInfo> {
+  return portalRequest<JoinInfo>(`/events/${eventId}/live/token`, {
+    method: "POST",
+    body: {},
+  });
 }

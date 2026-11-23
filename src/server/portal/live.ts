@@ -4,7 +4,7 @@ import { badRequest, forbidden, HttpError, notFound } from "./http";
 import {
   getEvent,
   isManager,
-  istMs,
+  utcMs,
   requireManager,
   type EventRow,
 } from "./access";
@@ -34,6 +34,7 @@ export interface WebinarRow extends db.Row {
   provider: string;
   room_ref: string | null;
   recording_url: string | null;
+  hls_url: string | null;
 }
 
 interface PartRow extends db.Row {
@@ -101,7 +102,7 @@ async function roleOf(ev: EventRow, userId: string | null): Promise<OurRole> {
 }
 
 const stateOf = (ev: EventRow, role: OurRole, now = new Date()) =>
-  webinarState(iso(istMs(ev.start_ist)), iso(istMs(ev.end_ist)), role, now);
+  webinarState(iso(utcMs(ev.start_ist)), iso(utcMs(ev.end_ist)), role, now);
 
 const flag = (b: unknown): number | undefined =>
   b === undefined ? undefined : b ? 1 : 0;
@@ -287,15 +288,27 @@ export async function joinCredential(eventId: number, userId: string) {
     if (blocks.some((b) => b.participant_id === reg))
       throw forbidden("You were removed from this session");
   }
+  // Webinar format: attendees only watch. Proven in the spike that anyone
+  // holding a meeting token can switch their mode and publish audio and video,
+  // so an attendee never gets one. They get the stream address instead, and
+  // only while the host is live.
+  if (role === "attendee" && w.audience === "livestream")
+    return {
+      mode: "watch" as const,
+      watchUrl: w.is_live ? w.hls_url : null,
+    };
   const room = await ensureRoom(w);
-  const end = (istMs(ev.end_ist) ?? Date.now()) + CLOSES_AFTER_MIN * 60_000;
+  const end = (utcMs(ev.end_ist) ?? Date.now()) + CLOSES_AFTER_MIN * 60_000;
   // Short expiry: until the room closes plus 15 minutes, never over 12 hours.
   const ttl = Math.min(
     12 * 3600,
     Math.max(900, Math.round((end - Date.now()) / 1000) + 900),
   );
   const pid = role === "attendee" ? String(reg) : `u${userId}`;
-  return { credential: provider.credentialFor(room, role, pid, ttl) };
+  return {
+    mode: "room" as const,
+    credential: provider.credentialFor(room, role, pid, ttl),
+  };
 }
 
 async function ensureRoom(w: WebinarRow): Promise<string> {
@@ -348,16 +361,18 @@ export async function hostAction(
   const room = await ensureRoom(w);
   if (action === "go-live") {
     if (w.is_live) return;
-    if (w.audience === "livestream") await provider.startStream(room, hook);
+    let hls: string | null = null;
+    if (w.audience === "livestream")
+      hls = await provider.startStream(room, hook);
     let recording = 0;
     if (w.recording) {
       await provider.startRecording(room, hook);
       recording = 1;
     }
-    await save({ is_live: 1, is_recording: recording });
+    await save({ is_live: 1, is_recording: recording, hls_url: hls });
   } else if (action === "stop") {
     if (w.audience === "livestream") await provider.stopStream(room);
-    await save({ is_live: 0 });
+    await save({ is_live: 0, hls_url: null });
   } else if (action === "record") {
     const on = b.enabled === true || b.enabled === "true";
     if (on && !w.is_recording) await provider.startRecording(room, hook);
@@ -366,7 +381,7 @@ export async function hostAction(
   } else if (action === "end") {
     if (w.is_recording) await provider.stopRecording(room).catch(() => {});
     await provider.endRoom(room);
-    await save({ is_live: 0, is_recording: 0, is_ended: 1 });
+    await save({ is_live: 0, is_recording: 0, is_ended: 1, hls_url: null });
   }
 }
 
@@ -439,11 +454,12 @@ export async function applyProviderEvent(ev: NormalizedEvent) {
     });
   const kind: LiveKind = ev.kind;
   if (kind === "live_started") await set({ is_live: 1 });
-  else if (kind === "live_stopped") await set({ is_live: 0 });
+  else if (kind === "live_stopped") await set({ is_live: 0, hls_url: null });
   else if (kind === "recording_started") await set({ is_recording: 1 });
-  else if (kind === "failed") await set({ is_live: 0, is_recording: 0 });
+  else if (kind === "failed")
+    await set({ is_live: 0, is_recording: 0, hls_url: null });
   else if (kind === "session_closed")
-    await set({ is_live: 0, is_recording: 0, is_ended: 1 });
+    await set({ is_live: 0, is_recording: 0, is_ended: 1, hls_url: null });
   else if (kind === "recording_ready") {
     await set({ is_recording: 0 });
     if (ev.fileUrl) await copyRecording(w, ev.fileUrl);

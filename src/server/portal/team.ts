@@ -5,7 +5,7 @@ import {
   getEvent,
   isManager,
   isOrganizer,
-  istMs,
+  utcMs,
   requireManager,
   roleCan,
   scopeOf,
@@ -133,7 +133,7 @@ export async function createLink(
   else if (expiry === "NEVER") expires = null;
   else if (expiry === "EVENT_END") {
     // a day of slack after the end, so the link works through the wrap-up
-    const end = istMs(ev.end_ist) ?? istMs(ev.start_ist) ?? Date.now();
+    const end = utcMs(ev.end_ist) ?? utcMs(ev.start_ist) ?? Date.now();
     expires = db.ts(new Date(end + day));
   } else throw badRequest("Unknown expiry");
   const token = newToken();

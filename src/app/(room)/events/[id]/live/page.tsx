@@ -8,6 +8,7 @@ import { useSession } from "@/hooks/use-session";
 import {
   getLiveAccess,
   requestJoinCredential,
+  type JoinInfo,
   type LiveAccess,
 } from "@/lib/api/webinar";
 import { LIVE_ROOM_ENABLED } from "@/lib/feature-flags";
@@ -39,7 +40,7 @@ export default function WebinarLivePage() {
   const { event, status } = useEvent(params.id);
   const [access, setAccess] = useState<LiveAccess | null>();
   const [stage, setStage] = useState<
-    { kind: "door" } | { kind: "room"; credential: string } | { kind: "left" }
+    { kind: "door" } | { kind: "room"; join: JoinInfo } | { kind: "left" }
   >({ kind: "door" });
 
   const refresh = useCallback(async () => {
@@ -158,7 +159,9 @@ export default function WebinarLivePage() {
       <RoomFrame title={event.title} subtitle={when}>
         <LiveRoom
           eventId={event.id}
-          credential={stage.credential}
+          join={stage.join}
+          refresh={() => requestJoinCredential(event.id)}
+          name={session.fullName || "Guest"}
           role={role}
           onLeave={() => setStage({ kind: "left" })}
         />
@@ -190,8 +193,8 @@ export default function WebinarLivePage() {
       when={when}
       backstage={state === "BACKSTAGE"}
       onJoin={async () => {
-        const credential = await requestJoinCredential(event.id);
-        setStage({ kind: "room", credential });
+        const join = await requestJoinCredential(event.id);
+        setStage({ kind: "room", join });
       }}
     />,
   );
