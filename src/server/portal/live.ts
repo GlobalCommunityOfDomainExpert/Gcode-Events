@@ -297,7 +297,7 @@ export async function joinCredential(eventId: number, userId: string) {
       mode: "watch" as const,
       watchUrl: w.is_live ? w.hls_url : null,
     };
-  const room = await ensureRoom(w);
+  const room = await ensureRoom(w, ev);
   const end = (utcMs(ev.end_ist) ?? Date.now()) + CLOSES_AFTER_MIN * 60_000;
   // Short expiry: until the room closes plus 15 minutes, never over 12 hours.
   const ttl = Math.min(
@@ -311,8 +311,21 @@ export async function joinCredential(eventId: number, userId: string) {
   };
 }
 
-async function ensureRoom(w: WebinarRow): Promise<string> {
+/** The provider room is created this long before the start, never earlier. */
+export const ROOM_OPENS_BEFORE_MIN = 5;
+
+/**
+ * Saving settings never touches the provider. The room is created on first
+ * need, and only once the session is within ROOM_OPENS_BEFORE_MIN of starting
+ * (or later), so no room exists for an event that is still days away.
+ */
+async function ensureRoom(w: WebinarRow, ev: EventRow): Promise<string> {
   if (w.room_ref) return w.room_ref;
+  const start = utcMs(ev.start_ist);
+  if (start !== null && Date.now() < start - ROOM_OPENS_BEFORE_MIN * 60_000)
+    throw forbidden(
+      `The room is set up ${ROOM_OPENS_BEFORE_MIN} minutes before the start. Come back then`,
+    );
   const room = await provider.createRoom();
   await db.replace("portal_webinar", w.event_id, { ...w, room_ref: room });
   w.room_ref = room;
@@ -358,7 +371,11 @@ export async function hostAction(
     throw badRequest("Live captions are not available with this room");
   if (w.is_ended) throw badRequest("This session has ended");
 
-  const room = await ensureRoom(w);
+  // Only go-live may create the room. Anything else with no room has nothing
+  // to act on, so it must not make one.
+  if (action !== "go-live" && !w.room_ref)
+    throw badRequest("The room has not been set up yet");
+  const room = await ensureRoom(w, ev);
   if (action === "go-live") {
     if (w.is_live) return;
     let hls: string | null = null;
