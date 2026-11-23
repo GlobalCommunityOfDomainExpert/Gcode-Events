@@ -13,7 +13,6 @@ import {
   Eye,
   KeyRound,
   Lock,
-  Mail,
   Megaphone,
   MessageSquare,
   Mic,
@@ -34,10 +33,7 @@ import {
   saveWebinar,
   type HostAction,
 } from "@/lib/api/webinar";
-import {
-  LIVE_ROOM_ENABLED,
-  ORGANIZER_PORTAL_ENABLED,
-} from "@/lib/feature-flags";
+import { LIVE_ROOM_ENABLED } from "@/lib/feature-flags";
 import {
   CLOSES_AFTER_MIN,
   DEFAULT_WEBINAR,
@@ -298,7 +294,6 @@ export default function WebinarPage() {
         <AfterPhase
           config={config}
           recordingReady={status.recordingReady}
-          base={base}
           onPersist={(patch, message) => void persist(patch, message)}
         />
       )}
@@ -1148,12 +1143,10 @@ function LivePhase({
 function AfterPhase({
   config,
   recordingReady,
-  base,
   onPersist,
 }: {
   config: WebinarConfig;
   recordingReady: boolean;
-  base: string;
   onPersist: (patch: Partial<WebinarConfig>, message?: string) => void;
 }) {
   const [slides, setSlides] = useState(config.slidesUrl ?? "");
@@ -1218,36 +1211,6 @@ function AfterPhase({
           </FormField>
         </div>
       </section>
-
-      {ORGANIZER_PORTAL_ENABLED && (
-        <section className={card}>
-          <h3 className="text-text-primary flex items-center gap-2 font-bold">
-            <Icon icon={Mail} size="sm" className="text-text-secondary" />{" "}
-            Follow up
-          </h3>
-          <p className="text-small text-text-secondary">
-            The best time is within a day, while it&apos;s fresh.
-          </p>
-          <Link
-            href={`${base}/communication`}
-            className="border-border-light hover:border-border-hover mt-4 flex items-center gap-3 rounded-md border p-3 transition-colors"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="text-small text-text-primary block font-semibold">
-                Thank attendees
-              </span>
-              <span className="text-text-secondary block text-xs">
-                With the replay, slides and a feedback link
-              </span>
-            </span>
-            <Icon
-              icon={ExternalLink}
-              size="sm"
-              className="text-text-secondary size-3.5"
-            />
-          </Link>
-        </section>
-      )}
     </div>
   );
 }

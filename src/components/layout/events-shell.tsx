@@ -11,7 +11,6 @@ import {
   CalendarPlus,
   LayoutDashboard,
   LayoutGrid,
-  Mail,
   MonitorPlay,
   PencilLine,
   Receipt,
@@ -156,12 +155,6 @@ function buildOrganizerLinks(
       : []),
     ...(ORGANIZER_PORTAL_ENABLED
       ? ([
-          {
-            label: "Communication",
-            href: `${base}/communication`,
-            icon: Mail,
-            groupLabel: "Engage",
-          },
           {
             label: "Team & access",
             href: `${base}/team`,

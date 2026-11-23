@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Download, Mail, Trash2, Users } from "lucide-react";
+import { ChevronRight, Download, Trash2, Users } from "lucide-react";
 import {
   Avatar,
   Badge,
@@ -61,8 +61,6 @@ export interface AttendeesTabProps {
   attendees: Attendee[];
   /** True until the first attendee fetch resolves — shows a list skeleton. */
   loading?: boolean;
-  /** Set when the Communication page exists; shows the Message buttons. */
-  onNavigateToCommunication?: () => void;
   selectedIds: Set<string>;
   onSelectedIdsChange: (ids: Set<string>) => void;
   // Refetches the attendee list after a remove.
@@ -107,7 +105,6 @@ export function AttendeesTab({
   event,
   attendees,
   loading = false,
-  onNavigateToCommunication,
   selectedIds,
   onSelectedIdsChange,
   onAttendeesChanged,
@@ -302,11 +299,6 @@ export function AttendeesTab({
             >
               <Icon icon={Download} size="sm" /> Export
             </Button>
-            {onNavigateToCommunication && (
-              <Button variant="secondary" onClick={onNavigateToCommunication}>
-                <Icon icon={Mail} size="sm" /> Message
-              </Button>
-            )}
           </>
         }
       />
@@ -511,15 +503,6 @@ export function AttendeesTab({
           >
             <Icon icon={Download} size="sm" /> Export
           </Button>
-          {onNavigateToCommunication && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onNavigateToCommunication}
-            >
-              <Icon icon={Mail} size="sm" /> Email
-            </Button>
-          )}
           <Button
             size="sm"
             variant="danger"

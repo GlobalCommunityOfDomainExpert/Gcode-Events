@@ -28,7 +28,7 @@ Required for the portal:
 |---|---|
 | `ORDS_PORTAL_KEY` | the key from step 2 (server only, never `NEXT_PUBLIC_`) |
 | `JWT_SECRET` | the secret that signs sign-in tokens (it lives in the database). Without it callers are only decoded, not verified |
-| `NEXT_PUBLIC_ORGANIZER_PORTAL=true` | shows Communication and Team & access |
+| `NEXT_PUBLIC_ORGANIZER_PORTAL=true` | shows Team & access |
 
 Required for the live room:
 
@@ -50,8 +50,6 @@ Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL
   never be co-organizer.
 - `GET /shared/:token` has no side effects; `POST .../open` counts a view or activates an invite;
   `.../data` returns only what the role may see, never contacts.
-- Communications: the browser names a group, the server resolves recipients and returns the real count; 5 sends
-  per event per hour. "Paid" is rejected until payment status can be told. Rows are written as QUEUED.
 - Live room: role, registration and door state come from the server; room-shaping settings lock once doors
   open; removed people get no credential; host actions run against the provider from the server.
 - Replay: the recording is copied into the private bucket and streamed through a signed, short-lived,
@@ -67,4 +65,5 @@ Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL
 - The inside of the room is still the "Room opening soon" stub in `components/live-room.tsx`: the provider
   embed waits on the spike.
 - Recordings over 200 MB are not copied (held in memory); that needs a worker.
-- No mailer: Communication rows stay QUEUED.
+- Communication (emailing attendees) and a mailer are removed for now. The tables were dropped from
+  `01_tables.sql`; its clean-up block still drops any left from an earlier run.

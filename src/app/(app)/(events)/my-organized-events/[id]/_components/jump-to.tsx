@@ -10,7 +10,6 @@ import {
   Download,
   ExternalLink,
   LayoutDashboard,
-  Mail,
   MonitorPlay,
   PencilLine,
   Receipt,
@@ -26,7 +25,6 @@ import {
 import { Icon } from "@/components/atoms";
 import type { Event } from "@/lib/event";
 import { eventTools } from "@/lib/organizer";
-import { ORGANIZER_PORTAL_ENABLED } from "@/lib/feature-flags";
 
 // "Jump to…" for one event's dashboard (Ctrl/⌘ K): every section and the
 // actions organizers look for most, filtered to what this event type uses.
@@ -144,18 +142,6 @@ export function JumpTo({
             },
           ]
         : []),
-      ...(ORGANIZER_PORTAL_ENABLED
-        ? [
-            {
-              id: "comms",
-              label: "Communication",
-              group: "Go to" as const,
-              icon: Mail,
-              keywords: "email message announce",
-              run: go("/communication"),
-            },
-          ]
-        : []),
       {
         id: "settings",
         label: "Settings",
@@ -165,18 +151,6 @@ export function JumpTo({
         run: go("/settings"),
       },
 
-      ...(ORGANIZER_PORTAL_ENABLED
-        ? [
-            {
-              id: "message",
-              label: "Message all attendees",
-              group: "Actions" as const,
-              icon: Mail,
-              keywords: "email announce reminder",
-              run: go("/communication"),
-            },
-          ]
-        : []),
       {
         id: "invite",
         label: tools.judging ? "Invite a judge" : "Invite a panelist",

@@ -125,30 +125,6 @@ BEGIN
     APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
   END;~');
 
-  -- portal_communications -> GCODE_EVENT_COMMUNICATIONS
-  route('portal_communications', 'GET', 'json/query', q'~SELECT id,event_id,subject,message,recipient_group,recipient_count,sent_by,sent_on,status FROM GCODE_EVENT_COMMUNICATIONS
-    WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
-  route('portal_communications', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
-  BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
-    IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
-    INSERT INTO GCODE_EVENT_COMMUNICATIONS (event_id, subject, message, recipient_group, recipient_count, sent_by) VALUES (:event_id, :subject, :message, :recipient_group, :recipient_count, :sent_by) RETURNING id INTO v_id;
-    APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
-  EXCEPTION
-    WHEN DUP_VAL_ON_INDEX THEN APEX_JSON.open_object; APEX_JSON.write('error', 'duplicate'); APEX_JSON.close_object;
-  END;~');
-
-  -- portal_comm_recipients -> GCODE_EVENT_COMM_RECIPIENTS
-  route('portal_comm_recipients', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER; v_id NUMBER;
-  BEGIN
-    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
-    IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
-    INSERT INTO GCODE_EVENT_COMM_RECIPIENTS (communication_id, participant_id, email) VALUES (:communication_id, :participant_id, :email) RETURNING id INTO v_id;
-    APEX_JSON.open_object; APEX_JSON.write('id', v_id); APEX_JSON.close_object;
-  EXCEPTION
-    WHEN DUP_VAL_ON_INDEX THEN APEX_JSON.open_object; APEX_JSON.write('error', 'duplicate'); APEX_JSON.close_object;
-  END;~');
-
   -- portal_webinar -> GCODE_EVENT_WEBINAR
   route('portal_webinar', 'GET', 'json/query', q'~SELECT event_id,audience,recording,chat,hand_raise,captions,notice,restream_url,slides_url,replay_published,is_live,is_recording,is_ended,provider,room_ref,recording_url,updated_on FROM GCODE_EVENT_WEBINAR
     WHERE (:event_id IS NULL OR event_id = :event_id) AND (:room_ref IS NULL OR room_ref = :room_ref) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
