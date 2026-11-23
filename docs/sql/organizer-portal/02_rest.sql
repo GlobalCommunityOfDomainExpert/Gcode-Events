@@ -24,6 +24,7 @@
 
 DECLARE
   v_failed VARCHAR2(4000);
+  v_seen   VARCHAR2(4000) := '|';   -- templates already defined (a second DEFINE_TEMPLATE would wipe its handlers)
 
   PROCEDURE step(p_label IN VARCHAR2, p_sql IN VARCHAR2) IS
   BEGIN
@@ -38,9 +39,12 @@ DECLARE
                   p_source IN CLOB) IS
   BEGIN
     BEGIN
-      EXECUTE IMMEDIATE 'BEGIN ORDS.DEFINE_TEMPLATE(p_module_name => ''gcode.portal.v1'', '
-        || 'p_pattern => :1, p_priority => 0, p_etag_type => ''HASH'', p_etag_query => NULL, '
-        || 'p_comments => NULL); END;' USING p_pattern;
+      IF INSTR(v_seen, '|' || p_pattern || '|') = 0 THEN
+        EXECUTE IMMEDIATE 'BEGIN ORDS.DEFINE_TEMPLATE(p_module_name => ''gcode.portal.v1'', '
+          || 'p_pattern => :1, p_priority => 0, p_etag_type => ''HASH'', p_etag_query => NULL, '
+          || 'p_comments => NULL); END;' USING p_pattern;
+        v_seen := v_seen || p_pattern || '|';
+      END IF;
       EXECUTE IMMEDIATE 'BEGIN ORDS.DEFINE_HANDLER(p_module_name => ''gcode.portal.v1'', '
         || 'p_pattern => :1, p_method => :2, p_source_type => :3, p_mimes_allowed => NULL, '
         || 'p_comments => NULL, p_source => :4); END;' USING p_pattern, p_method, p_type, p_source;
@@ -54,6 +58,8 @@ DECLARE
     END;
   END route;
 BEGIN
+  step('drop old module', 'BEGIN ORDS.DELETE_MODULE(p_module_name => ''gcode.portal.v1''); END;');
+  v_failed := NULL;   -- nothing to drop the first time
   step('create module',
     'BEGIN ORDS.DEFINE_MODULE(p_module_name => ''gcode.portal.v1'', p_base_path => ''/v1/portal/'', '
     || 'p_items_per_page => 500, p_status => ''PUBLISHED'', p_comments => NULL); END;');
