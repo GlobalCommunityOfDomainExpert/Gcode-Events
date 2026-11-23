@@ -130,19 +130,20 @@ function Watcher({
     if (!url || !el) return;
     let hls: { destroy: () => void } | null = null;
     let gone = false;
-    if (el.canPlayType("application/vnd.apple.mpegurl")) {
-      el.src = url; // Safari plays HLS itself
-    } else {
-      void import("hls.js").then(({ default: Hls }) => {
-        if (gone) return;
-        if (!Hls.isSupported()) return setFailed(true);
+    void import("hls.js").then(({ default: Hls }) => {
+      if (gone) return;
+      if (Hls.isSupported()) {
         const h = new Hls({ lowLatencyMode: true });
         h.on(Hls.Events.ERROR, (_e, d) => d.fatal && setFailed(true));
         h.loadSource(url);
         h.attachMedia(el);
         hls = h;
-      });
-    }
+      } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
+        el.src = url; // iPhone Safari has no MSE but plays HLS itself
+      } else {
+        setFailed(true);
+      }
+    });
     void el.play().catch(() => undefined);
     return () => {
       gone = true;

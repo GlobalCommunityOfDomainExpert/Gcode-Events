@@ -62,8 +62,23 @@ Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL
   all follow the public docs but need the spike (Handover 7, Part 0b). The adapter is `provider.ts`.
 - **Nothing here has run against your ORDS.** The module calls and the handler SQL (header parameter, POST
   returning the new id, timestamp text parsing) are the first thing to test.
-- The inside of the room is still the "Room opening soon" stub in `components/live-room.tsx`: the provider
-  embed waits on the spike.
 - Recordings over 200 MB are not copied (held in memory); that needs a worker.
 - Communication (emailing attendees) and a mailer are removed for now. The tables were dropped from
   `01_tables.sql`; its clean-up block still drops any left from an earlier run.
+
+## What the VideoSDK spike proved (2026-11-23, a real account)
+
+- Rooms, join tokens and HLS go-live work as `provider.ts` builds them, with two fixes: the host token needs
+  `allow_join` AND `allow_mod` (`allow_mod` alone cannot join), and HLS stops at `/v2/hls/end`.
+- **A meeting token holder can publish.** An attendee holding only `allow_join` joined, switched mode with
+  `changeMode`, and the host received their audio and video. VideoSDK does not enforce "viewer".
+  So in the **Webinar** format attendees never get a meeting token: they get the HLS address
+  (`GCODE_EVENT_WEBINAR.HLS_URL`, server-only, returned only while live) and play it with hls.js. Only the host and
+  speakers join the meeting.
+- The HLS address has no token or expiry; anyone holding it can watch. It is handed out only to ticket holders.
+- **The Interactive format is not safe yet.** Its attendees still get a meeting token and so could publish by
+  changing their client. Use Webinar until the room has a receive-only custom viewer (or hide Interactive).
+- Door times: `events.start_date` / `end_date` are stored as UTC; the portal view's `start_ist` / `end_ist` names
+  are misleading and the server reads them as UTC.
+- Not tested: the webhook signature and payload mapping (VideoSDK cannot reach localhost; needs a public
+  URL), recording (out of scope for now), speakers publishing together with the host, captions.
