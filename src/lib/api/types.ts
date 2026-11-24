@@ -408,6 +408,9 @@ export interface PanelistInviteApi {
   invited_email: string;
   status: "INVITED" | "ACCEPTED" | "DECLINED";
   invited_on: string;
+  // Optional: older backends omit them (the invite is then a judge invite).
+  panelist_role?: "JUDGE" | "MENTOR" | "SPEAKER" | null;
+  invite_note?: string | null;
 }
 
 // Mirrors ORDS POST /events/:id/razorpay-order binds ->

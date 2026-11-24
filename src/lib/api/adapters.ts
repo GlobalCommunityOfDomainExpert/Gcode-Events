@@ -207,6 +207,8 @@ export interface PanelistInvite {
   invitedEmail: string;
   status: "INVITED" | "ACCEPTED" | "DECLINED";
   invitedOn: string;
+  role: "JUDGE" | "MENTOR" | "SPEAKER";
+  note?: string;
 }
 
 export function adaptPanelistInvite(row: PanelistInviteApi): PanelistInvite {
@@ -217,6 +219,8 @@ export function adaptPanelistInvite(row: PanelistInviteApi): PanelistInvite {
     invitedEmail: row.invited_email,
     status: row.status,
     invitedOn: row.invited_on,
+    role: row.panelist_role ?? "JUDGE",
+    note: row.invite_note?.trim() || undefined,
   };
 }
 
