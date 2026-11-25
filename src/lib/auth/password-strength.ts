@@ -3,6 +3,9 @@ export interface PasswordRule {
   test: (password: string) => boolean;
 }
 
+
+// use zxcvbn to measure password strength
+
 export const PASSWORD_RULES: PasswordRule[] = [
   { label: "At least 8 characters", test: (pw) => pw.length >= 8 },
   { label: "One uppercase letter", test: (pw) => /[A-Z]/.test(pw) },

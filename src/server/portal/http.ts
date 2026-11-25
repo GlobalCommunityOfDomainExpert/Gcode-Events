@@ -45,8 +45,8 @@ export function handle<P = Record<string, never>>(
 }
 
 /** The signed-in caller, or a 401. */
-export function requireUser(req: NextRequest): string {
-  const id = userFromRequest(req);
+export async function requireUser(req: NextRequest): Promise<string> {
+  const id = await userFromRequest(req);
   if (!id) throw new HttpError(401, "Sign in again to continue");
   return id;
 }

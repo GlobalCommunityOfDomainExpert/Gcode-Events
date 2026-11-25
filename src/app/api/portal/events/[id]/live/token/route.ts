@@ -10,7 +10,7 @@ export const POST = handle<P>(async (req, { id }) => {
   const b = await jsonBody(req);
   return joinCredential(
     intParam(id),
-    userFromRequest(req),
+    await userFromRequest(req),
     typeof b.t === "string" ? b.t : null,
   );
 });

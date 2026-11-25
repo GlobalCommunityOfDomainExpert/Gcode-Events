@@ -25,7 +25,7 @@ export function useMyTickets() {
       setStatus("loading");
       try {
         const [rows, types, modes, statuses] = await Promise.all([
-          listMyParticipations(session.token),
+          listMyParticipations(),
           getEventTypes(),
           getModes(),
           getStatuses(),
@@ -33,10 +33,10 @@ export function useMyTickets() {
         if (cancelled) return;
         const typeNames = Object.fromEntries(types.map((t) => [t.id, t.name]));
         const modeNames = Object.fromEntries(
-          modes.map((m) => [m.id, m.mode_name]),
+          modes.map((m) => [m.id, m.code]),
         );
         const statusCodes = Object.fromEntries(
-          statuses.map((s) => [s.id, s.status_code]),
+          statuses.map((s) => [s.id, s.code]),
         );
         setTickets(
           rows.map((row) =>

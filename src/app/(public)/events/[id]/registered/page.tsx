@@ -22,7 +22,7 @@ import { googleCalendarUrl } from "@/lib/event";
 import { getParticipant } from "@/lib/api/participants";
 import { emailJoinLink } from "@/lib/api/webinar";
 import { hasLiveRoom } from "@/lib/live-room";
-import { ParticipantApi } from "@/lib/api/types";
+import type { ParticipantSummary } from "@/lib/api/participants";
 import { getSession } from "@/lib/auth/session";
 import { renderTicketPng } from "@/lib/ticket-image";
 import { RegisteredSkeleton } from "./_components/registered-skeleton";
@@ -37,7 +37,9 @@ export default function EventRegisteredPage() {
   const { event, status: eventStatus } = useEvent(params.id);
   const session = getSession();
 
-  const [participant, setParticipant] = useState<ParticipantApi | undefined>();
+  const [participant, setParticipant] = useState<
+    ParticipantSummary | undefined
+  >();
   const [participantStatus, setParticipantStatus] = useState<
     "loading" | "error" | "ready"
   >("loading");
@@ -90,7 +92,7 @@ export default function EventRegisteredPage() {
   // ticket instead of asking for the details again (editing stays one click
   // away on the ticket).
   const alreadySubmitted =
-    audioAppliesToMe && !!participant?.audio_submission_url;
+    audioAppliesToMe && !!participant?.audioSubmissionUrl;
   const needsAdditionalInfo =
     !additionalInfoComplete &&
     !alreadySubmitted &&
@@ -165,7 +167,7 @@ export default function EventRegisteredPage() {
 
   if (needsAdditionalInfo) return <RegisteredSkeleton />;
 
-  const holder = participant.user_name || session?.fullName || "Guest";
+  const holder = participant.fullName || session?.fullName || "Guest";
   const firstName = holder.split(" ")[0];
   const online = event.mode === "Online";
   const isPerformer = participant.category === "PARTICIPANT";
@@ -180,7 +182,8 @@ export default function EventRegisteredPage() {
     (category === "PARTICIPANT"
       ? event.participantRegistration.registrationDeadlineIso
       : event.attendeeRegistration.registrationDeadlineIso) ??
-    participant.applied_on;
+    participant.appliedOn ??
+    new Date(mountedAt).toISOString();
   const entryLocked =
     audioAppliesToMe &&
     new Date(closesIso).getTime() + 24 * 60 * 60 * 1000 <= mountedAt;
@@ -295,7 +298,7 @@ export default function EventRegisteredPage() {
             You&apos;re in, {firstName}!
           </h1>
           <p className="text-body text-text-secondary">
-            {`${quantity} ticket${quantity === 1 ? "" : "s"} confirmed · we've emailed it to ${participant.email || "you"}.`}
+            {`${quantity} ticket${quantity === 1 ? "" : "s"} confirmed · we've emailed it to ${session?.email || "you"}.`}
           </p>
         </div>
       </div>

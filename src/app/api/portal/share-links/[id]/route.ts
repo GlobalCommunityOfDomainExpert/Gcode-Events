@@ -4,5 +4,5 @@ import { revokeLink } from "@/server/portal/team";
 type P = { id: string };
 
 export const DELETE = handle<P>(async (req, { id }) => {
-  await revokeLink(intParam(id), requireUser(req));
+  await revokeLink(intParam(id), await requireUser(req));
 });

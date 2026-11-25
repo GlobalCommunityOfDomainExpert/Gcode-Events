@@ -2,19 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "./use-session";
-import { listEventPanelists } from "@/lib/api/panelists";
-import { adaptEventPanelist } from "@/lib/api/adapters";
-import { EventPanelist } from "@/lib/event";
+import { getMyPanelistAccess } from "@/lib/api/panelists";
 
 // Whether the signed-in user is an ACCEPTED panelist for this event — the
-// gate for the /judge/[id] scoring route. No server-side enforcement behind
-// this (this backend doesn't verify bearer tokens — see decideRoundStatus's
-// own comment), same trust level as everything else in this app; this is a
-// UI gate, not a security boundary.
+// gate for the /judge/[id] scoring route. The server enforces the same rule
+// on every judging endpoint; this only decides what the page shows.
 export function usePanelistAccess(eventId: string | undefined) {
   const session = useSession();
   const [status, setStatus] = useState<"loading" | "ready">("loading");
-  const [panelist, setPanelist] = useState<EventPanelist | undefined>();
+  const [isAcceptedPanelist, setIsAcceptedPanelist] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,12 +20,10 @@ export function usePanelistAccess(eventId: string | undefined) {
         return;
       }
       try {
-        const items = await listEventPanelists(eventId);
-        if (cancelled) return;
-        const mine = items
-          .map(adaptEventPanelist)
-          .find((p) => p.userId === session.userId);
-        setPanelist(mine);
+        const access = await getMyPanelistAccess(eventId);
+        if (!cancelled) setIsAcceptedPanelist(access.isAcceptedPanelist);
+      } catch {
+        if (!cancelled) setIsAcceptedPanelist(false);
       } finally {
         if (!cancelled) setStatus("ready");
       }
@@ -39,8 +33,5 @@ export function usePanelistAccess(eventId: string | undefined) {
     };
   }, [eventId, session]);
 
-  return {
-    status,
-    isAcceptedPanelist: panelist?.status === "ACCEPTED",
-  };
+  return { status, isAcceptedPanelist };
 }

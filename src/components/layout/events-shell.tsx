@@ -25,7 +25,8 @@ import {
 import { OrganizerNavEvent, useOrganizerNav } from "@/hooks/use-organizer-nav";
 import { useSidebarOpen } from "@/hooks/use-sidebar-open";
 import { ProfileMenu, ProfileMenuUser } from "@/components/molecules";
-import { clearSession, isAdmin, Session } from "@/lib/auth/session";
+import { isAdmin, Session } from "@/lib/auth/session";
+import { signOut } from "@/lib/api/auth";
 import { initials } from "@/lib/auth/format";
 import { ORGANIZER_PORTAL_ENABLED } from "@/lib/feature-flags";
 
@@ -221,8 +222,8 @@ export function EventsShell({ session, children }: EventsShellProps) {
     avatarInitials: initials(session.fullName),
   };
 
-  function handleLogout() {
-    clearSession();
+  async function handleLogout() {
+    await signOut();
     router.push("/sign-in");
   }
 

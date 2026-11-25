@@ -7,7 +7,7 @@ export const POST = handle<P>(async (req, { id }) => {
   const b = await jsonBody(req);
   await removeFromRoom(
     intParam(id),
-    requireUser(req),
+    await requireUser(req),
     intParam(String(b.registration_id), "registration"),
   );
 });

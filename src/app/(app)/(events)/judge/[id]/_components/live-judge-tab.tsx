@@ -8,7 +8,7 @@ import { Event, EventRound } from "@/lib/event";
 import { myRoundScores, RoundScore } from "@/lib/rounds";
 import { listRoundScores, submitRoundScore } from "@/lib/api/rounds";
 import { adaptRoundScore } from "@/lib/api/adapters";
-import { LivePerformer } from "@/lib/api/ratings";
+import { LivePerformer, liveStateStreamUrl } from "@/lib/api/ratings";
 import { useSession } from "@/hooks/use-session";
 import { ApiError } from "@/lib/api/client";
 
@@ -35,24 +35,22 @@ export function LiveJudgeTab({ event, attendees, liveRound }: LiveJudgeTabProps)
 
   useEffect(() => {
     if (!event.id) return;
-    const source = new EventSource(
-      `/api/events/${event.id}/live-performer/stream`,
-    );
+    const source = new EventSource(liveStateStreamUrl(event.id));
     source.onmessage = (e) => setLive(JSON.parse(e.data));
     return () => source.close();
   }, [event.id]);
 
-  // Trust the live state's own round_id when present (it's authoritative for
+  // Trust the live state's own roundId when present (it's authoritative for
   // which round this performance belongs to) — fall back to the locally
-  // resolved live round for older live state set before round_id existed.
-  const round = live?.round_id
-    ? (event.rounds.find((r) => String(r.id) === String(live.round_id)) ??
+  // resolved live round for older live state set before roundId existed.
+  const round = live?.roundId
+    ? (event.rounds.find((r) => String(r.id) === String(live.roundId)) ??
       liveRound)
     : liveRound;
 
   const performer =
-    live?.participant_id != null
-      ? attendees.find((a) => a.id === String(live.participant_id))
+    live?.participantId != null
+      ? attendees.find((a) => a.id === String(live.participantId))
       : undefined;
 
   async function refreshScores() {
@@ -68,7 +66,7 @@ export function LiveJudgeTab({ event, attendees, liveRound }: LiveJudgeTabProps)
   useEffect(() => {
     void refreshScores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event.id, round?.id, live?.participant_id]);
+  }, [event.id, round?.id, live?.participantId]);
 
   async function submitScore(criterionId: string, maxScore: number, raw: string) {
     if (!performer || !round) return;

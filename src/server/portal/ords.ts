@@ -1,4 +1,3 @@
-import { API_BASE_URL } from "@/lib/api/client";
 import { HttpError } from "./http";
 
 // Client for the small ORDS module in docs/sql/organizer-portal/02_rest.sql.
@@ -6,9 +5,10 @@ import { HttpError } from "./http";
 // browser. APEX holds tables only; the module is plain SELECT / INSERT /
 // UPDATE / DELETE on them, and every decision is made in the callers.
 
-const base = `${(
-  process.env.ORDS_ROOT ?? API_BASE_URL.replace(/\/v1\/?$/, "")
-).replace(/\/$/, "")}/v1/portal`;
+// The ORDS service this module lives on (the part before /v1).
+const DEFAULT_ORDS_ROOT =
+  "https://g39bc7cd4ecbbbb-gcdev01.adb.ap-hyderabad-1.oraclecloudapps.com/ords/wksp_gcode2";
+const base = `${(process.env.ORDS_ROOT ?? DEFAULT_ORDS_ROOT).replace(/\/$/, "")}/v1/portal`;
 
 function key(): string {
   const k = process.env.ORDS_PORTAL_KEY;

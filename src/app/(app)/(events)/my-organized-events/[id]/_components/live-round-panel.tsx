@@ -13,7 +13,7 @@ import {
   RoundScore,
   scoresByJudge,
 } from "@/lib/rounds";
-import { updateEvent } from "@/lib/api/events";
+import { patchEvent } from "@/lib/api/events";
 import { listRoundScores } from "@/lib/api/rounds";
 import { listEventPanelists } from "@/lib/api/panelists";
 import { adaptEventPanelist, adaptRoundScore } from "@/lib/api/adapters";
@@ -113,7 +113,7 @@ export function LiveRoundPanel({
     void (async () => {
       setModeSaving(true);
       try {
-        await updateEvent(event.id, { rating_mode: desired });
+        await patchEvent(event.id, { ratingMode: desired });
         if (!cancelled) {
           syncedRatingModeRef.current = syncKey;
           onEventChanged?.();
@@ -149,16 +149,16 @@ export function LiveRoundPanel({
         const state = await getLivePerformer(event.id);
         if (cancelled) return;
         // ORDS omits the key entirely rather than sending JSON null when no
-        // performer is set — state.participant_id comes back `undefined`,
+        // performer is set — state.participantId comes back `undefined`,
         // not `null`, so both must be treated as "no one on stage."
-        if (state.participant_id != null) {
-          setCurrentId(String(state.participant_id));
+        if (state.participantId != null) {
+          setCurrentId(String(state.participantId));
         }
         setRatingOpen(
-          !!state.window_closes_at &&
-            new Date(state.window_closes_at).getTime() > Date.now(),
+          !!state.windowClosesAt &&
+            new Date(state.windowClosesAt).getTime() > Date.now(),
         );
-        setIntermissionState(state.is_intermission);
+        setIntermissionState(state.isIntermission);
       } catch {
         // best-effort — organizer can still set a performer without this
       }
@@ -171,7 +171,7 @@ export function LiveRoundPanel({
   async function refreshPerformed() {
     try {
       const items = await getPerformedParticipants(event.id);
-      setPerformedIds(new Set(items.map((i) => String(i.participant_id))));
+      setPerformedIds(new Set(items.map((i) => String(i.participantId))));
     } catch {
       // best-effort — badge just won't show if this fails
     }
@@ -183,7 +183,7 @@ export function LiveRoundPanel({
       try {
         const items = await getPerformedParticipants(event.id);
         if (!cancelled) {
-          setPerformedIds(new Set(items.map((i) => String(i.participant_id))));
+          setPerformedIds(new Set(items.map((i) => String(i.participantId))));
         }
       } catch {
         // best-effort — badge just won't show if this fails
@@ -220,7 +220,7 @@ export function LiveRoundPanel({
         );
         setRoundScores(scoreItems.map(adaptRoundScore));
         setRoundRatings(ratingItems);
-        setCurrentAvgRating(performerState.avg_rating);
+        setCurrentAvgRating(performerState.avgRating);
       } catch {
         // best-effort — panel just shows stale/empty data until next tick
       }
@@ -271,8 +271,8 @@ export function LiveRoundPanel({
           );
           const audienceScore100 = round.audienceScoringEnabled
             ? roundRatings.find(
-                (r) => String(r.participant_id) === participantId,
-              )?.avg_rating
+                (r) => String(r.participantId) === participantId,
+              )?.avgRating
             : undefined;
           return {
             participantId,

@@ -6,5 +6,9 @@ type P = { id: string };
 
 // DELETE /api/portal/events/:id. The admin check uses the verified token.
 export const DELETE = handle<P>(async (req, { id }) => {
-  await deleteEventAs(intParam(id), requireUser(req), isAdminRequest(req));
+  await deleteEventAs(
+    intParam(id),
+    await requireUser(req),
+    await isAdminRequest(req),
+  );
 });

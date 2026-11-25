@@ -211,7 +211,7 @@ export function StepPartners({
 }
 
 // Logo preview that doubles as the upload button. The file is downscaled in
-// the browser, stored via /api/uploads/image, and only the URL is kept (a
+// the browser, stored via /api/v1/uploads/image, and only the URL is kept (a
 // pasted link works too, in the field beside it).
 function LogoTile({
   url,

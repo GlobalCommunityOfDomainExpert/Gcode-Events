@@ -1,42 +1,38 @@
-import { apiRequest } from "./client";
-import {
-  CategoryLookup,
-  EventTypeLookup,
-  ApiListResponse,
-  EventModeLookup,
-  ApiStatus,
-} from "./types";
+import { v1Request } from "./client";
+import type {
+  Category,
+  EventMode,
+  EventStatus,
+  EventType,
+  Lookups,
+} from "@/server/modules/lookups/lookups.schemas";
 
-// Reference data — static for the life of the tab, so fetch once and cache.
-let eventTypesCache: Promise<EventTypeLookup[]> | null = null;
-let statusesCache: Promise<ApiStatus[]> | null = null;
-let modesCache: Promise<EventModeLookup[]> | null = null;
-let categoriesCache: Promise<CategoryLookup[]> | null = null;
+export type { Category, EventMode, EventStatus, EventType };
 
-export function getEventTypes(): Promise<EventTypeLookup[]> {
-  eventTypesCache ??= apiRequest<ApiListResponse<EventTypeLookup>>(
-    "/lookups/event-types",
-  ).then((r) => r.items);
-  return eventTypesCache;
+// Browser-only. Server components should call lookupsService directly
+// (src/server/modules/lookups/lookups.service.ts) instead of going over HTTP.
+//
+// Reference data is static for the life of the tab: one request fetches all
+// four tables and every getter reads from the same cached promise.
+let cache: Promise<Lookups> | null = null;
+
+function lookups(): Promise<Lookups> {
+  cache ??= v1Request<Lookups>("/lookups").catch((err) => {
+    // Don't pin a failed request for the rest of the session.
+    cache = null;
+    throw err;
+  });
+  return cache;
 }
 
-export function getStatuses(): Promise<ApiStatus[]> {
-  statusesCache ??= apiRequest<ApiListResponse<ApiStatus>>(
-    "/lookups/statuses",
-  ).then((r) => r.items);
-  return statusesCache;
-}
+export const getEventTypes = (): Promise<EventType[]> =>
+  lookups().then((l) => l.eventTypes);
 
-export function getModes(): Promise<EventModeLookup[]> {
-  modesCache ??= apiRequest<ApiListResponse<EventModeLookup>>(
-    "/lookups/modes",
-  ).then((r) => r.items);
-  return modesCache;
-}
+export const getStatuses = (): Promise<EventStatus[]> =>
+  lookups().then((l) => l.statuses);
 
-export function getCategories(): Promise<CategoryLookup[]> {
-  categoriesCache ??= apiRequest<ApiListResponse<CategoryLookup>>(
-    "/lookups/categories",
-  ).then((r) => r.items);
-  return categoriesCache;
-}
+export const getModes = (): Promise<EventMode[]> =>
+  lookups().then((l) => l.modes);
+
+export const getCategories = (): Promise<Category[]> =>
+  lookups().then((l) => l.categories);

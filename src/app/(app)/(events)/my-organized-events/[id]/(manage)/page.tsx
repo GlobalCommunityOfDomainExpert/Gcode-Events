@@ -15,7 +15,7 @@ import {
   ToggleGroup,
 } from "@/components/molecules";
 import { hasEventEnded } from "@/lib/event";
-import { updateEvent } from "@/lib/api/events";
+import { patchEvent } from "@/lib/api/events";
 import { useServerNow } from "@/hooks/use-server-now";
 import { useOrganizedEvent } from "../_components/event-context";
 import { NextSteps } from "../_components/next-steps";
@@ -133,11 +133,11 @@ export default function OverviewPage() {
   ) {
     setToggling(category);
     try {
-      await updateEvent(
+      await patchEvent(
         event.id,
         category === "ATTENDEE"
-          ? { attendee_registration_enabled: nextEnabled ? 1 : 0 }
-          : { participant_registration_enabled: nextEnabled ? 1 : 0 },
+          ? { attendeeRegistrationEnabled: nextEnabled }
+          : { participantRegistrationEnabled: nextEnabled },
       );
       await refreshEvent();
       notify(

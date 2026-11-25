@@ -12,7 +12,7 @@ import {
 import * as provider from "./provider";
 import type { LiveKind, NormalizedEvent, OurRole } from "./provider";
 import { CLOSES_AFTER_MIN, webinarState } from "@/lib/webinar";
-import { uploadRecordingObject } from "@/lib/oci/object-storage";
+import { uploadRecordingObject } from "@/infrastructure/storage/oci-object-storage";
 
 // The live room's decisions: who may enter and as what, the door state on the
 // server clock, host actions run against the provider, attendance and

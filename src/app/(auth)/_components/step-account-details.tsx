@@ -12,8 +12,7 @@ import {
 } from "@/components/atoms";
 import { FormField, PasswordStrengthMeter } from "@/components/molecules";
 import { GoogleButton } from "./google-button";
-import { oauthLoginGoogle } from "@/lib/api/auth";
-import { setSession } from "@/lib/auth/session";
+import { signInWithGoogle } from "@/lib/api/auth";
 import {
   decodeGoogleEmail,
   useGoogleIdToken,
@@ -84,12 +83,10 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
     setError(null);
     try {
       const idToken = await requestGoogleIdToken();
-      const { user_id, role_name, token } = await oauthLoginGoogle(idToken);
-      console.log(user_id);
-      setSession(token);
-      if (role_name === "NONE") {
+      const { user, needsRole } = await signInWithGoogle(idToken);
+      if (needsRole) {
         const email = encodeURIComponent(decodeGoogleEmail(idToken));
-        router.push(`/sign-up?oauth=1&userId=${user_id}&email=${email}`);
+        router.push(`/sign-up?oauth=1&userId=${user.userId}&email=${email}`);
       } else {
         router.push("/");
       }

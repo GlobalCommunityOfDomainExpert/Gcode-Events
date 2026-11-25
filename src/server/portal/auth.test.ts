@@ -1,62 +1,56 @@
-import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SignJWT } from "jose";
 import { NextRequest } from "next/server";
-import { isAdminRequest } from "./auth";
+import { SESSION_COOKIE, signSession } from "@/server/auth/session";
+import { isAdminRequest, userFromRequest } from "./auth";
 
-const SECRET = "test-secret";
-const b64 = (o: unknown) =>
-  Buffer.from(JSON.stringify(o)).toString("base64url");
-function token(payload: object, secret = SECRET) {
-  const head = b64({ alg: "HS256", typ: "JWT" });
-  const body = b64(payload);
-  const sig = createHmac("sha256", secret)
-    .update(`${head}.${body}`)
-    .digest("base64url");
-  return `${head}.${body}.${sig}`;
-}
-const req = (t?: string) =>
+const req = (cookie?: string) =>
   new NextRequest("http://x/api", {
-    headers: t ? { authorization: `Bearer ${t}` } : {},
+    headers: cookie ? { cookie: `${SESSION_COOKIE}=${cookie}` } : {},
   });
-const future = Math.floor(Date.now() / 1000) + 600;
 
-describe("isAdminRequest", () => {
+describe("portal auth reads the login cookie", () => {
+  const saved = process.env.AUTH_SECRET;
   beforeEach(() => {
-    process.env.JWT_SECRET = SECRET;
+    process.env.AUTH_SECRET = "x".repeat(40);
   });
   afterEach(() => {
-    delete process.env.JWT_SECRET;
+    if (saved === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = saved;
   });
 
-  it("accepts a correctly signed ADMIN token", () => {
-    expect(
-      isAdminRequest(req(token({ sub: "1", role: "ADMIN", exp: future }))),
-    ).toBe(true);
+  it("an admin session is an admin", async () => {
+    const t = await signSession({ userId: "1", role: "ADMIN", fullName: "A" });
+    expect(await isAdminRequest(req(t))).toBe(true);
+    expect(await userFromRequest(req(t))).toBe("1");
   });
-  it("rejects a non-admin role", () => {
-    expect(
-      isAdminRequest(req(token({ sub: "1", role: "ORGANIZER", exp: future }))),
-    ).toBe(false);
+
+  it("any other role is not an admin", async () => {
+    const t = await signSession({ userId: "2", role: "NONE", fullName: "B" });
+    expect(await isAdminRequest(req(t))).toBe(false);
+    expect(await userFromRequest(req(t))).toBe("2");
   });
-  it("rejects a forged token signed with another secret", () => {
-    expect(
-      isAdminRequest(
-        req(token({ sub: "1", role: "ADMIN", exp: future }, "other")),
-      ),
-    ).toBe(false);
+
+  it("a cookie signed with another secret is nobody", async () => {
+    const forged = await new SignJWT({ role: "ADMIN", name: "A" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("1")
+      .setExpirationTime("1h")
+      .sign(new TextEncoder().encode("y".repeat(40)));
+    expect(await isAdminRequest(req(forged))).toBe(false);
+    expect(await userFromRequest(req(forged))).toBeNull();
   });
-  it("rejects an expired token", () => {
-    expect(
-      isAdminRequest(req(token({ sub: "1", role: "ADMIN", exp: 1 }))),
-    ).toBe(false);
+
+  it("no cookie, or a made-up one, is nobody", async () => {
+    expect(await isAdminRequest(req())).toBe(false);
+    expect(await userFromRequest(req("not-a-token"))).toBeNull();
   });
-  it("rejects a missing token", () => {
-    expect(isAdminRequest(req())).toBe(false);
-  });
-  it("never grants admin when JWT_SECRET is unset", () => {
-    delete process.env.JWT_SECRET;
-    expect(
-      isAdminRequest(req(token({ sub: "1", role: "ADMIN", exp: future }))),
-    ).toBe(false);
+
+  it("a bearer header alone no longer counts", async () => {
+    const t = await signSession({ userId: "1", role: "ADMIN", fullName: "A" });
+    const viaHeader = new NextRequest("http://x/api", {
+      headers: { authorization: `Bearer ${t}` },
+    });
+    expect(await isAdminRequest(viaHeader)).toBe(false);
   });
 });

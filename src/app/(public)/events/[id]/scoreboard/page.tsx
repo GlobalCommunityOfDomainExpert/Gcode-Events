@@ -6,7 +6,11 @@ import { Mic } from "lucide-react";
 import { Card, Icon, Progress } from "@/components/atoms";
 import { ScoreboardSkeleton } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
-import { LivePerformer } from "@/lib/api/ratings";
+import {
+  LivePerformer,
+  liveStateStreamUrl,
+  reactionsStreamUrl,
+} from "@/lib/api/ratings";
 import Image from "next/image";
 interface FloatingEmoji {
   key: string;
@@ -18,7 +22,7 @@ interface FloatingEmoji {
 }
 
 interface ReactionBatch {
-  performer_participant_id: number;
+  performerParticipantId: number;
   items: { id: number; emoji: string }[];
   bots: { emoji: string }[];
 }
@@ -28,7 +32,7 @@ const MAX_ON_SCREEN_EMOJI = 15;
 // Public big-screen display — no attendee identity needed, just shows
 // whoever the organizer has marked as currently performing plus their live
 // score. Same SSE stream as the rate page, just without an attendee_id (so
-// `already_rated` on the payload is meaningless here and ignored).
+// `alreadyRated` on the payload is meaningless here and ignored).
 export default function ScoreboardPage() {
   const params = useParams<{ id: string }>();
   const { event } = useEvent(params.id);
@@ -43,9 +47,7 @@ export default function ScoreboardPage() {
 
   useEffect(() => {
     if (!params.id) return;
-    const source = new EventSource(
-      `/api/events/${params.id}/live-performer/stream`,
-    );
+    const source = new EventSource(liveStateStreamUrl(params.id));
     source.onmessage = (e) => {
       const data: LivePerformer = JSON.parse(e.data);
       setLive(data);
@@ -59,9 +61,9 @@ export default function ScoreboardPage() {
   }, []);
 
   useEffect(() => {
-    if (event?.ratingMode !== "Casual" || !live?.participant_id) return;
+    if (event?.ratingMode !== "Casual" || !live?.participantId) return;
     const source = new EventSource(
-      `/api/events/${params.id}/reactions/stream?performer_id=${live.participant_id}`,
+      reactionsStreamUrl(params.id, live.participantId),
     );
     source.onmessage = (e) => {
       const data: ReactionBatch = JSON.parse(e.data);
@@ -93,7 +95,7 @@ export default function ScoreboardPage() {
       });
     };
     return () => source.close();
-  }, [event?.ratingMode, live?.participant_id, params.id]);
+  }, [event?.ratingMode, live?.participantId, params.id]);
 
   if (!event) {
     return <ScoreboardSkeleton />;
@@ -103,7 +105,7 @@ export default function ScoreboardPage() {
   // else at all (no performer card, no rating UI, no floating reactions),
   // regardless of whatever performer/round state is still set underneath —
   // that state just resumes once intermission ends.
-  if (live?.is_intermission) {
+  if (live?.isIntermission) {
     return (
       <div className="fixed inset-0 z-1000 flex items-center justify-center bg-black">
         <Image
@@ -117,8 +119,8 @@ export default function ScoreboardPage() {
     );
   }
 
-  const windowClosesAtMs = live?.window_closes_at
-    ? new Date(live.window_closes_at).getTime()
+  const windowClosesAtMs = live?.windowClosesAt
+    ? new Date(live.windowClosesAt).getTime()
     : null;
   const secondsLeft = windowClosesAtMs
     ? Math.max(0, Math.ceil((windowClosesAtMs - now) / 1000))
@@ -126,9 +128,9 @@ export default function ScoreboardPage() {
   // Casual has no expiry at all — once the organizer starts it, reactions
   // stay open until a new performer is selected. Only Competitive's 2-minute
   // window actually closes.
-  const windowOpen = live?.participant_id
+  const windowOpen = live?.participantId
     ? event.ratingMode === "Casual"
-      ? !!live.window_closes_at
+      ? !!live.windowClosesAt
       : secondsLeft > 0
     : false;
 
@@ -153,7 +155,7 @@ export default function ScoreboardPage() {
         </div>
       )}
 
-      {!live?.participant_id ? (
+      {!live?.participantId ? (
         <Card
           padding="md"
           className="flex flex-col items-center gap-4 px-12 py-10"
@@ -170,30 +172,30 @@ export default function ScoreboardPage() {
               Now Performing
             </p>
             <p className="text-8xl font-extrabold text-amber-500">
-              {live.participant_name}
+              {live.participantName}
             </p>
           </div>
 
           {event.ratingMode === "Competitive" && (
             <div className="border-border-light border-t pt-6">
-              {live.rating_count > 0 ? (
+              {live.ratingCount > 0 ? (
                 <>
                   <p className="text-display text-primary font-extrabold">
-                    {live.avg_rating?.toFixed(1)}
+                    {live.avgRating?.toFixed(1)}
                     <span className="text-heading text-text-secondary font-semibold">
                       {" "}
                       / 100
                     </span>
                   </p>
                   <Progress
-                    value={live.avg_rating ?? 0}
+                    value={live.avgRating ?? 0}
                     max={100}
                     label="Average rating"
                     className="mt-3"
                   />
                   <p className="text-small text-text-secondary mt-2">
-                    {live.rating_count} rating
-                    {live.rating_count === 1 ? "" : "s"} so far
+                    {live.ratingCount} rating
+                    {live.ratingCount === 1 ? "" : "s"} so far
                   </p>
                 </>
               ) : (

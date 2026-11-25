@@ -19,7 +19,7 @@ export const POST = handle<P>(async (req, { id, action }) => {
   const b = await jsonBody(req);
   await hostAction(
     intParam(id),
-    requireUser(req),
+    await requireUser(req),
     action as HostAction,
     b,
     process.env.PUBLIC_BASE_URL ?? req.nextUrl.origin,

@@ -9,7 +9,7 @@ type P = { id: string };
 export const GET = handle<P>(async (req, { id }) =>
   liveAccess(
     intParam(id),
-    userFromRequest(req),
+    await userFromRequest(req),
     req.nextUrl.searchParams.get("t"),
   ),
 );

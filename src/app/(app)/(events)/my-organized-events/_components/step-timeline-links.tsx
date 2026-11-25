@@ -80,7 +80,7 @@ export function StepTimelineLinks({
   // title+description agenda with no date/time inputs shown at all.
   const [showTimes, setShowTimes] = useState(true);
   const { data: modes } = useLookup(getModes);
-  const modeCode = modes.find((m) => m.id === data.mode)?.mode_name ?? "";
+  const modeCode = modes.find((m) => m.id === data.mode)?.code ?? "";
   const splitDays = data.stages.length > 0;
   // Days switched off are kept for this session, so flipping back restores them.
   const parkedDays = useRef<EventStageData[]>([]);
@@ -716,7 +716,7 @@ const YT =
 
 // Photos (uploaded from the device) and videos / image links for the event
 // page gallery. Uploads are downscaled in the browser, stored in object
-// storage by /api/uploads/image, and only the returned URL is kept.
+// storage by /api/v1/uploads/image, and only the returned URL is kept.
 function MediaEditor({
   urls,
   onChange,

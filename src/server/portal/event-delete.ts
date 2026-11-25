@@ -1,5 +1,7 @@
 import * as db from "./ords";
-import { API_BASE_URL } from "@/lib/api/client";
+import { AppError } from "@/server/http/errors";
+import { eventsService } from "@/server/modules/events/events.service";
+import { lookupsService } from "@/server/modules/lookups/lookups.service";
 import { deleteRule } from "@/lib/event-delete";
 import { forbidden, HttpError, notFound } from "./http";
 import { isManager, getEvent } from "./access";
@@ -16,15 +18,20 @@ interface PublicEvent {
 }
 
 async function publicEvent(eventId: number): Promise<PublicEvent> {
-  const res = await fetch(`${API_BASE_URL}/events/${eventId}`, {
-    cache: "no-store",
-  });
-  if (res.status === 404) throw notFound("Event not found");
-  if (!res.ok) throw new Error(`event lookup failed (${res.status})`);
-  const j = (await res.json()) as { items?: PublicEvent[] };
-  const ev = j.items?.[0];
-  if (!ev) throw notFound("Event not found");
-  return ev;
+  let detail;
+  try {
+    detail = await eventsService.get(eventId);
+  } catch (e) {
+    if (e instanceof AppError && e.code === "NOT_FOUND")
+      throw notFound("Event not found");
+    throw e;
+  }
+  const statuses = await lookupsService.statuses();
+  return {
+    status_code: statuses.find((s) => s.id === detail.statusId)?.code ?? null,
+    registered_count: detail.registeredCount,
+    participant_registered_count: detail.participantRegisteredCount,
+  };
 }
 
 export async function deleteEventAs(

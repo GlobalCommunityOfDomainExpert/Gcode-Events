@@ -103,13 +103,12 @@ export function InterestButton({
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(
-    identity: { userId: string } | { email: string; phone: string },
-  ) {
+  // No argument → signed in; the server uses the session's account.
+  async function submit(guest?: { email: string; phone?: string }) {
     setSubmitting(true);
     setError(null);
     try {
-      await expressInterest(eventId, identity);
+      await expressInterest(eventId, guest);
       rememberInterested(eventId);
       onInterested?.();
     } catch (err) {
@@ -121,9 +120,8 @@ export function InterestButton({
 
   function handleClick() {
     setError(null);
-    const session = getSession();
-    if (session) {
-      void submit({ userId: session.userId });
+    if (getSession()) {
+      void submit();
     } else {
       setDetailsOpen(true);
     }
@@ -144,7 +142,10 @@ export function InterestButton({
 
   async function handleVerified() {
     setVerifyOpen(false);
-    await submit({ email: email.trim(), phone: normalizePhone(phone) });
+    await submit({
+      email: email.trim(),
+      phone: normalizePhone(phone) || undefined,
+    });
   }
 
   return (

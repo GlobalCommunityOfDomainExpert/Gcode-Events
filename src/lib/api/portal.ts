@@ -1,5 +1,4 @@
 import { ApiError } from "./client";
-import { getSession } from "@/lib/auth/session";
 
 // Same-origin calls to the Next.js server routes under /api/portal. These are
 // where the organizer portal and live room do their work; APEX only stores the
@@ -17,13 +16,10 @@ export async function portalRequest<T>(
   const url = new URL(`/api/portal${path}`, window.location.origin);
   for (const [k, v] of Object.entries(query ?? {}))
     if (v !== undefined) url.searchParams.set(k, v);
-  const session = getSession();
+  // The login cookie rides along on same-origin requests.
   const res = await fetch(url, {
     method,
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
-    },
+    headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });

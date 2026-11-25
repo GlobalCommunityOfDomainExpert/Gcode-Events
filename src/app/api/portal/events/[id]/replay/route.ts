@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkReplaySig, recordingObject } from "@/server/portal/live";
-import { getRecordingObject } from "@/lib/oci/object-storage";
+import { getRecordingObject } from "@/infrastructure/storage/oci-object-storage";
 
 type P = { id: string };
 

@@ -12,7 +12,7 @@ export const POST = handle<P>(async (req, { id }) => {
   const pid = Number(b.participant_id);
   await sendJoinLink(
     intParam(id),
-    userFromRequest(req),
+    await userFromRequest(req),
     Number.isInteger(pid) ? pid : 0,
     process.env.PUBLIC_BASE_URL ?? req.nextUrl.origin,
   );

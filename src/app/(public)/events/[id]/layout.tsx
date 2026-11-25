@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getEvent } from "@/lib/api/events";
+import { eventsService } from "@/server/modules/events/events.service";
 
 export async function generateMetadata({
   params,
@@ -9,8 +9,8 @@ export async function generateMetadata({
   const { id } = await params;
 
   try {
-    const detail = await getEvent(id);
-    const title = `${detail.event_name} | GCODE Events`;
+    const detail = await eventsService.get(Number(id));
+    const title = `${detail.title} | GCODE Events`;
     const description =
       (detail.description ?? "").trim().slice(0, 125) ||
       "Discover this event on GCODE Events.";

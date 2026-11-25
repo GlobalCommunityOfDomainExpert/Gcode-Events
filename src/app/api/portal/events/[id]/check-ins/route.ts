@@ -8,7 +8,7 @@ type P = { id: string };
 export const GET = handle<P>(async (req, { id }) => ({
   items: await listCheckIns(
     intParam(id),
-    userFromRequest(req),
+    await userFromRequest(req),
     req.nextUrl.searchParams.get("token"),
   ),
 }));
@@ -17,7 +17,7 @@ export const POST = handle<P>(async (req, { id }) => {
   const b = await jsonBody(req);
   await setCheckIn(
     intParam(id),
-    userFromRequest(req),
+    await userFromRequest(req),
     typeof b.token === "string" ? b.token : null,
     intParam(String(b.participant_id), "participant"),
     b.arrived === true || b.arrived === "true",

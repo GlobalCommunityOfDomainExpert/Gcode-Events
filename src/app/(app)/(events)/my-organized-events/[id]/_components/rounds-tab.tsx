@@ -151,7 +151,7 @@ export function RoundsTab({
     void refreshDecisions();
     void refreshScores();
     void (async () => {
-      const items = await listEventPanelists(event.id);
+      const items = await listEventPanelists(event.id).catch(() => []);
       const accepted = items
         .map(adaptEventPanelist)
         .filter((p) => p.status === "ACCEPTED" && p.userId);
@@ -179,7 +179,9 @@ export function RoundsTab({
         setRoundRatings([]);
         return;
       }
-      const items = await listRoundRatings(event.id, activeRoundId);
+      const items = await listRoundRatings(event.id, activeRoundId).catch(
+        () => [],
+      );
       if (!cancelled) setRoundRatings(items);
     })();
     return () => {
@@ -508,7 +510,7 @@ export function RoundsTab({
     !isRoundDecided(participantIds, decisions, previousRound.id);
 
   const ratingsByParticipant = useMemo(
-    () => new Map(roundRatings.map((r) => [String(r.participant_id), r])),
+    () => new Map(roundRatings.map((r) => [String(r.participantId), r])),
     [roundRatings],
   );
 
@@ -662,9 +664,9 @@ export function RoundsTab({
               }
               return (
                 <span className="text-text-primary">
-                  {(summary.avg_rating / 10).toFixed(1)} / 10{" "}
+                  {(summary.avgRating / 10).toFixed(1)} / 10{" "}
                   <span className="text-text-secondary">
-                    ({summary.rating_count})
+                    ({summary.ratingCount})
                   </span>
                 </span>
               );

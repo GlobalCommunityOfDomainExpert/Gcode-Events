@@ -11,36 +11,40 @@ const ticket = {
 const NOW = new Date("2026-11-20T00:00:00Z");
 // Registration closes 2026-11-20T12:00Z → entry window closes +24h.
 const open = {
-  registration_deadline: "2026-11-20T12:00:00Z",
-  participant_registration_deadline: "2026-11-21T12:00:00Z",
+  registrationDeadline: "2026-11-20T12:00:00Z",
+  participantRegistrationDeadline: "2026-11-21T12:00:00Z",
 };
 const base = {
   ticket,
-  detail: { ...open, audio_recording_enabled: 0 },
+  detail: {
+    ...open,
+    audioRecordingEnabled: false,
+    audioRecordingAppliesTo: "PARTICIPANT" as const,
+  },
   questions: [] as {
     id: number;
-    applies_to: "ATTENDEE" | "PARTICIPANT";
-    is_required: number;
+    appliesTo: "ATTENDEE" | "PARTICIPANT";
+    required: boolean;
   }[],
   participant: {
     category: "ATTENDEE" as const,
-    audio_submission_url: null as string | null,
-    applied_on: "2026-11-01T00:00:00Z",
+    audioSubmissionUrl: null as string | null,
+    appliedOn: "2026-11-01T00:00:00Z",
   },
   answers: [] as {
-    question_id: number;
-    option_id: number | null;
-    answer_text: string | null;
+    questionId: number;
+    optionId: number | null;
+    answerText: string | null;
   }[],
 };
 const q = (
   id: number,
-  required = 1,
-  applies_to: "ATTENDEE" | "PARTICIPANT" = "ATTENDEE",
+  required = true,
+  appliesTo: "ATTENDEE" | "PARTICIPANT" = "ATTENDEE",
 ) => ({
   id,
-  applies_to,
-  is_required: required,
+  appliesTo,
+  required,
 });
 
 describe("computeEntryTodo", () => {
@@ -51,8 +55,8 @@ describe("computeEntryTodo", () => {
     const r = computeEntryTodo(
       {
         ...base,
-        questions: [q(1), q(2, 0)],
-        answers: [{ question_id: 1, option_id: null, answer_text: "x" }],
+        questions: [q(1), q(2, false)],
+        answers: [{ questionId: 1, optionId: null, answerText: "x" }],
       },
       NOW,
     );
@@ -60,7 +64,10 @@ describe("computeEntryTodo", () => {
   });
   it("counts missing required questions, ignoring other passes and optional ones", () => {
     const r = computeEntryTodo(
-      { ...base, questions: [q(1), q(2), q(3, 0), q(4, 1, "PARTICIPANT")] },
+      {
+        ...base,
+        questions: [q(1), q(2), q(3, false), q(4, true, "PARTICIPANT")],
+      },
       NOW,
     );
     expect(r).toMatchObject({ required: 2, answered: 0, needsClip: false });
@@ -72,8 +79,8 @@ describe("computeEntryTodo", () => {
         ...base,
         questions: [q(1), q(2)],
         answers: [
-          { question_id: 1, option_id: null, answer_text: "  " },
-          { question_id: 2, option_id: 7, answer_text: null },
+          { questionId: 1, optionId: null, answerText: "  " },
+          { questionId: 2, optionId: 7, answerText: null },
         ],
       },
       NOW,
@@ -85,8 +92,8 @@ describe("computeEntryTodo", () => {
       ...base,
       detail: {
         ...open,
-        audio_recording_enabled: 1,
-        audio_recording_applies_to: "ATTENDEE" as const,
+        audioRecordingEnabled: true,
+        audioRecordingAppliesTo: "ATTENDEE" as const,
       },
     };
     expect(computeEntryTodo(withAudio, NOW)?.needsClip).toBe(true);
@@ -96,7 +103,7 @@ describe("computeEntryTodo", () => {
           ...withAudio,
           participant: {
             ...base.participant,
-            audio_submission_url: "https://x",
+            audioSubmissionUrl: "https://x",
           },
         },
         NOW,
@@ -108,7 +115,7 @@ describe("computeEntryTodo", () => {
           ...withAudio,
           detail: {
             ...withAudio.detail,
-            audio_recording_applies_to: "PARTICIPANT" as const,
+            audioRecordingAppliesTo: "PARTICIPANT" as const,
           },
         },
         NOW,
@@ -123,7 +130,7 @@ describe("computeEntryTodo", () => {
     const r = computeEntryTodo(
       {
         ...base,
-        questions: [q(1, 1, "PARTICIPANT")],
+        questions: [q(1, true, "PARTICIPANT")],
         participant: { ...base.participant, category: "PARTICIPANT" },
       },
       NOW,
@@ -135,7 +142,7 @@ describe("computeEntryTodo", () => {
     const b = computeEntryTodo(
       {
         ...base,
-        questions: [q(1, 1, "PARTICIPANT")],
+        questions: [q(1, true, "PARTICIPANT")],
         participant: { ...base.participant, category: "PARTICIPANT" },
       },
       NOW,
