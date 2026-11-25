@@ -1,6 +1,6 @@
 -- Event delete guard. Run in SQL Workshop > SQL Scripts (schema WKSP_GCODE2).
 -- Re-runnable. No package or ORDS change: the existing
--- DELETE /events/:id -> gcode_events_api.delete_event keeps working, and this
+-- DELETE /events/:id (retired by 01_retire_old_delete_route.sql) and this
 -- trigger refuses the delete when it is not allowed.
 --
 -- Rule (same as the app, src/lib/event-delete.ts):
