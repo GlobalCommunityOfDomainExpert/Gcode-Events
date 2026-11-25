@@ -95,6 +95,10 @@ export interface OracleConfig {
   // Directory holding tnsnames.ora / ewallet.pem for mTLS wallets. Omit for
   // TLS-only (walletless) Autonomous DB connections.
   walletDir?: string;
+  // ewallet.pem's contents, for hosts with no wallet on disk (Vercel). Used
+  // instead of walletDir; connectString must then be a full descriptor,
+  // since there's no tnsnames.ora to resolve an alias.
+  walletContent?: string;
   walletPassword?: string;
   // Schema that unqualified names resolve to. Set when connecting as a
   // least-privilege app user that doesn't own the tables.

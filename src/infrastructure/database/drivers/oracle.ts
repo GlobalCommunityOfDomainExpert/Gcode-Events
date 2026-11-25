@@ -253,12 +253,18 @@ export async function createOracleClient(
       user: config.user,
       password: config.password,
       connectString: config.connectString,
-      // mTLS wallet: tnsnames.ora and ewallet.pem live in the same dir.
-      ...(config.walletDir && {
-        configDir: config.walletDir,
-        walletLocation: config.walletDir,
-        walletPassword: config.walletPassword,
-      }),
+      // mTLS wallet: from an env var (no disk, e.g. Vercel), or a directory
+      // where tnsnames.ora and ewallet.pem live together.
+      ...(config.walletContent
+        ? {
+            walletContent: config.walletContent,
+            walletPassword: config.walletPassword,
+          }
+        : config.walletDir && {
+            configDir: config.walletDir,
+            walletLocation: config.walletDir,
+            walletPassword: config.walletPassword,
+          }),
       poolMin: config.pool.min,
       poolMax: config.pool.max,
       poolTimeout: config.pool.idleTimeoutSeconds,
