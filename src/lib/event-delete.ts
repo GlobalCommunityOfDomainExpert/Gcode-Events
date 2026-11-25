@@ -1,21 +1,26 @@
-// Who may delete an event, and when. Drafts were never public, so deleting
-// one is always fine. A published event can only be deleted by a GCODE admin,
-// and only while it has at most MAX_REGISTRATIONS_TO_DELETE registrations;
-// past that, cancel it instead so attendees are not silently dropped.
+// Who may delete an event, and when.
+//  * A draft was never public: always deletable, whatever its registrations.
+//  * A published event: admins only. Up to MAX_REGISTRATIONS_TO_DELETE
+//    registrations is a plain delete; above that an admin can still do it, but
+//    it is an explicit override (the database guard is told, and the confirm
+//    dialog says how many registrations go with it).
 export const MAX_REGISTRATIONS_TO_DELETE = 2;
 
 export type DeleteRule =
-  | { allowed: true; draft: boolean }
-  | { allowed: false; reason: "not-admin" | "has-registrations" };
+  | { allowed: true; draft: boolean; override: boolean }
+  | { allowed: false; reason: "not-admin" };
 
 export function deleteRule(opts: {
   status: string;
   registrations: number;
   isAdmin: boolean;
 }): DeleteRule {
-  if (opts.status === "DRAFT") return { allowed: true, draft: true };
+  if (opts.status === "DRAFT")
+    return { allowed: true, draft: true, override: false };
   if (!opts.isAdmin) return { allowed: false, reason: "not-admin" };
-  if (opts.registrations > MAX_REGISTRATIONS_TO_DELETE)
-    return { allowed: false, reason: "has-registrations" };
-  return { allowed: true, draft: false };
+  return {
+    allowed: true,
+    draft: false,
+    override: opts.registrations > MAX_REGISTRATIONS_TO_DELETE,
+  };
 }

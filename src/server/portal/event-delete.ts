@@ -46,23 +46,29 @@ export async function deleteEventAs(
     registrations,
     isAdmin: admin,
   });
-  if (!rule.allowed) {
-    throw forbidden(
-      rule.reason === "not-admin"
-        ? "Only an admin can delete a published event"
-        : "This event has too many registrations to delete. Cancel it instead.",
-    );
-  }
+  if (!rule.allowed)
+    throw forbidden("Only an admin can delete a published event");
   // A draft can be deleted by an admin or by whoever runs the event.
   if (rule.draft && !admin && !(await isManager(ev, userId)))
     throw forbidden("Only the organizer or an admin can delete this draft");
 
-  const out = await db.tryRemove("portal_events", eventId);
-  if (!out.ok)
+  // force=Y tells the database guard this is a verified admin override.
+  const out = await db.tryRemove(
+    "portal_events",
+    eventId,
+    rule.override ? "?force=Y" : "",
+  );
+  if (!out.ok) {
+    console.error("[event-delete]", eventId, out.error);
     throw new HttpError(
       409,
-      out.error?.includes("ORA-20401")
-        ? "This event has too many registrations to delete. Cancel it instead."
-        : "The event could not be deleted because other records still use it",
+      out.error?.includes("ORA-20402")
+        ? "This event has live payments. Cancel and refund it instead of deleting."
+        : out.error?.includes("ORA-20401")
+          ? "This event has too many registrations to delete."
+          : out.error?.includes("ORA-02292")
+            ? `The event could not be deleted because other records still use it (${out.error.match(/\(([^)]+)\)/)?.[1] ?? "see server log"}).`
+            : "The event could not be deleted.",
     );
+  }
 }

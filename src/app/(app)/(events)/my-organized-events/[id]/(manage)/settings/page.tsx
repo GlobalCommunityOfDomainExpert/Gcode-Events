@@ -13,7 +13,7 @@ import { Button, ButtonLink } from "@/components/atoms";
 import { deleteEvent, updateEvent } from "@/lib/api/events";
 import { getStatuses } from "@/lib/api/lookups";
 import { isAdmin } from "@/lib/auth/session";
-import { deleteRule, MAX_REGISTRATIONS_TO_DELETE } from "@/lib/event-delete";
+import { deleteRule } from "@/lib/event-delete";
 import { useSession } from "@/hooks/use-session";
 import { useOrganizedEvent } from "../../_components/event-context";
 import { CancelEventModal } from "../../_components/cancel-event-modal";
@@ -197,14 +197,7 @@ function EventSettings() {
                 </Button>
               }
             />
-          ) : (
-            rule.reason === "has-registrations" && (
-              <p className="text-small text-text-secondary">
-                Events with more than {MAX_REGISTRATIONS_TO_DELETE}{" "}
-                registrations can&apos;t be deleted. Cancel the event instead.
-              </p>
-            )
-          )}
+          ) : null}
         </SettingGroup>
       </div>
 
@@ -253,6 +246,18 @@ function EventSettings() {
               ? `This permanently removes "${event.title}"${registrations ? ` and its ${registrations} registration${registrations > 1 ? "s" : ""}` : ""}. This can't be undone.`
               : "This permanently removes the draft and anything you've entered."}
           </p>
+          {rule.allowed && rule.override && (
+            <Banner tone="danger">
+              Admin override: this event has more than 2 registrations, and they
+              are deleted with it.
+            </Banner>
+          )}
+          {rule.allowed && rule.override && (
+            <Banner tone="danger">
+              Admin override: this event has more than 2 registrations, and they
+              are deleted with it.
+            </Banner>
+          )}
           {error && <Banner tone="danger">{error}</Banner>}
         </div>
       </Modal>

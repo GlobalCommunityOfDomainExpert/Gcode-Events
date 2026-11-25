@@ -125,8 +125,9 @@ export const ts = (d: Date = new Date()) => d.toISOString().slice(0, 19);
 export async function tryRemove(
   table: string,
   id: number | string,
+  query = "",
 ): Promise<{ ok: boolean; error?: string }> {
-  const res = await call(`${table}/${id}`, { method: "DELETE" });
+  const res = await call(`${table}/${id}${query}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`ORDS ${table} delete failed (${res.status})`);
   const j = (await res.json()) as { ok?: boolean; error?: string };
   return j.error ? { ok: false, error: j.error } : { ok: j.ok !== false };

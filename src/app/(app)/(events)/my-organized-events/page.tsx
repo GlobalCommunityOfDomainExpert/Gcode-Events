@@ -724,6 +724,18 @@ function RowMenu({
               : ""}
             . This can&apos;t be undone.
           </p>
+          {rule.allowed && rule.override && (
+            <Banner tone="danger">
+              Admin override: this event has more than 2 registrations, and they
+              are deleted with it.
+            </Banner>
+          )}
+          {rule.allowed && rule.override && (
+            <Banner tone="danger">
+              Admin override: this event has more than 2 registrations, and they
+              are deleted with it.
+            </Banner>
+          )}
           {error && <Banner tone="danger">{error}</Banner>}
         </div>
       </Modal>
