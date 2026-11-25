@@ -12,6 +12,9 @@ import {
 import { Button, ButtonLink } from "@/components/atoms";
 import { deleteEvent, updateEvent } from "@/lib/api/events";
 import { getStatuses } from "@/lib/api/lookups";
+import { isAdmin } from "@/lib/auth/session";
+import { deleteRule, MAX_REGISTRATIONS_TO_DELETE } from "@/lib/event-delete";
+import { useSession } from "@/hooks/use-session";
 import { useOrganizedEvent } from "../../_components/event-context";
 import { CancelEventModal } from "../../_components/cancel-event-modal";
 
@@ -31,6 +34,7 @@ function EventSettings() {
   const { event, attendees, refreshEvent, notify, isCancelled } =
     useOrganizedEvent();
   const searchParams = useSearchParams();
+  const session = useSession();
   // Jump to → "Cancel this event" lands here with ?action=cancel
   const [pending, setPending] = useState<Pending>(() =>
     searchParams.get("action") === "cancel" && event.status !== "CANCELLED"
@@ -42,6 +46,12 @@ function EventSettings() {
 
   const isDraft = event.status === "DRAFT";
   const publicPath = `/events/${event.id}`;
+  const registrations = Math.max(attendees.length, event.registeredCount);
+  const rule = deleteRule({
+    status: event.status ?? "",
+    registrations,
+    isAdmin: isAdmin(session),
+  });
 
   async function copyLink() {
     try {
@@ -82,10 +92,11 @@ function EventSettings() {
     setBusy(true);
     setError("");
     try {
+      if (!rule.allowed) throw new Error("not allowed");
       await deleteEvent(event.id);
       router.push("/my-organized-events");
     } catch {
-      setError("Couldn't delete the draft. Please try again.");
+      setError("Couldn't delete the event. Please try again.");
       setBusy(false);
     }
   }
@@ -164,20 +175,31 @@ function EventSettings() {
               }
             />
           )}
-          {isDraft && (
+          {rule.allowed ? (
             <ValueLine
-              text="Delete this draft"
-              sub="Removes the draft permanently."
+              text={rule.draft ? "Delete this draft" : "Delete this event"}
+              sub={
+                rule.draft
+                  ? "Removes the draft permanently."
+                  : `Removes the event${registrations ? ` and its ${registrations} registration${registrations > 1 ? "s" : ""}` : ""} permanently. Admin only.`
+              }
               action={
                 <Button
                   variant="danger-ghost"
                   size="sm"
                   onClick={() => setPending("delete")}
                 >
-                  Delete draft
+                  {rule.draft ? "Delete draft" : "Delete event"}
                 </Button>
               }
             />
+          ) : (
+            rule.reason === "has-registrations" && (
+              <p className="text-small text-text-secondary">
+                Events with more than {MAX_REGISTRATIONS_TO_DELETE}{" "}
+                registrations can&apos;t be deleted. Cancel the event instead.
+              </p>
+            )
           )}
         </SettingGroup>
       </div>
@@ -186,7 +208,7 @@ function EventSettings() {
         open={pending === "cancel"}
         onClose={closeModal}
         event={event}
-        registrations={Math.max(attendees.length, event.registeredCount)}
+        registrations={registrations}
         busy={busy}
         error={error}
         onConfirm={() => void confirmCancel()}
@@ -195,7 +217,11 @@ function EventSettings() {
       <Modal
         open={pending === "delete"}
         onClose={closeModal}
-        title="Delete this draft?"
+        title={
+          rule.allowed && !rule.draft
+            ? "Delete this event?"
+            : "Delete this draft?"
+        }
         footer={
           <>
             <Button
@@ -204,7 +230,7 @@ function EventSettings() {
               onClick={closeModal}
               disabled={busy}
             >
-              Keep draft
+              {rule.allowed && !rule.draft ? "Keep event" : "Keep draft"}
             </Button>
             <Button
               variant="danger"
@@ -212,14 +238,16 @@ function EventSettings() {
               loading={busy}
               onClick={confirmDelete}
             >
-              Delete draft
+              {rule.allowed && !rule.draft ? "Delete event" : "Delete draft"}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
           <p>
-            This permanently removes the draft and anything you&apos;ve entered.
+            {rule.allowed && !rule.draft
+              ? `This permanently removes "${event.title}"${registrations ? ` and its ${registrations} registration${registrations > 1 ? "s" : ""}` : ""}. This can't be undone.`
+              : "This permanently removes the draft and anything you've entered."}
           </p>
           {error && <Banner tone="danger">{error}</Banner>}
         </div>
