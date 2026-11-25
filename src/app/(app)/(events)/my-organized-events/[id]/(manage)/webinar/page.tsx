@@ -114,18 +114,23 @@ export default function WebinarPage() {
     return () => clearInterval(id);
   }, [active, load]);
 
-  if (!LIVE_ROOM_ENABLED || event.mode === "In-Person") {
+  const ownLink = event.mode === "Online" && !!event.participationLink?.trim();
+  if (!LIVE_ROOM_ENABLED || event.mode === "In-Person" || ownLink) {
     return (
       <div className={card}>
         <p className="text-text-primary font-semibold">
           {event.mode === "In-Person"
             ? "No live room for in-person events"
-            : "The live room isn't available yet"}
+            : ownLink
+              ? "This event uses your own meeting link"
+              : "The live room isn't available yet"}
         </p>
         <p className="text-small text-text-secondary mt-1">
           {event.mode === "In-Person"
             ? "Switch the event to Online or Hybrid in Edit details to get a live room."
-            : "It is switched off for now."}
+            : ownLink
+              ? "Registrants get your link after they sign up. To use the GCODE live room instead, clear the link in Edit details."
+              : "It is switched off for now."}
         </p>
       </div>
     );
