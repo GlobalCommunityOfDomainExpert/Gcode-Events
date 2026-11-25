@@ -54,6 +54,11 @@ export function loadDatabaseConfig(): DatabaseConfig {
         password: requiredEnv("DB_PASSWORD"),
         connectString: requiredEnv("DB_CONNECT_STRING"),
         walletDir: process.env.DB_WALLET_DIR || undefined,
+        walletContent: process.env.DB_WALLET_PEM_BASE64
+          ? Buffer.from(process.env.DB_WALLET_PEM_BASE64, "base64").toString(
+              "utf8",
+            )
+          : undefined,
         walletPassword: process.env.DB_WALLET_PASSWORD || undefined,
         schema: process.env.DB_SCHEMA || undefined,
         pool: poolConfig(),

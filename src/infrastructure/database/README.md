@@ -60,6 +60,7 @@ Only ever import from `@/infrastructure/database`, never from `./drivers/*`.
 | `DB_PASSWORD`          | yes      |                                                              |
 | `DB_CONNECT_STRING`    | yes      | EZConnect, TNS alias, or full descriptor                     |
 | `DB_WALLET_DIR`        | mTLS     | Unzipped wallet dir (contains `tnsnames.ora`, `ewallet.pem`) |
+| `DB_WALLET_PEM_BASE64` | mTLS     | `base64 -w0 ewallet.pem`, instead of `DB_WALLET_DIR` (Vercel) |
 | `DB_WALLET_PASSWORD`   | mTLS     | Password chosen when downloading the wallet                  |
 | `DB_POOL_MIN`          | no       | default `0`                                                  |
 | `DB_POOL_MAX`          | no       | default `4`                                                  |
@@ -73,6 +74,9 @@ Only ever import from `@/infrastructure/database`, never from `./drivers/*`.
 - **mTLS (wallet)** — download the wallet, unzip it somewhere outside the
   repo, set `DB_WALLET_DIR`/`DB_WALLET_PASSWORD`, and use a TNS alias such as
   `gcdev01_high` as `DB_CONNECT_STRING`.
+- **mTLS on Vercel** (no wallet on disk) — set `DB_WALLET_PEM_BASE64` to
+  `base64 -w0 ewallet.pem` and `DB_WALLET_PASSWORD`, and use the alias's full
+  `(description=…)` from `tnsnames.ora` as `DB_CONNECT_STRING`.
 
 ## Adding another database
 
