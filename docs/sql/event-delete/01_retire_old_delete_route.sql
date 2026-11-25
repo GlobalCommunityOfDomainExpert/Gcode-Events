@@ -1,27 +1,38 @@
 -- Retire the old unauthenticated DELETE /events/:id route. Run in SQL Workshop >
 -- SQL Scripts (WKSP_GCODE2) AFTER 00_run_on_prod.sql and after 02_rest.sql of the
 -- organizer portal, and after the app that uses /api/portal/events/:id is live.
--- Re-runnable: if the handler is already gone it says so and carries on.
+-- Re-runnable.
 --
--- Events are now deleted by the Next.js route, which verifies the admin token
--- and reaches the database through portal_events/:id (key-guarded, trigger
--- still applies). The package procedure gcode_events_api.delete_event is left
--- in place but nothing exposes it.
+-- ORDS.DELETE_HANDLER does not take these arguments on every ORDS version
+-- (PLS-00306), so the handler is REPLACED instead: DEFINE_HANDLER on the same
+-- module, pattern and method overwrites it. The route now deletes nothing and
+-- answers 410 Gone.
+--
+-- Events are deleted by the Next.js route, which verifies the admin token and
+-- reaches the database through portal_events/:id (key-guarded, and the trigger
+-- still applies). gcode_events_api.delete_event stays but nothing exposes it.
 
 BEGIN
-  ORDS.DELETE_HANDLER(
-    p_module_name => 'gcode.events.v1',
-    p_pattern     => ':id',
-    p_method      => 'DELETE');
+  ORDS.DEFINE_HANDLER(
+    p_module_name    => 'gcode.events.v1',
+    p_pattern        => ':id',
+    p_method         => 'DELETE',
+    p_source_type    => 'plsql/block',
+    p_mimes_allowed  => NULL,
+    p_comments       => 'Retired. Use /api/portal/events/:id',
+    p_source         =>
+'BEGIN
+  :status_code := 410;
+  APEX_JSON.open_object;
+  APEX_JSON.write(''error'', ''This route was retired. Delete events from the app.'');
+  APEX_JSON.close_object;
+END;');
   COMMIT;
-  DBMS_OUTPUT.PUT_LINE('Old DELETE /events/:id handler removed.');
-EXCEPTION WHEN OTHERS THEN
-  DBMS_OUTPUT.PUT_LINE('Nothing removed: ' || SUBSTR(SQLERRM, 1, 200));
 END;
 /
 
--- Check: no DELETE handler left on gcode.events.v1 :id (expect no rows).
-SELECT m.name AS module, t.uri_template, h.method
+-- Check: the DELETE handler's source now starts with the 410 block.
+SELECT h.method, SUBSTR(h.source, 1, 60) AS source_start
   FROM user_ords_modules m
   JOIN user_ords_templates t ON t.module_id = m.id
   JOIN user_ords_handlers  h ON h.template_id = t.id
