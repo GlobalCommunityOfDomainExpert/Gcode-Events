@@ -175,7 +175,6 @@ function WebinarLive() {
           join={stage.join}
           refresh={() => requestJoinCredential(event.id, linkToken)}
           name={session?.fullName || "Guest"}
-          role={role}
           onLeave={() => setStage({ kind: "left" })}
         />
       </RoomFrame>
