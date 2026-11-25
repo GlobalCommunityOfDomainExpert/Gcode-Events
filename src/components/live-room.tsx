@@ -286,6 +286,12 @@ function Publisher({
           p.on("stream-disabled", (s: Sdk) =>
             untrack(p.id, p.displayName ?? p.id, self, s.kind),
           );
+          // A stream that started before we were listening (our own camera
+          // starts with the join; a late joiner may already be publishing)
+          // never fires "stream-enabled" again, so replay what already exists.
+          (p.streams as Map<string, Sdk> | undefined)?.forEach((s: Sdk) => {
+            if (s?.track) track(p.id, p.displayName ?? p.id, self, s);
+          });
         };
         m.on("meeting-joined", () => {
           if (gone) return;
