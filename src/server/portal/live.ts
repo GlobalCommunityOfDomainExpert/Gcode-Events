@@ -267,7 +267,8 @@ export async function liveAccess(
   const w = await webinarRow(eventId);
   const role = await roleOf(ev, userId);
   const reg = await registrationOf(eventId, userId, token);
-  const state = stateOf(ev, role);
+  // The host pressing End closes the door at once, whatever the clock says.
+  const state = w.is_ended ? "ENDED" : stateOf(ev, role);
   const holder = reg > 0 || role !== "attendee";
   // The recording URL is returned only to ticket holders, and only once it is
   // published and stored in our own bucket (D6).
@@ -284,6 +285,8 @@ export async function liveAccess(
     state,
     live: !!w.is_live,
     notice: w.notice,
+    // For ticket holders only: shown while the host is on a break and after.
+    slides_url: holder ? w.slides_url : null,
     replay,
   };
 }
@@ -311,11 +314,18 @@ export async function joinCredential(
     if (blocks.some((b) => b.participant_id === reg))
       throw forbidden("You were removed from this session");
   }
-  // Webinar format: attendees only watch. Proven in the spike that anyone
-  // holding a meeting token can switch their mode and publish audio and video,
-  // so an attendee never gets one. They get the stream address instead, and
-  // only while the host is live.
-  if (role === "attendee" && w.audience === "livestream")
+  // Webinar format: attendees watch, they never publish. Two ways to give
+  // them the show:
+  //  - Prebuilt viewer (default): they join the room as signalling-only viewers
+  //    with a token that carries no moderator right, and see the stream with
+  //    chat, polls and raise hand. Their mic and camera buttons are off in the
+  //    UI, but VideoSDK does not stop a viewer who calls the SDK from the
+  //    console (spike, 2026-11-23): the host can mute and remove them.
+  //  - Stream only (LIVE_ATTENDEE_STREAM_ONLY=1): they get just the stream
+  //    address, never a token, so nothing they do can reach the room.
+  // Either way nobody is let in before the host is live.
+  const webinarViewer = role === "attendee" && w.audience === "livestream";
+  if (webinarViewer && process.env.LIVE_ATTENDEE_STREAM_ONLY === "1")
     return {
       mode: "watch" as const,
       watchUrl: w.is_live ? w.hls_url : null,
@@ -335,6 +345,7 @@ export async function joinCredential(
   return {
     mode: "room" as const,
     credential: provider.credentialFor(room, role, pid, ttl),
+    viewer: webinarViewer,
   };
 }
 
@@ -508,7 +519,10 @@ export async function applyProviderEvent(ev: NormalizedEvent) {
   else if (kind === "failed")
     await set({ is_live: 0, is_recording: 0, hls_url: null });
   else if (kind === "session_closed")
-    await set({ is_live: 0, is_recording: 0, is_ended: 1, hls_url: null });
+    // VideoSDK closes a session whenever the room empties, e.g. the host
+    // drops and rejoins. That is not the end of the webinar: only the host's
+    // End (hostAction) or the event's own end time ends it.
+    await set({ is_live: 0, is_recording: 0, hls_url: null });
   else if (kind === "recording_ready") {
     await set({ is_recording: 0 });
     if (ev.fileUrl) await copyRecording(w, ev.fileUrl);

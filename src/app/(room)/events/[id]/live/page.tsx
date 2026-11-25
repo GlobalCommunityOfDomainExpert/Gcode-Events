@@ -174,14 +174,24 @@ function WebinarLive() {
           eventId={event.id}
           join={stage.join}
           refresh={() => requestJoinCredential(event.id, linkToken)}
+          recheck={() => void refresh()}
           name={session?.fullName || "Guest"}
+          role={role}
+          notice={access.notice}
+          slidesUrl={access.slidesUrl}
           onLeave={() => setStage({ kind: "left" })}
         />
       </RoomFrame>
     );
   }
   if (state === "ENDED") {
-    return frame(<EndedScreen event={event} replay={access.replay} />);
+    return frame(
+      <EndedScreen
+        event={event}
+        replay={access.replay}
+        slidesUrl={access.slidesUrl}
+      />,
+    );
   }
   if (stage.kind === "left") {
     return frame(

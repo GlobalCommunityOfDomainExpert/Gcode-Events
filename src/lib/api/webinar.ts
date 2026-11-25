@@ -143,6 +143,8 @@ export interface LiveAccess {
   audience: "interactive" | "livestream";
   live: boolean;
   notice?: string;
+  /** Present only for ticket holders, whenever the organizer has set it. */
+  slidesUrl?: string;
   /** Present only for ticket holders, and only when the replay is published. */
   replay?: { url: string; slidesUrl?: string };
 }
@@ -163,6 +165,7 @@ export async function getLiveAccess(
     state: WebinarState;
     live: boolean;
     notice?: string | null;
+    slides_url?: string | null;
     replay?: { url: string; slides_url?: string | null } | null;
   }>(`/events/${eventId}/live-access`, {
     query: { t: token ?? undefined },
@@ -179,6 +182,7 @@ export async function getLiveAccess(
     state: r.state,
     live: r.live,
     notice: r.notice ?? undefined,
+    slidesUrl: r.slides_url ?? undefined,
     replay: r.replay
       ? { url: r.replay.url, slidesUrl: r.replay.slides_url ?? undefined }
       : undefined,
@@ -191,7 +195,7 @@ export async function getLiveAccess(
  * registered or outside the window.
  */
 export type JoinInfo =
-  | { mode: "room"; credential: string }
+  | { mode: "room"; credential: string; viewer?: boolean }
   | { mode: "watch"; watchUrl: string | null }
   | { mode: "wait" };
 

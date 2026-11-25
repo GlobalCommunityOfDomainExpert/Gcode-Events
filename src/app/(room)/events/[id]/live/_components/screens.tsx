@@ -169,10 +169,14 @@ export function LeftScreen({
 export function EndedScreen({
   event,
   replay,
+  slidesUrl: slidesOnly,
 }: {
   event: Event;
   replay?: { url: string; slidesUrl?: string };
+  /** Slides the organizer shared, shown even when there is no replay. */
+  slidesUrl?: string;
 }) {
+  const slidesUrl = replay?.slidesUrl ?? slidesOnly;
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 space-y-8 px-4 pb-10 sm:px-6">
       <div>
@@ -211,9 +215,9 @@ export function EndedScreen({
         )}
 
         <div className="space-y-4">
-          {replay?.slidesUrl && (
+          {slidesUrl && (
             <a
-              href={replay.slidesUrl}
+              href={slidesUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 rounded-md bg-white/10 p-4 ring-1 ring-white/10 transition-colors hover:bg-white/15"
@@ -223,7 +227,7 @@ export function EndedScreen({
                   Slides
                 </span>
                 <span className="block truncate text-xs text-white/60">
-                  {replay.slidesUrl.split("/").pop()}
+                  {slidesUrl.split("/").pop()}
                 </span>
               </span>
               <Icon

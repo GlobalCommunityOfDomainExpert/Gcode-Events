@@ -857,7 +857,11 @@ function LivePhase({
           : "Accept a raised hand",
     ],
     [MessageSquare, "Moderate chat", "Chat panel"],
-    [PhoneOff, "Leave or end", "Leave keeps it running · End stops it for all"],
+    [
+      PhoneOff,
+      "Leave or end",
+      "Leaving only takes you out · End the stream here to stop it for all",
+    ],
   ];
 
   return (
@@ -893,23 +897,17 @@ function LivePhase({
             label="Session"
             state={streaming ? "Live" : "Not started"}
             on={streaming}
-            action={
-              streaming
-                ? capabilities.pause
-                  ? "Pause"
-                  : "Stop stream"
-                : "Go live"
-            }
+            action={streaming ? "End stream" : "Go live"}
             primary={!streaming}
             disabled={busy}
             onClick={() =>
-              void run(
-                streaming ? "stop" : "go-live",
-                {},
-                streaming
-                  ? "Stopped. Attendees see the waiting screen"
-                  : `You're live${config.recording ? " · recording started" : ""}`,
-              )
+              streaming
+                ? setConfirmEnd(true)
+                : void run(
+                    "go-live",
+                    {},
+                    `You're live${config.recording ? " · recording started" : ""}`,
+                  )
             }
           />
           <Control
@@ -963,47 +961,43 @@ function LivePhase({
           )}
         </div>
 
-        <div className="border-border-light mt-5 flex flex-wrap items-center gap-3 border-t pt-4">
-          <span className="text-text-secondary text-xs">
-            If the stream or recording fails, the controls above go back to Off.
-          </span>
-          <span className="ml-auto">
-            {confirmEnd ? (
-              <span className="flex items-center gap-2">
-                <span className="text-small text-text-primary">
-                  Remove everyone and end?
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmEnd(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => {
-                    setConfirmEnd(false);
-                    void run("end", {}, "Session ended for everyone");
-                  }}
-                >
-                  End session
-                </Button>
-              </span>
-            ) : (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setConfirmEnd(true)}
-              >
-                <Icon icon={PhoneOff} size="sm" className="size-4" /> End for
-                everyone
-              </Button>
-            )}
-          </span>
-        </div>
+        {confirmEnd && (
+          <div
+            role="alertdialog"
+            aria-label="End the stream"
+            className="border-border-light mt-5 flex flex-wrap items-center gap-3 rounded-md border bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] p-4"
+          >
+            <span className="text-small text-text-primary min-w-0 flex-1">
+              <span className="font-semibold">
+                End the stream for everyone?
+              </span>{" "}
+              Everyone is removed and attendees see the session-ended page. It
+              can&apos;t be restarted.
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmEnd(false)}
+            >
+              Keep going
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                setConfirmEnd(false);
+                void run("end", {}, "The stream has ended for everyone");
+              }}
+            >
+              <Icon icon={PhoneOff} size="sm" className="size-4" /> End stream
+            </Button>
+          </div>
+        )}
+
+        <p className="text-text-secondary mt-4 text-xs">
+          If the stream or recording fails, the controls above go back to Off.
+        </p>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">

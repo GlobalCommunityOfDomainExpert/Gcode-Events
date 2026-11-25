@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Loader } from "lucide-react";
 import { Icon } from "@/components/atoms";
+import type { WebinarRole } from "@/lib/webinar";
 import type { JoinInfo } from "@/lib/api/webinar";
 
 // The one place the video provider's room lives. Pages never import vendor
@@ -33,15 +34,26 @@ function claimsOf(token: string): { roomId: string } {
 export function LiveRoom({
   eventId,
   name,
+  role,
+  notice,
+  slidesUrl,
   join,
   refresh,
+  recheck,
   onLeave,
 }: {
   eventId: string;
   name: string;
+  role: WebinarRole;
+  /** The host's note and slides, shown while they are on a break. */
+  notice?: string;
+  slidesUrl?: string;
   join: JoinInfo;
   /** Asks the server again (a watcher polls until the host goes live). */
   refresh: () => Promise<JoinInfo>;
+  /** Called when the server refuses a waiting person: the door looks again
+   *  (the session may have ended) instead of leaving them on "waiting". */
+  recheck: () => void;
   onLeave: () => void;
 }) {
   const [current, setCurrent] = useState(join);
@@ -53,31 +65,39 @@ export function LiveRoom({
     const t = setInterval(() => {
       void refresh()
         .then((r) => live && r.mode !== "wait" && setCurrent(r))
-        .catch(() => undefined);
+        .catch(() => live && recheck());
     }, 6000);
     return () => {
       live = false;
       clearInterval(t);
     };
-  }, [current.mode, refresh]);
+  }, [current.mode, refresh, recheck]);
+
+  // The Prebuilt room takes the whole screen: its own control bar, chat,
+  // participant list and layouts need the room, and it has its own Leave.
+  if (current.mode === "room")
+    return (
+      <PrebuiltRoom
+        credential={current.credential}
+        name={name}
+        role={role}
+        viewer={!!current.viewer}
+      />
+    );
 
   return (
     <main className="mx-auto grid w-full max-w-5xl flex-1 gap-4 px-4 pb-10 sm:px-6">
       {current.mode === "wait" ? (
         <Waiting
-          title="Waiting for the host"
-          body="The host has not started the session yet. You will be let in by itself as soon as they do."
+          title="The host isn't live right now"
+          body="The session hasn't started, or the host is on a short break. This page lets you in by itself the moment they are back."
+          notice={notice}
+          slidesUrl={slidesUrl}
         />
       ) : current.mode === "watch" ? (
         <Watcher initial={current} refresh={refresh} />
-      ) : (
-        <PrebuiltRoom
-          eventId={eventId}
-          credential={current.credential}
-          name={name}
-        />
-      )}
-      <div className="flex flex-wrap gap-3">
+      ) : null}
+      <div className="flex flex-wrap justify-center gap-3">
         <button
           type="button"
           onClick={onLeave}
@@ -96,13 +116,51 @@ export function LiveRoom({
   );
 }
 
-function Waiting({ title, body }: { title: string; body: string }) {
+function Waiting({
+  title,
+  body,
+  notice,
+  slidesUrl,
+}: {
+  title: string;
+  body: string;
+  notice?: string;
+  slidesUrl?: string;
+}) {
   return (
-    <div className="max-w-xl space-y-3 py-10">
-      <p className="text-small flex items-center gap-2 font-bold tracking-widest text-white/60 uppercase">
-        <Icon icon={Loader} size="sm" className="size-4" /> {title}
-      </p>
-      <p className="text-body text-white/70">{body}</p>
+    <div
+      role="status"
+      aria-live="polite"
+      className="mx-auto flex min-h-[55vh] w-full max-w-xl flex-col items-center justify-center gap-5 py-10 text-center"
+    >
+      <span className="relative flex size-20 items-center justify-center">
+        <span className="absolute inset-0 animate-ping rounded-full bg-white/15" />
+        <span className="relative flex size-20 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/25">
+          <Icon icon={Loader} size="lg" className="animate-spin text-white" />
+        </span>
+      </span>
+      <h1 className="text-display leading-tight font-extrabold text-white">
+        {title}
+      </h1>
+      <p className="text-body max-w-md text-white/75">{body}</p>
+      {notice && (
+        <p className="text-body w-full rounded-md bg-white/10 p-4 text-left text-white ring-1 ring-white/15">
+          <span className="text-small mb-1 block font-bold tracking-widest text-white/60 uppercase">
+            Note from the host
+          </span>
+          {notice}
+        </p>
+      )}
+      {slidesUrl && (
+        <a
+          href={slidesUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary inline-flex h-10 items-center rounded-sm bg-white px-4 text-sm font-semibold shadow-sm transition-colors hover:bg-white/90"
+        >
+          Open the slides while you wait
+        </a>
+      )}
     </div>
   );
 }
@@ -188,19 +246,111 @@ function Watcher({
 }
 
 /**
- * VideoSDK's Prebuilt room in an iframe. The URL carries a token our server
+ * Prebuilt's options, as the embed page reads them from its query string (the
+ * names are the ones in its bundle; the docs list some under other names).
+ * Our own lobby has already checked the camera and microphone, so Prebuilt's
+ * join screen is skipped. What each role may do mirrors what the server lets
+ * their token do: the host moderates, speakers present, attendees take part.
+ * Ending the session, recording and the HLS stream stay with our server, so
+ * those controls are off here.
+ */
+function roomOptions(
+  role: WebinarRole,
+  origin: string,
+  viewer: boolean,
+): Record<string, string> {
+  const host = role === "host";
+  const presenter = host || role === "speaker";
+  const b = (v: boolean) => String(v);
+  // A Webinar attendee: a signalling-only viewer. Prebuilt plays the host's
+  // HLS stream for them, with chat, polls and raise hand, and no mic, camera
+  // or screen share.
+  const viewing: Record<string, string> = viewer
+    ? {
+        mode: "SIGNALLING_ONLY",
+        micEnabled: "false",
+        webcamEnabled: "false",
+        participantCanToggleSelfMic: "false",
+        participantCanToggleSelfWebcam: "false",
+        hlsEnabled: "true",
+        hlsPlayerControlsVisible: "true",
+        hlsTheme: "DARK",
+      }
+    : {};
+  return {
+    // Look
+    theme: "DARK",
+    language: "en",
+    brandingEnabled: "true",
+    brandName: "GCODE Events",
+    // The square GCODE mark: Prebuilt shows the logo in a small round slot, so
+    // the wide wordmark (app-logo.png) would be squeezed.
+    brandLogoURL: `${origin}/apple-icon.png`,
+    poweredBy: "false",
+    topbarEnabled: "true",
+    layoutType: "SIDEBAR",
+    layoutPriority: "SPEAKER",
+    layoutGridSize: "9",
+    maintainVideoAspectRatio: "true",
+    animationsEnabled: "true",
+    waitingScreenText: "Connecting you to the session...",
+    // Joining: our lobby already did it, so Prebuilt's device-check screen
+    // and its "Join the meeting" button are both skipped. If a browser with no
+    // camera sits on "Connecting", set joinWithoutUserInteraction back to
+    // "false" (that is what showed the button).
+    joinScreenEnabled: "false",
+    joinWithoutUserInteraction: "true",
+    askJoin: "false",
+    // Everyone
+    chatEnabled: "true",
+    raiseHandEnabled: "true",
+    pollEnabled: "true",
+    participantTabPanelEnabled: "true",
+    moreOptionsEnabled: "true",
+    participantCanLeave: "true",
+    participantCanToggleSelfMic: "true",
+    participantCanToggleSelfWebcam: "true",
+    notificationSoundEnabled: "true",
+    notificationAlertsEnabled: "true",
+    participantNotificationAlertsEnabled: "true",
+    maxResolution: "hd",
+    // By role
+    screenShareEnabled: b(presenter),
+    canPin: b(presenter),
+    canChangeLayout: b(presenter),
+    canCreatePoll: b(presenter),
+    canToggleVirtualBackground: "true",
+    whiteboardEnabled: "false",
+    participantCanToggleOtherMic: b(host),
+    participantCanToggleOtherWebcam: b(host),
+    partcipantCanToogleOtherScreenShare: b(host),
+    canRemoveOtherParticipant: b(host),
+    // Ours: the server ends the session and starts recording and the stream
+    participantCanEndMeeting: "false",
+    recordingEnabled: "false",
+    participantCanToggleRecording: "false",
+    participantCanToggleHls: "false",
+    liveStreamEnabled: "false",
+    hlsEnabled: "false",
+    ...viewing,
+  };
+}
+
+/**
+ * VideoSDK's Prebuilt room, full screen. The URL carries a token our server
  * made for this person (it holds the room id and their registration as the
- * participant id), so nobody joins without a ticket. Chat, raise hand, screen
- * share and the participant list come from Prebuilt itself.
+ * participant id), so nobody joins without a ticket.
  */
 function PrebuiltRoom({
-  eventId,
   credential,
   name,
+  role,
+  viewer,
 }: {
-  eventId: string;
   credential: string;
   name: string;
+  role: WebinarRole;
+  viewer: boolean;
 }) {
   let src: string | null = null;
   try {
@@ -211,10 +361,10 @@ function PrebuiltRoom({
       name,
       micEnabled: "true",
       webcamEnabled: "true",
-      chatEnabled: "true",
-      raiseHandEnabled: "true",
-      screenShareEnabled: "true",
-      redirectOnLeave: `${window.location.origin}/events/${eventId}`,
+      // Leaving, or being removed when the host ends the stream, lands back
+      // on this page: the door then shows the waiting room or the ended page.
+      redirectOnLeave: window.location.href,
+      ...roomOptions(role, window.location.origin, viewer),
     });
     src = `${PREBUILT_URL}?${q}`;
   } catch {
@@ -232,7 +382,7 @@ function PrebuiltRoom({
       src={src}
       title="Live session"
       allow="camera; microphone; display-capture; fullscreen; autoplay; clipboard-write"
-      className="h-[75vh] min-h-[420px] w-full rounded-md border-0 bg-black"
+      className="fixed inset-0 z-50 size-full border-0 bg-black"
     />
   );
 }
