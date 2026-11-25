@@ -12,6 +12,7 @@ import {
 import type {
   Panelist,
   PanelistInvite,
+  PanelistRole,
   PanelistStatus,
 } from "./panelists.schemas";
 
@@ -25,6 +26,8 @@ function toPanelist(row: PanelistRow): Panelist {
     invitedBy: row.invited_by,
     invitedOn: row.invited_on.toISOString(),
     respondedOn: row.responded_on?.toISOString() ?? null,
+    role: roleOf(row.panelist_role),
+    note: row.invite_note?.trim() || null,
   };
 }
 
@@ -36,7 +39,14 @@ function toInvite(row: PanelistInviteRow): PanelistInvite {
     invitedEmail: row.invited_email,
     status: row.status as PanelistStatus,
     invitedOn: row.invited_on.toISOString(),
+    role: roleOf(row.panelist_role),
+    note: row.invite_note?.trim() || null,
   };
+}
+
+// Rows from before the role column, or a database without it, are judges.
+function roleOf(value: string | null | undefined): PanelistRole {
+  return value === "MENTOR" || value === "SPEAKER" ? value : "JUDGE";
 }
 
 // Sessions from Google sign-in can lack the email claim; the account has it.
@@ -98,7 +108,12 @@ export const panelistsService = {
     return { isAcceptedPanelist: await isAcceptedPanelist(eventId, user) };
   },
 
-  async invite(eventId: number, email: string, user: SessionUser) {
+  async invite(
+    eventId: number,
+    email: string,
+    user: SessionUser,
+    extra?: { role?: PanelistRole; note?: string },
+  ) {
     if (!(await eventsRepository.exists(eventId)))
       throw AppError.notFound("Event");
     if (
@@ -107,7 +122,11 @@ export const panelistsService = {
       throw new AppError("CONFLICT", `${email} has already been invited.`);
     }
     try {
-      return { id: await repo.invite(eventId, email, user.userId) };
+      return {
+        id: extra
+          ? await repo.invite(eventId, email, user.userId, extra)
+          : await repo.invite(eventId, email, user.userId),
+      };
     } catch (err) {
       if (DatabaseError.is(err) && err.code === "UNIQUE_VIOLATION") {
         throw new AppError("CONFLICT", `${email} has already been invited.`);

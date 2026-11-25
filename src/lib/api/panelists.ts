@@ -27,10 +27,16 @@ export function getMyPanelistAccess(
 export function invitePanelist(
   eventId: number | string,
   email: string,
+  // Optional: omitted means a judge invite.
+  extra?: { role?: "JUDGE" | "MENTOR" | "SPEAKER"; note?: string },
 ): Promise<{ id: number }> {
   return v1Request(`/events/${eventId}/panelists`, {
     method: "POST",
-    body: { email },
+    body: {
+      email,
+      ...(extra?.role ? { role: extra.role } : {}),
+      ...(extra?.note ? { note: extra.note } : {}),
+    },
   });
 }
 

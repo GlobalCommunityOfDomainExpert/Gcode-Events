@@ -34,6 +34,7 @@ import { groupByDay, resolveDisplayTime, to12Hour, daysUntil } from "./format";
 
 export { MediaSection } from "./event-media";
 import { OnlineInfoCard } from "./online-info-card";
+import { OnlineJoinPanel } from "./online-join-panel";
 import { HybridStagesPanel } from "./hybrid-stages-panel";
 import { AgendaTimeline } from "./agenda-timeline";
 import { FaqAccordion } from "./faq-accordion";
@@ -421,9 +422,15 @@ export function LocationSection({
   }
   return (
     <Section title={event.mode === "Online" ? "How to join" : "Location"}>
-      {event.mode === "Hybrid" && hasLiveRoom(event) && <OnlineInfoCard />}
+      {event.mode === "Hybrid" && hasLiveRoom(event) && (
+        <OnlineJoinPanel event={event} />
+      )}
       {event.mode === "Online" ? (
-        <OnlineInfoCard />
+        hasLiveRoom(event) ? (
+          <OnlineJoinPanel event={event} />
+        ) : (
+          <OnlineInfoCard />
+        )
       ) : !event.location?.trim() ? (
         // No venue set (draft or not announced yet): no map, no directions.
         <div className="border-border-light bg-surface-light flex items-start gap-3 rounded-lg border p-5 shadow-sm">
@@ -695,12 +702,12 @@ function BrandMark({
   }[size];
   const body = partner.logoUrl ? (
     <span className="flex items-center gap-2">
-      <span className={`flex items-center rounded-sm  px-1 ${pill}`}>
+      <span className={`flex items-center rounded-sm px-1 ${pill}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={partner.logoUrl}
           alt={partner.name}
-          className="h-full w-auto max-w-40 object-contain "
+          className="h-full w-auto max-w-40 object-contain"
         />
       </span>
       {withName && (

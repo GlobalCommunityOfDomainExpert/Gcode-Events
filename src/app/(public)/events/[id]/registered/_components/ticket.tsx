@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   CalendarPlus,
   Download,
   ExternalLink,
+  Lock,
   Monitor,
+  PlayCircle,
   ScanLine,
+  Video,
 } from "lucide-react";
 import { Icon } from "@/components/atoms";
 import {
@@ -16,6 +20,11 @@ import {
   type Event,
 } from "@/lib/event";
 import { getEventColor } from "@/lib/event-color";
+import { useLiveAccess } from "@/hooks/use-live-access";
+import { emailJoinLink } from "@/lib/api/webinar";
+import { hasLiveRoom } from "@/lib/live-room";
+import { serverNow } from "@/lib/server-time";
+import { OPENS_BEFORE_MIN } from "@/lib/webinar";
 
 // The booking as an actual ticket: banner, the details you'd check at the
 // door, a perforated tear line, and a stub — the check-in QR for venue
@@ -127,7 +136,11 @@ export function Ticket({
         {/* stub */}
         <div className="flex flex-col items-center justify-center gap-2 p-6 text-center @xl:w-52">
           {online ? (
-            <OnlineStub event={event} bookingRef={bookingRef} />
+            hasLiveRoom(event) ? (
+              <LiveStub event={event} bookingRef={bookingRef} />
+            ) : (
+              <OnlineStub event={event} bookingRef={bookingRef} />
+            )
           ) : showQr ? (
             <>
               <div className="border-border-light rounded-lg border bg-white p-2">
@@ -243,5 +256,120 @@ function OnlineStub({
         {bookingRef}
       </p>
     </>
+  );
+}
+
+// An online event with a live room: the stub follows the server's door state.
+// Having a ticket is what brought the viewer to this page, but the state still
+// comes from live-access, so a wrong clock or a forwarded link changes nothing.
+function LiveStub({ event, bookingRef }: { event: Event; bookingRef: string }) {
+  const access = useLiveAccess(event.id, true);
+  const door = `/events/${event.id}/live`;
+  const opensAt = event.startDateIso
+    ? new Date(event.startDateIso).getTime() -
+      OPENS_BEFORE_MIN.attendee * 60_000
+    : 0;
+  const left = opensAt
+    ? Math.max(0, Math.round((opensAt - serverNow().getTime()) / 60_000))
+    : null;
+
+  if (access?.state === "ENDED")
+    return (
+      <>
+        <Icon icon={PlayCircle} size="lg" className="text-primary" />
+        <p className="text-small text-text-primary font-semibold">
+          {access.replay ? "Replay ready" : "Session ended"}
+        </p>
+        {access.replay && (
+          <Link
+            href={door}
+            className="bg-primary hover:bg-primary-hover text-small mt-1 inline-flex h-9 items-center rounded-sm px-4 font-semibold text-white"
+          >
+            Watch replay
+          </Link>
+        )}
+      </>
+    );
+  if (access?.state === "OPEN" || access?.state === "BACKSTAGE")
+    return (
+      <>
+        <span className="relative">
+          <Icon icon={Video} size="lg" className="text-primary" />
+          <span
+            className={`absolute -top-0.5 -right-1 size-2.5 animate-pulse rounded-full ${access.live ? "bg-secondary" : "bg-success"}`}
+          />
+        </span>
+        <p className="text-small text-text-primary font-semibold">
+          {access.live ? "Live now" : "Doors are open"}
+        </p>
+        <Link
+          href={door}
+          className="bg-primary hover:bg-primary-hover text-small mt-1 inline-flex h-9 items-center gap-1.5 rounded-sm px-4 font-semibold text-white"
+        >
+          <Icon icon={Video} size="sm" className="size-4" /> Join now
+        </Link>
+      </>
+    );
+  return (
+    <>
+      <span className="bg-bg-light grid size-12 place-items-center rounded-full">
+        <Icon icon={Lock} size="sm" className="text-text-secondary" />
+      </span>
+      <p className="text-text-secondary text-[11px] font-semibold tracking-wider uppercase">
+        Live room unlocks in
+      </p>
+      <p className="text-text-primary text-lg font-extrabold tabular-nums">
+        {left === null
+          ? "—"
+          : left >= 60 * 24
+            ? `${Math.floor(left / (60 * 24))} d`
+            : left >= 60
+              ? `${Math.floor(left / 60)} h ${left % 60} min`
+              : `${left} min`}
+      </p>
+      <p className="text-text-secondary text-xs">
+        We emailed you a personal link to join. Open it then, no account needed.
+      </p>
+      <ResendLink eventId={event.id} bookingRef={bookingRef} />
+      <p className="text-text-primary mt-1 font-mono text-xs font-bold tracking-wider">
+        {bookingRef}
+      </p>
+    </>
+  );
+}
+
+// "Email me my link": the server sends it to the address on this registration
+// only, at most once a minute.
+function ResendLink({
+  eventId,
+  bookingRef,
+}: {
+  eventId: string;
+  bookingRef: string;
+}) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle",
+  );
+  const pid = bookingRef.replace(/^GCODE-P/, "");
+  return (
+    <button
+      type="button"
+      disabled={state === "sending" || state === "sent"}
+      onClick={() => {
+        setState("sending");
+        emailJoinLink(eventId, pid)
+          .then(() => setState("sent"))
+          .catch(() => setState("error"));
+      }}
+      className="text-primary text-xs font-semibold underline disabled:no-underline disabled:opacity-70"
+    >
+      {state === "sending"
+        ? "Sending…"
+        : state === "sent"
+          ? "Link sent, check your inbox"
+          : state === "error"
+            ? "Couldn't send, try again in a minute"
+            : "Email me my link"}
+    </button>
   );
 }

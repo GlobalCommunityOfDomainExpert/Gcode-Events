@@ -10,6 +10,7 @@ import {
   Download,
   ExternalLink,
   LayoutDashboard,
+  MonitorPlay,
   PencilLine,
   Receipt,
   Search,
@@ -109,6 +110,18 @@ export function JumpTo({
             },
           ]
         : []),
+      ...(tools.liveRoom
+        ? [
+            {
+              id: "live",
+              label: "Live room",
+              group: "Go to" as const,
+              icon: MonitorPlay,
+              keywords: "webinar stream live room recording speakers",
+              run: go("/webinar"),
+            },
+          ]
+        : []),
       ...(tools.money
         ? [
             {
@@ -204,7 +217,15 @@ export function JumpTo({
       },
     ];
     return list;
-  }, [base, event.id, onNotify, router, tools.judging, tools.money]);
+  }, [
+    base,
+    event.id,
+    onNotify,
+    router,
+    tools.judging,
+    tools.liveRoom,
+    tools.money,
+  ]);
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();

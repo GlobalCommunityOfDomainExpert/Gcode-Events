@@ -1285,15 +1285,8 @@ BEGIN
       END;
     ');
 
-  ORDS.DEFINE_HANDLER(
-      p_module_name    => 'gcode.events.v1',
-      p_pattern        => ':id',
-      p_method         => 'DELETE',
-      p_source_type    => 'plsql/block',
-      p_mimes_allowed  => NULL,
-      p_comments       => NULL,
-      p_source         =>
-'BEGIN gcode_events_api.delete_event(p_id => :id); END;');
+  -- DELETE :id is deliberately not defined any more (retired). Events are
+  -- deleted through /api/portal/events/:id, see docs/sql/event-delete.
 
   COMMIT;
 EXCEPTION

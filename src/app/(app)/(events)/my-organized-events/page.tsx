@@ -9,14 +9,18 @@ import {
   Copy,
   Ellipsis,
   ExternalLink,
+  MonitorPlay,
   PencilLine,
   SearchX,
+  Trash2,
   Trophy,
   Users,
 } from "lucide-react";
 import { Button, ButtonLink, Icon, Select } from "@/components/atoms";
 import {
+  Banner,
   EmptyState,
+  Modal,
   MyOrganizedEventsSkeleton,
   SearchBar,
   Tabs,
@@ -25,6 +29,10 @@ import { PageHeader } from "@/components/layout";
 import { Event, eventTypeTone } from "@/lib/event";
 import { getEventColor } from "@/lib/event-color";
 import { useEvents } from "@/hooks/use-events";
+import { useSession } from "@/hooks/use-session";
+import { deleteEvent } from "@/lib/api/events";
+import { isAdmin } from "@/lib/auth/session";
+import { deleteRule } from "@/lib/event-delete";
 import { useServerNow } from "@/hooks/use-server-now";
 import {
   attentionFor,
@@ -77,7 +85,13 @@ export default function MyOrganizedEventsPage() {
 function OrganizedEventsList() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { events, status } = useEvents();
+  const { events: fetched, status } = useEvents();
+  // Deleted rows leave the list at once; the list is not refetched.
+  const [removed, setRemoved] = useState<ReadonlySet<Event["id"]>>(new Set());
+  const events = useMemo(
+    () => fetched.filter((e) => !removed.has(e.id)),
+    [fetched, removed],
+  );
   const now = useServerNow();
   const [query, setQuery] = useState("");
   const [type, setType] = useState<string>("all");
@@ -309,7 +323,14 @@ function OrganizedEventsList() {
               </div>
               <ul className="divide-border-light divide-y">
                 {visible.map((e) => (
-                  <EventRow key={e.id} event={e} now={now} />
+                  <EventRow
+                    key={e.id}
+                    event={e}
+                    now={now}
+                    onDeleted={() =>
+                      setRemoved((prev) => new Set(prev).add(e.id))
+                    }
+                  />
                 ))}
               </ul>
             </div>
@@ -352,9 +373,11 @@ function NextUp({ event, now }: { event: Event; now: Date }) {
   const pct = cap
     ? Math.min(100, Math.round((totalRegistered(event) / cap) * 100))
     : null;
-  const special = tools.judging
-    ? { href: `${base}/rounds`, label: "Judging", icon: Trophy }
-    : { href: `${base}/attendees`, label: "Attendees", icon: Users };
+  const special = tools.liveRoom
+    ? { href: `${base}/webinar`, label: "Live room", icon: MonitorPlay }
+    : tools.judging
+      ? { href: `${base}/rounds`, label: "Judging", icon: Trophy }
+      : { href: `${base}/attendees`, label: "Attendees", icon: Users };
   return (
     <div className="border-border-light bg-surface-light flex overflow-hidden rounded-lg border shadow-sm">
       <div
@@ -413,7 +436,15 @@ function NextUp({ event, now }: { event: Event; now: Date }) {
   );
 }
 
-function EventRow({ event, now }: { event: Event; now: Date }) {
+function EventRow({
+  event,
+  now,
+  onDeleted,
+}: {
+  event: Event;
+  now: Date;
+  onDeleted: () => void;
+}) {
   const bucket = bucketOf(event, now);
   const base = `/my-organized-events/${event.id}`;
   const flags = attentionFor(event, now, { roundsKnown: false });
@@ -541,7 +572,7 @@ function EventRow({ event, now }: { event: Event; now: Date }) {
         >
           {bucket === "draft" ? "Continue" : "Manage"}
         </ButtonLink>
-        <RowMenu event={event} />
+        <RowMenu event={event} onDeleted={onDeleted} />
       </div>
     </li>
   );
@@ -555,7 +586,42 @@ const TONE_CHIP: Record<string, string> = {
   neutral: "bg-bg-light text-text-secondary",
 };
 
-function RowMenu({ event }: { event: Event }) {
+function RowMenu({
+  event,
+  onDeleted,
+}: {
+  event: Event;
+  onDeleted: () => void;
+}) {
+  const session = useSession();
+  const rule = deleteRule({
+    status: event.status ?? "",
+    registrations: totalRegistered(event),
+    isAdmin: isAdmin(session),
+  });
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const noun = rule.allowed && rule.draft ? "draft" : "event";
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteEvent(event.id);
+      setConfirming(false);
+      onDeleted();
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't delete the event. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -610,8 +676,69 @@ function RowMenu({ event }: { event: Event }) {
             <Icon icon={Copy} size="sm" className="size-4" />{" "}
             {copied ? "Link copied" : "Copy event link"}
           </button>
+          {rule.allowed && (
+            <button
+              type="button"
+              className={`${item} text-danger!`}
+              onClick={() => {
+                setOpen(false);
+                setError("");
+                setConfirming(true);
+              }}
+            >
+              <Icon icon={Trash2} size="sm" className="size-4" /> Delete {noun}
+            </button>
+          )}
         </div>
       )}
+      <Modal
+        open={confirming}
+        onClose={() => !busy && setConfirming(false)}
+        title={`Delete this ${noun}?`}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => setConfirming(false)}
+            >
+              Keep {noun}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={busy}
+              onClick={() => void confirmDelete()}
+            >
+              Delete {noun}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p>
+            This permanently removes &ldquo;{event.title}&rdquo;
+            {totalRegistered(event) > 0
+              ? ` and its ${totalRegistered(event)} registration${totalRegistered(event) > 1 ? "s" : ""}`
+              : ""}
+            . This can&apos;t be undone.
+          </p>
+          {rule.allowed && rule.override && (
+            <Banner tone="danger">
+              Admin override: this event has more than 2 registrations, and they
+              are deleted with it.
+            </Banner>
+          )}
+          {rule.allowed && rule.override && (
+            <Banner tone="danger">
+              Admin override: this event has more than 2 registrations, and they
+              are deleted with it.
+            </Banner>
+          )}
+          {error && <Banner tone="danger">{error}</Banner>}
+        </div>
+      </Modal>
     </div>
   );
 }

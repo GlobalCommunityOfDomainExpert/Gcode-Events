@@ -15,5 +15,14 @@ export const GET = route(
 export const POST = route(
   { auth: "admin", params: eventIdParamsSchema, body: invitePanelistSchema },
   async ({ params, body, user }) =>
-    created(await panelistsService.invite(params.id, body.email, user)),
+    created(
+      await panelistsService.invite(
+        params.id,
+        body.email,
+        user,
+        body.role || body.note
+          ? { role: body.role, note: body.note }
+          : undefined,
+      ),
+    ),
 );

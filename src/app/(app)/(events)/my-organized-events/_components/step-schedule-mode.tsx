@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Building2,
   CalendarDays,
@@ -42,6 +43,11 @@ export function StepScheduleMode({ data, onChange }: StepScheduleModeProps) {
   const { status, data: modes } = useLookup(getModes);
   const activeMode = modes.find((mode) => mode.id === data.mode);
   const modeCode = activeMode?.code ?? "";
+  // An empty link means the GCODE live room. Starts on "own link" when the
+  // event already has one.
+  const [joinChoice, setJoinChoice] = useState<"gcode" | "own">(
+    data.participationLink.trim() ? "own" : "gcode",
+  );
 
   return (
     <div className="space-y-5">
@@ -157,23 +163,86 @@ export function StepScheduleMode({ data, onChange }: StepScheduleModeProps) {
         </p>
       )}
 
-      {(modeCode === "ONLINE" || modeCode === "HYBRID") &&
-        data.stages.length === 0 && (
-          <FormField
-            label="Participation link"
-            htmlFor="event-participation-link"
+      {modeCode === "ONLINE" && data.stages.length === 0 && (
+        <FormField
+          label="How will people join?"
+          htmlFor="event-join-choice"
+          hint={
+            joinChoice === "gcode"
+              ? "Registered attendees join from the event page with their ticket. No link to share."
+              : "Shared with registrants after they sign up."
+          }
+        >
+          <div
+            id="event-join-choice"
+            role="radiogroup"
+            className="grid gap-2 sm:grid-cols-2"
           >
-            <Input
-              id="event-participation-link"
-              icon={Link2}
-              value={data.participationLink}
-              onChange={(event) =>
-                onChange("participationLink", event.target.value)
-              }
-              placeholder="Shared with registrants after they sign up"
-            />
-          </FormField>
-        )}
+            {(
+              [
+                ["gcode", "GCODE live room", "We host it. No link needed."],
+                ["own", "My own link", "Zoom, Meet, Teams, YouTube..."],
+              ] as const
+            ).map(([value, title, sub]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={joinChoice === value}
+                onClick={() => {
+                  setJoinChoice(value);
+                  if (value === "gcode") onChange("participationLink", "");
+                }}
+                className={`rounded-md border p-3 text-left transition-colors ${joinChoice === value ? "border-primary bg-primary/5 ring-primary/15 ring-2" : "border-border-light hover:border-border-hover"}`}
+              >
+                <span className="text-small text-text-primary block font-semibold">
+                  {title}
+                </span>
+                <span className="text-small text-text-secondary block">
+                  {sub}
+                </span>
+              </button>
+            ))}
+          </div>
+          {joinChoice === "own" && (
+            <div className="mt-3">
+              <Input
+                id="event-participation-link"
+                icon={Link2}
+                value={data.participationLink}
+                onChange={(event) =>
+                  onChange("participationLink", event.target.value)
+                }
+                placeholder="https://..."
+                aria-label="Meeting link"
+              />
+              {!data.participationLink.trim() && (
+                <p className="text-small text-text-secondary mt-1">
+                  Paste your link, or switch to the GCODE live room. With no
+                  link the event uses the GCODE live room.
+                </p>
+              )}
+            </div>
+          )}
+        </FormField>
+      )}
+
+      {modeCode === "HYBRID" && data.stages.length === 0 && (
+        <FormField
+          label="Participation link"
+          htmlFor="event-participation-link"
+        >
+          <Input
+            id="event-participation-link"
+            icon={Link2}
+            value={data.participationLink}
+            onChange={(event) =>
+              onChange("participationLink", event.target.value)
+            }
+            placeholder="Shared with registrants after they sign up"
+          />
+        </FormField>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField

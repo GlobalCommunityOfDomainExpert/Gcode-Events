@@ -17,12 +17,17 @@ export interface OrganizerNavEvent {
   isDraft: boolean;
   pendingClaims: number;
   /** Which type-specific sections this event needs (see lib/organizer). */
-  tools?: { judging: boolean; money: boolean; checkIn: boolean };
+  tools?: {
+    judging: boolean;
+    money: boolean;
+    checkIn: boolean;
+    liveRoom: boolean;
+  };
   type?: string;
 }
 
 const toolsKey = (t: OrganizerNavEvent["tools"]) =>
-  t ? `${+t.judging}${+t.money}${+t.checkIn}` : "";
+  t ? `${+t.judging}${+t.money}${+t.checkIn}${+t.liveRoom}` : "";
 
 let current: OrganizerNavEvent | null = null;
 const listeners = new Set<() => void>();

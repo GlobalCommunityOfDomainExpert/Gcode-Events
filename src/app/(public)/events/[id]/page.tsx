@@ -12,6 +12,7 @@ import { InterestButton } from "./_components/interest-button";
 import { EventEnquiryButton } from "./_components/event-enquiry-button";
 import { EventDetailSkeleton } from "./_components/event-detail-skeleton";
 import { OrganizerBar } from "./_components/organizer-bar";
+import { LiveRoomCard } from "./_components/live-room-card";
 import {
   AboutSection,
   EventCover,
@@ -172,6 +173,7 @@ export default function EventDetailPage() {
         {/* --------------------------------------------------------- sidebar */}
         <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
           <TicketsCard event={event} state={state} />
+          {isLive && <LiveRoomCard event={event} />}
           <HostCard event={event} />
 
           {!isLive && (
