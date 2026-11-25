@@ -30,10 +30,14 @@ CREATE OR REPLACE PROCEDURE gcode_purge_event (
   -- a CASCADE child can have its own NO ACTION children (e.g. ADV_ANSWERS under
   -- ADV_OPTION_SETTINGS), and Oracle's cascade stops at those with ORA-02292.
   -- SET NULL keys never block and are left alone. Single-column keys only.
-  PROCEDURE purge(p_table IN VARCHAR2, p_where IN VARCHAR2, p_depth IN PLS_INTEGER) IS
+  -- p_path lists the tables on the way down ('|A|B|'). A table already on the
+  -- path is not entered again: the advanced-question tables point at each other,
+  -- and following that loop never ends.
+  PROCEDURE purge(p_table IN VARCHAR2, p_where IN VARCHAR2, p_depth IN PLS_INTEGER,
+                  p_path IN VARCHAR2) IS
     v_child_where VARCHAR2(4000);
   BEGIN
-    IF p_depth > 6 THEN
+    IF p_depth > 12 THEN
       RAISE_APPLICATION_ERROR(-20403, 'Foreign keys nest too deep under ' || p_table);
     END IF;
     FOR fk IN (
@@ -49,10 +53,12 @@ CREATE OR REPLACE PROCEDURE gcode_purge_event (
       IF fk.ncols > 1 THEN
         RAISE_APPLICATION_ERROR(-20403, 'Composite foreign key on ' || fk.child || ' not handled');
       END IF;
-      v_child_where := fk.child_col || ' IN (SELECT ' || fk.parent_col ||
-                       ' FROM ' || p_table || ' WHERE ' || p_where || ')';
-      purge(fk.child, v_child_where, p_depth + 1);
-      EXECUTE IMMEDIATE 'DELETE FROM ' || fk.child || ' WHERE ' || v_child_where;
+      IF INSTR(p_path, '|' || fk.child || '|') = 0 THEN
+        v_child_where := fk.child_col || ' IN (SELECT ' || fk.parent_col ||
+                         ' FROM ' || p_table || ' WHERE ' || p_where || ')';
+        purge(fk.child, v_child_where, p_depth + 1, p_path || fk.child || '|');
+        EXECUTE IMMEDIATE 'DELETE FROM ' || fk.child || ' WHERE ' || v_child_where;
+      END IF;
     END LOOP;
   END purge;
 BEGIN
@@ -84,7 +90,7 @@ BEGIN
 
   -- Tell the guard trigger this delete passed the checks above.
   DBMS_SESSION.SET_IDENTIFIER('GCODE_PURGE_EVENT');
-  purge('EVENTS', 'id = ' || TO_CHAR(p_id), 1);
+  purge('EVENTS', 'id = ' || TO_CHAR(p_id), 1, '|EVENTS|');
   DELETE FROM events WHERE id = p_id;
   DBMS_SESSION.CLEAR_IDENTIFIER;
 EXCEPTION WHEN OTHERS THEN
