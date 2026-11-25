@@ -191,6 +191,16 @@ BEGIN
   route('portal_v_events', 'GET', 'json/query', q'~SELECT id,title,organizer_id,organizer_name,start_ist,end_ist FROM GCODE_PORTAL_V_EVENTS
     WHERE (:id IS NULL OR id = :id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
 
+  -- portal_events -> EVENTS (delete only; the trigger in docs/sql/event-delete decides if it is allowed)
+  route('portal_events/:id', 'DELETE', 'plsql/block', q'~BEGIN
+    DELETE FROM events WHERE id = :id
+       AND (SELECT COUNT(*) FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key) > 0;
+    APEX_JSON.open_object; APEX_JSON.write('ok', SQL%ROWCOUNT = 1); APEX_JSON.close_object;
+  EXCEPTION WHEN OTHERS THEN
+    ROLLBACK;
+    APEX_JSON.open_object; APEX_JSON.write('error', SUBSTR(SQLERRM, 1, 300)); APEX_JSON.close_object;
+  END;~');
+
   -- portal_v_participants -> GCODE_PORTAL_V_PARTICIPANTS
   route('portal_v_participants', 'GET', 'json/query', q'~SELECT id,event_id,user_id,category,active,full_name,email FROM GCODE_PORTAL_V_PARTICIPANTS
     WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');

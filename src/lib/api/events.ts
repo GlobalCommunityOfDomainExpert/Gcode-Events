@@ -1,4 +1,5 @@
 import { apiRequest, API_BASE_URL, ApiError } from "./client";
+import { portalRequest } from "./portal";
 import {
   EventDetail,
   EventListItem,
@@ -376,8 +377,10 @@ export function listAdvancedOptions(id: number | string) {
     }
   });
 }
-export function deleteEvent(id: number | string): Promise<void> {
-  return apiRequest<void>(`/events/${id}`, { method: "DELETE" });
+// Goes through the Next.js server, which checks the signed-in role and the
+// draft / registration rules before touching the database.
+export async function deleteEvent(id: number | string): Promise<void> {
+  await portalRequest<unknown>(`/events/${id}`, { method: "DELETE" });
 }
 
 // Binary upload: PUT the raw image bytes. Can't go through apiRequest (which

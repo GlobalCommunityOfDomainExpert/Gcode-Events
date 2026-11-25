@@ -95,8 +95,12 @@ function EventSettings() {
       if (!rule.allowed) throw new Error("not allowed");
       await deleteEvent(event.id);
       router.push("/my-organized-events");
-    } catch {
-      setError("Couldn't delete the event. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't delete the event. Please try again.",
+      );
       setBusy(false);
     }
   }

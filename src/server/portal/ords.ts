@@ -120,3 +120,14 @@ export async function remove(
 
 /** UTC time as ISO text without the "Z" (see `body`). */
 export const ts = (d: Date = new Date()) => d.toISOString().slice(0, 19);
+
+/** Delete by id; a refusal from the database comes back as text, not a throw. */
+export async function tryRemove(
+  table: string,
+  id: number | string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await call(`${table}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`ORDS ${table} delete failed (${res.status})`);
+  const j = (await res.json()) as { ok?: boolean; error?: string };
+  return j.error ? { ok: false, error: j.error } : { ok: j.ok !== false };
+}

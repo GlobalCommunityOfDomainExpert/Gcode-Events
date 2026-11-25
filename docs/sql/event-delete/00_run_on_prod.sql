@@ -7,10 +7,12 @@
 --   * DRAFT event: always deletable.
 --   * Any other status: deletable only with 2 or fewer active registrations.
 --
--- NOT enforced here: "admin only". The database never sees who is calling
--- (the API does not verify bearer tokens), so that part is checked in the app
--- (/my-organized-events is admin-only). If you later pass the caller's role to
--- delete_event, add the check in the trigger or the procedure.
+-- Admin-only is checked in Next.js (DELETE /api/portal/events/:id verifies the
+-- JWT signature and role = ADMIN), not here: the database does not see who is
+-- calling. Run docs/sql/organizer-portal/02_rest.sql again so the
+-- portal_events/:id route exists (it calls this same delete, so the trigger
+-- still applies). The old DELETE /events/:id route skips the admin check:
+-- retire it once nothing else uses it.
 
 CREATE OR REPLACE TRIGGER trg_events_delete_guard
 BEFORE DELETE ON events
