@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { readJoinToken, signJoinToken } from "./crypto";
 import * as db from "./ords";
 import { badRequest, forbidden, HttpError, notFound } from "./http";
 import {
@@ -73,15 +74,29 @@ async function webinarRow(eventId: number): Promise<WebinarRow> {
 const iso = (ms: number | null) =>
   ms === null ? null : new Date(ms).toISOString();
 
-/** The registration id of a signed-in ticket holder, or 0. */
+/**
+ * The registration id of a ticket holder, or 0. Either a signed-in account that
+ * holds a ticket, or a signed join link (the emailed link a guest uses): the
+ * link is checked against the event and must still point at an active
+ * registration, so removing someone or cancelling their ticket ends it.
+ */
 async function registrationOf(
   eventId: number,
   userId: string | null,
+  token: string | null = null,
 ): Promise<number> {
-  if (!userId) return 0;
+  const linked = readJoinToken(eventId, token);
+  if (!userId && !linked) return 0;
   const parts = await db.list<PartRow>("portal_v_participants", {
     event_id: eventId,
   });
+  if (linked)
+    return (
+      parts.find(
+        (p) =>
+          p.id === linked && p.active === "Y" && p.category !== "PARTICIPANT",
+      )?.id ?? 0
+    );
   return parts.find((p) => p.user_id === userId && p.active === "Y")?.id ?? 0;
 }
 
@@ -243,22 +258,24 @@ export function checkReplaySig(
   return want.length === got.length && timingSafeEqual(want, got);
 }
 
-export async function liveAccess(eventId: number, userId: string | null) {
+export async function liveAccess(
+  eventId: number,
+  userId: string | null,
+  token: string | null = null,
+) {
   const ev = await getEvent(eventId);
   const w = await webinarRow(eventId);
   const role = await roleOf(ev, userId);
-  const reg = await registrationOf(eventId, userId);
+  const reg = await registrationOf(eventId, userId, token);
   const state = stateOf(ev, role);
   const holder = reg > 0 || role !== "attendee";
   // The recording URL is returned only to ticket holders, and only once it is
   // published and stored in our own bucket (D6).
+  // A link holder has no account: their registration stands in for the user id.
+  const who = userId ?? (reg > 0 ? `p${reg}` : null);
   const replay =
-    userId &&
-    holder &&
-    state === "ENDED" &&
-    w.replay_published &&
-    w.recording_url
-      ? { url: replayUrl(eventId, userId), slides_url: w.slides_url }
+    who && holder && state === "ENDED" && w.replay_published && w.recording_url
+      ? { url: replayUrl(eventId, who), slides_url: w.slides_url }
       : undefined;
   return {
     registered: holder,
@@ -272,10 +289,15 @@ export async function liveAccess(eventId: number, userId: string | null) {
 }
 
 /** A join credential for this viewer, or a 403. Tied to their registration. */
-export async function joinCredential(eventId: number, userId: string) {
+export async function joinCredential(
+  eventId: number,
+  userId: string | null,
+  token: string | null = null,
+) {
+  if (!userId && !token) throw new HttpError(401, "Sign in again to continue");
   const ev = await getEvent(eventId);
   const role = await roleOf(ev, userId);
-  const reg = await registrationOf(eventId, userId);
+  const reg = await registrationOf(eventId, userId, token);
   if (role === "attendee" && reg === 0)
     throw forbidden("You need a ticket to join this session");
   const w = await webinarRow(eventId);
@@ -570,4 +592,48 @@ async function copyRecording(w: WebinarRow, fileUrl: string) {
 export async function recordingObject(eventId: number) {
   const w = await webinarRow(eventId);
   return w.recording_url;
+}
+
+// ------------------------------------------------ join link by email (guests)
+const sentAt = new Map<number, number>();
+const RESEND_AFTER_MS = 60_000;
+
+/**
+ * Emails a signed join link to the address on one registration. The recipient
+ * is read by the database from the registration, never from this request, so
+ * a caller can only ever send a link to its rightful owner. Rate-limited per
+ * registration. Signed-in callers need no id (their own ticket is used).
+ */
+export async function sendJoinLink(
+  eventId: number,
+  userId: string | null,
+  participantId: number,
+  origin: string,
+) {
+  const ev = await getEvent(eventId);
+  const parts = await db.list<PartRow>("portal_v_participants", {
+    event_id: eventId,
+  });
+  const mine = userId
+    ? parts.find((p) => p.user_id === userId && p.active === "Y")
+    : undefined;
+  const pid = mine?.id ?? participantId;
+  const row = parts.find((p) => p.id === pid);
+  if (!row || row.active !== "Y" || row.category === "PARTICIPANT")
+    throw notFound("Registration not found");
+
+  const last = sentAt.get(pid) ?? 0;
+  if (Date.now() - last < RESEND_AFTER_MS)
+    throw new HttpError(429, "A link was just sent. Check your inbox.");
+  sentAt.set(pid, Date.now());
+
+  // Valid until the room closes plus a day, so a late open still works.
+  const end =
+    (utcMs(ev.end_ist) ?? Date.now()) + (CLOSES_AFTER_MIN + 24 * 60) * 60_000;
+  const url = `${origin.replace(/\/$/, "")}/events/${eventId}/live?t=${signJoinToken(eventId, pid, end)}`;
+  await db.insert("portal_send_join_link", {
+    event_id: eventId,
+    participant_id: pid,
+    join_url: url,
+  });
 }

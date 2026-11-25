@@ -20,6 +20,8 @@ import { Breadcrumb, NotFoundState } from "@/components/molecules";
 import { useEvent } from "@/hooks/use-event";
 import { googleCalendarUrl } from "@/lib/event";
 import { getParticipant } from "@/lib/api/participants";
+import { emailJoinLink } from "@/lib/api/webinar";
+import { hasLiveRoom } from "@/lib/live-room";
 import { ParticipantApi } from "@/lib/api/types";
 import { getSession } from "@/lib/auth/session";
 import { renderTicketPng } from "@/lib/ticket-image";
@@ -96,6 +98,26 @@ export default function EventRegisteredPage() {
     !!participant &&
     (audioAppliesToMe ||
       event.questions.some((question) => question.appliesTo === category));
+
+  // A guest has no account, so the live room's door only knows them by the
+  // signed link we email. Send it once, the first time this ticket is opened.
+  // Best effort: the ticket also has an "Email me my link" button.
+  useEffect(() => {
+    if (!event || !participant || needsAdditionalInfo) return;
+    if (!hasLiveRoom(event) || participant.category === "PARTICIPANT") return;
+    const key = `gcode-join-link-${event.id}-${participant.id}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {
+      return;
+    }
+    void emailJoinLink(event.id, participant.id).catch(() => {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+    });
+  }, [event, participant, needsAdditionalInfo]);
 
   useEffect(() => {
     if (needsAdditionalInfo && event && participant) {

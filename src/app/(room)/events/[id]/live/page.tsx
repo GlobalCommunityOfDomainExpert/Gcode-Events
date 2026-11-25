@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { LiveRoom } from "@/components/live-room";
 import { useEvent } from "@/hooks/use-event";
 import { useSession } from "@/hooks/use-session";
@@ -35,8 +36,20 @@ import { WaitingRoom } from "./_components/waiting-room";
 //     server mints for this person's registration.
 //  4. Left → rejoin while it is running. Ended → replay, if published.
 export default function WebinarLivePage() {
+  return (
+    <Suspense fallback={null}>
+      <WebinarLive />
+    </Suspense>
+  );
+}
+
+function WebinarLive() {
   const params = useParams<{ id: string }>();
   const session = useSession();
+  // The signed link from the registration email (?t=...): it lets a guest
+  // with no account prove their ticket. Nothing else in the URL means anything.
+  const linkToken = useSearchParams().get("t");
+  const identified = !!session || !!linkToken;
   const { event, status } = useEvent(params.id);
   const [access, setAccess] = useState<LiveAccess | null>();
   const [stage, setStage] = useState<
@@ -45,19 +58,19 @@ export default function WebinarLivePage() {
 
   const refresh = useCallback(async () => {
     try {
-      setAccess(await getLiveAccess(params.id));
+      setAccess(await getLiveAccess(params.id, linkToken));
     } catch {
       setAccess(null);
     }
-  }, [params.id]);
+  }, [params.id, linkToken]);
 
   // The door opens, goes live and ends on the server's clock: poll so a
   // waiting page moves on by itself.
   useEffect(() => {
-    if (!session) return;
+    if (!identified) return;
     let live = true;
     const load = () =>
-      getLiveAccess(params.id)
+      getLiveAccess(params.id, linkToken)
         .then((a) => live && setAccess(a))
         .catch(() => live && setAccess(null));
     void load();
@@ -66,7 +79,7 @@ export default function WebinarLivePage() {
       live = false;
       clearInterval(id);
     };
-  }, [session, params.id]);
+  }, [identified, linkToken, params.id]);
 
   if (!LIVE_ROOM_ENABLED) {
     return (
@@ -104,7 +117,7 @@ export default function WebinarLivePage() {
     </RoomFrame>
   );
 
-  if (!session) {
+  if (!identified) {
     return frame(
       <RoomPanel>
         <h1 className="text-display leading-tight font-extrabold">
@@ -160,8 +173,8 @@ export default function WebinarLivePage() {
         <LiveRoom
           eventId={event.id}
           join={stage.join}
-          refresh={() => requestJoinCredential(event.id)}
-          name={session.fullName || "Guest"}
+          refresh={() => requestJoinCredential(event.id, linkToken)}
+          name={session?.fullName || "Guest"}
           role={role}
           onLeave={() => setStage({ kind: "left" })}
         />
@@ -190,11 +203,11 @@ export default function WebinarLivePage() {
       role={role}
       audience={access.audience}
       notice={access.notice}
-      name={session.fullName || "Guest"}
+      name={session?.fullName || "Guest"}
       when={when}
       backstage={state === "BACKSTAGE"}
       onJoin={async () => {
-        const join = await requestJoinCredential(event.id);
+        const join = await requestJoinCredential(event.id, linkToken);
         setStage({ kind: "room", join });
       }}
     />,

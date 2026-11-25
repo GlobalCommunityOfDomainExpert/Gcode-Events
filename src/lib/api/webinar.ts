@@ -147,7 +147,15 @@ export interface LiveAccess {
   replay?: { url: string; slidesUrl?: string };
 }
 
-export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
+/**
+ * `token` is the signed join link from the registration email (the `t` in
+ * /events/<id>/live?t=...). It lets a guest with no account prove their
+ * ticket; a signed-in account needs none.
+ */
+export async function getLiveAccess(
+  eventId: string,
+  token?: string | null,
+): Promise<LiveAccess> {
   const r = await portalRequest<{
     registered: boolean;
     role: "HOST" | "SPEAKER" | "ATTENDEE";
@@ -156,7 +164,9 @@ export async function getLiveAccess(eventId: string): Promise<LiveAccess> {
     live: boolean;
     notice?: string | null;
     replay?: { url: string; slides_url?: string | null } | null;
-  }>(`/events/${eventId}/live-access`);
+  }>(`/events/${eventId}/live-access`, {
+    query: { t: token ?? undefined },
+  });
   return {
     registered: r.registered,
     role:
@@ -185,9 +195,26 @@ export type JoinInfo =
   | { mode: "watch"; watchUrl: string | null }
   | { mode: "wait" };
 
-export function requestJoinCredential(eventId: string): Promise<JoinInfo> {
+export function requestJoinCredential(
+  eventId: string,
+  token?: string | null,
+): Promise<JoinInfo> {
   return portalRequest<JoinInfo>(`/events/${eventId}/live/token`, {
     method: "POST",
-    body: {},
+    body: token ? { t: token } : {},
+  });
+}
+
+/**
+ * Email the join link to the address on a registration. Needs no account: the
+ * server sends it only to the registrant's own address, at most once a minute.
+ */
+export function emailJoinLink(
+  eventId: string,
+  participantId: string | number,
+): Promise<unknown> {
+  return portalRequest(`/events/${eventId}/join-link`, {
+    method: "POST",
+    body: { participant_id: Number(participantId) },
   });
 }

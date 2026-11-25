@@ -7,5 +7,9 @@ type P = { id: string };
 // Works signed out too: the door and the event page still show the countdown
 // and the organizer notice, with registered = false.
 export const GET = handle<P>(async (req, { id }) =>
-  liveAccess(intParam(id), userFromRequest(req)),
+  liveAccess(
+    intParam(id),
+    userFromRequest(req),
+    req.nextUrl.searchParams.get("t"),
+  ),
 );

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   CalendarPlus,
   Download,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/event";
 import { getEventColor } from "@/lib/event-color";
 import { useLiveAccess } from "@/hooks/use-live-access";
+import { emailJoinLink } from "@/lib/api/webinar";
 import { hasLiveRoom } from "@/lib/live-room";
 import { serverNow } from "@/lib/server-time";
 import { OPENS_BEFORE_MIN } from "@/lib/webinar";
@@ -326,12 +328,48 @@ function LiveStub({ event, bookingRef }: { event: Event; bookingRef: string }) {
               : `${left} min`}
       </p>
       <p className="text-text-secondary text-xs">
-        Open this ticket again then. Your seat is tied to your account, so there
-        is no link to keep.
+        We emailed you a personal link to join. Open it then, no account needed.
       </p>
+      <ResendLink eventId={event.id} bookingRef={bookingRef} />
       <p className="text-text-primary mt-1 font-mono text-xs font-bold tracking-wider">
         {bookingRef}
       </p>
     </>
+  );
+}
+
+// "Email me my link": the server sends it to the address on this registration
+// only, at most once a minute.
+function ResendLink({
+  eventId,
+  bookingRef,
+}: {
+  eventId: string;
+  bookingRef: string;
+}) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle",
+  );
+  const pid = bookingRef.replace(/^GCODE-P/, "");
+  return (
+    <button
+      type="button"
+      disabled={state === "sending" || state === "sent"}
+      onClick={() => {
+        setState("sending");
+        emailJoinLink(eventId, pid)
+          .then(() => setState("sent"))
+          .catch(() => setState("error"));
+      }}
+      className="text-primary text-xs font-semibold underline disabled:no-underline disabled:opacity-70"
+    >
+      {state === "sending"
+        ? "Sending…"
+        : state === "sent"
+          ? "Link sent, check your inbox"
+          : state === "error"
+            ? "Couldn't send, try again in a minute"
+            : "Email me my link"}
+    </button>
   );
 }

@@ -206,6 +206,17 @@ BEGIN
     APEX_JSON.open_object; APEX_JSON.write('error', SUBSTR(SQLERRM, 1, 300)); APEX_JSON.close_object;
   END;~');
 
+  -- portal_send_join_link -> GCODE_EMAIL_API.send_join_link_email (the recipient is read from the registration)
+  route('portal_send_join_link', 'POST', 'plsql/block', q'~DECLARE v_n NUMBER;
+  BEGIN
+    SELECT COUNT(*) INTO v_n FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY' AND secret_value = :portal_key;
+    IF v_n = 0 THEN APEX_JSON.open_object; APEX_JSON.write('error', 'not allowed'); APEX_JSON.close_object; RETURN; END IF;
+    gcode_email_api.send_join_link_email(TO_NUMBER(:event_id), TO_NUMBER(:participant_id), :join_url);
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.close_object;
+  EXCEPTION WHEN OTHERS THEN
+    APEX_JSON.open_object; APEX_JSON.write('error', SUBSTR(SQLERRM, 1, 300)); APEX_JSON.close_object;
+  END;~');
+
   -- portal_v_participants -> GCODE_PORTAL_V_PARTICIPANTS
   route('portal_v_participants', 'GET', 'json/query', q'~SELECT id,event_id,user_id,category,active,full_name,email FROM GCODE_PORTAL_V_PARTICIPANTS
     WHERE (:event_id IS NULL OR event_id = :event_id) AND (SELECT COUNT(*) FROM gcode_app_secrets k WHERE k.secret_name = 'ORDS_PORTAL_KEY' AND k.secret_value = :portal_key) > 0~');
