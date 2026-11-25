@@ -26,8 +26,10 @@ CREATE OR REPLACE PROCEDURE gcode_purge_event (
   v_money    NUMBER;
 
   -- Delete every row that references the rows of p_table selected by p_where,
-  -- deepest children first. Only NO ACTION foreign keys: CASCADE ones are the
-  -- database's job. Single-column foreign keys only.
+  -- deepest children first. NO ACTION and CASCADE foreign keys are both walked:
+  -- a CASCADE child can have its own NO ACTION children (e.g. ADV_ANSWERS under
+  -- ADV_OPTION_SETTINGS), and Oracle's cascade stops at those with ORA-02292.
+  -- SET NULL keys never block and are left alone. Single-column keys only.
   PROCEDURE purge(p_table IN VARCHAR2, p_where IN VARCHAR2, p_depth IN PLS_INTEGER) IS
     v_child_where VARCHAR2(4000);
   BEGIN
@@ -41,7 +43,7 @@ CREATE OR REPLACE PROCEDURE gcode_purge_event (
         JOIN user_cons_columns cc ON cc.constraint_name = c.constraint_name
         JOIN user_constraints p   ON p.constraint_name = c.r_constraint_name
         JOIN user_cons_columns pc ON pc.constraint_name = p.constraint_name AND pc.position = cc.position
-       WHERE c.constraint_type = 'R' AND c.delete_rule = 'NO ACTION'
+       WHERE c.constraint_type = 'R' AND c.delete_rule IN ('NO ACTION', 'CASCADE')
          AND p.table_name = p_table AND c.table_name <> p_table
     ) LOOP
       IF fk.ncols > 1 THEN
