@@ -1,5 +1,10 @@
-import { portalRequest } from "./portal";
-import { ApiListResponse } from "./types";
+import { v1Request } from "./client";
+import type {
+  SharedAccessResult,
+  SharedDataResult,
+  ShareLinkItem,
+  TeamMemberItem,
+} from "@/server/modules/portal/portal.schemas";
 import type {
   SharedAccess,
   SharedData,
@@ -8,50 +13,30 @@ import type {
   TeamRole,
 } from "@/lib/team";
 
-// GCODE_EVENT_TEAM / GCODE_EVENT_SHARE_LINKS (docs/sql/organizer-portal).
-// Tokens are 256-bit values the server hashes before storing, so a token is
-// returned exactly once, when the invite or link is created. List calls never
-// carry one. /shared/:token is the only unauthenticated read.
+// GCODE_EVENT_TEAM / GCODE_EVENT_SHARE_LINKS through /api/v1 (see
+// src/server/modules/portal). Tokens are 256-bit values the server hashes
+// before storing, so a token is returned exactly once, when the invite or link
+// is created. List calls never carry one. /shared/:token is the only
+// unauthenticated read. The acting user is the login cookie, never a body
+// field.
 
-export interface TeamMemberApi {
-  id: number;
-  event_id: number;
-  email: string;
-  role: TeamRole;
-  status: "INVITED" | "ACTIVE";
-  invited_on: string;
-}
-
-export interface ShareLinkApi {
-  id: number;
-  event_id: number;
-  label: string;
-  role: TeamRole;
-  created_on: string;
-  expires_on: string | null;
-  views: number;
-}
-
-// The acting user is never sent in a body or query: the ORDS handler decodes
-// the bearer token itself, like /participants/me does.
-
-const member = (r: TeamMemberApi): TeamMember => ({
+const member = (r: TeamMemberItem): TeamMember => ({
   id: String(r.id),
-  eventId: String(r.event_id),
+  eventId: String(r.eventId),
   email: r.email,
   name: null,
   role: r.role,
   status: r.status,
-  invitedOn: r.invited_on,
+  invitedOn: r.invitedOn,
 });
 
-const link = (r: ShareLinkApi): ShareLink => ({
+const link = (r: ShareLinkItem): ShareLink => ({
   id: String(r.id),
-  eventId: String(r.event_id),
+  eventId: String(r.eventId),
   label: r.label,
   role: r.role,
-  createdOn: r.created_on,
-  expiresOn: r.expires_on,
+  createdOn: r.createdOn,
+  expiresOn: r.expiresOn,
   views: r.views,
 });
 
@@ -59,9 +44,7 @@ const link = (r: ShareLinkApi): ShareLink => ({
 // opens before the endpoints exist.
 export async function listTeam(eventId: string): Promise<TeamMember[]> {
   try {
-    const { items } = await portalRequest<ApiListResponse<TeamMemberApi>>(
-      `/events/${eventId}/team`,
-    );
+    const items = await v1Request<TeamMemberItem[]>(`/events/${eventId}/team`);
     return items.map(member);
   } catch {
     return [];
@@ -74,26 +57,26 @@ export function inviteTeamMember(
   email: string,
   role: TeamRole,
 ): Promise<{ token: string }> {
-  return portalRequest<{ token: string }>(`/events/${eventId}/team`, {
+  return v1Request<{ token: string }>(`/events/${eventId}/team`, {
     method: "POST",
     body: { email, role },
   });
 }
 
 export function changeTeamRole(id: string, role: TeamRole): Promise<unknown> {
-  return portalRequest(`/team/${id}`, {
+  return v1Request(`/team/${id}`, {
     method: "PUT",
     body: { role },
   });
 }
 
 export function removeTeamMember(id: string): Promise<unknown> {
-  return portalRequest(`/team/${id}`, { method: "DELETE" });
+  return v1Request(`/team/${id}`, { method: "DELETE" });
 }
 
 export async function listShareLinks(eventId: string): Promise<ShareLink[]> {
   try {
-    const { items } = await portalRequest<ApiListResponse<ShareLinkApi>>(
+    const items = await v1Request<ShareLinkItem[]>(
       `/events/${eventId}/share-links`,
     );
     return items.map(link);
@@ -109,7 +92,7 @@ export async function createShareLink(
   eventId: string,
   payload: { label: string; role: TeamRole; expiry: LinkExpiry },
 ): Promise<{ id: string; token: string }> {
-  const r = await portalRequest<{ id: number; token: string }>(
+  const r = await v1Request<{ id: number; token: string }>(
     `/events/${eventId}/share-links`,
     {
       method: "POST",
@@ -124,22 +107,16 @@ export async function createShareLink(
 }
 
 export function revokeShareLink(id: string): Promise<unknown> {
-  return portalRequest(`/share-links/${id}`, {
+  return v1Request(`/share-links/${id}`, {
     method: "DELETE",
   });
 }
 
 /** Read-only: opening the page must not change anything (see openShared). */
 export async function getSharedAccess(token: string): Promise<SharedAccess> {
-  const r = await portalRequest<{
-    event_id: number;
-    role: TeamRole;
-    viewer: string;
-    kind: "member" | "link";
-    expired: boolean;
-  }>(`/shared/${token}`);
+  const r = await v1Request<SharedAccessResult>(`/shared/${token}`);
   return {
-    eventId: String(r.event_id),
+    eventId: String(r.eventId),
     role: r.role,
     viewer: r.viewer,
     kind: r.kind,
@@ -152,15 +129,7 @@ export async function getSharedAccess(token: string): Promise<SharedAccess> {
  * who has arrived, and money totals for roles that get them.
  */
 export async function getSharedData(token: string): Promise<SharedData> {
-  const r = await portalRequest<{
-    guests?: { id: number; name: string; category: string }[];
-    arrived?: number[];
-    money?: {
-      pending_claims: number;
-      pending_amount: number;
-      active_coupons: number;
-    };
-  }>(`/shared/${token}/data`);
+  const r = await v1Request<SharedDataResult>(`/shared/${token}/data`);
   return {
     guests: (r.guests ?? []).map((g) => ({
       id: String(g.id),
@@ -168,21 +137,15 @@ export async function getSharedData(token: string): Promise<SharedData> {
       category: g.category === "PARTICIPANT" ? "Participant" : "Attendee",
     })),
     arrivedIds: (r.arrived ?? []).map(String),
-    money: r.money
-      ? {
-          pendingClaims: r.money.pending_claims,
-          pendingAmount: r.money.pending_amount,
-          activeCoupons: r.money.active_coupons,
-        }
-      : undefined,
+    money: r.money ?? undefined,
   };
 }
 
 /** Counts a link view / activates an invite. Deliberately a POST. */
 export function openShared(token: string): Promise<unknown> {
-  // A signed-in caller is identified by the bearer token, which a
+  // A signed-in caller is identified by the login cookie, which a
   // co-organizer invite needs; view-only roles open it anonymously.
-  return portalRequest(`/shared/${token}/open`, { method: "POST", body: {} });
+  return v1Request(`/shared/${token}/open`, { method: "POST" });
 }
 
 /** Door check-in: participant ids marked as arrived. */
@@ -191,10 +154,10 @@ export async function listCheckIns(
   token?: string,
 ): Promise<string[]> {
   try {
-    const { items } = await portalRequest<
-      ApiListResponse<{ participant_id: number }>
-    >(`/events/${eventId}/check-ins`, { query: { token } });
-    return items.map((r) => String(r.participant_id));
+    const ids = await v1Request<number[]>(`/events/${eventId}/check-ins`, {
+      query: { token },
+    });
+    return ids.map(String);
   } catch {
     return [];
   }
@@ -206,10 +169,10 @@ export function setCheckIn(
   arrived: boolean,
   token?: string,
 ): Promise<unknown> {
-  return portalRequest(`/events/${eventId}/check-ins`, {
+  return v1Request(`/events/${eventId}/check-ins`, {
     method: "POST",
     body: {
-      participant_id: Number(participantId),
+      participantId: Number(participantId),
       arrived,
       token,
     },

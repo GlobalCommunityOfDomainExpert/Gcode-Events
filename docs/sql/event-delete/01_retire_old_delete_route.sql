@@ -1,6 +1,6 @@
 -- Retire the old unauthenticated DELETE /events/:id route. Run in SQL Workshop >
--- SQL Scripts (WKSP_GCODE2) AFTER 00_run_on_prod.sql and after 02_rest.sql of the
--- organizer portal, and after the app that uses /api/portal/events/:id is live.
+-- SQL Scripts (WKSP_GCODE2) AFTER 00_run_on_prod.sql, and after the app that
+-- uses /api/v1/events/:id is live.
 -- Re-runnable.
 --
 -- ORDS.DELETE_HANDLER does not take these arguments on every ORDS version
@@ -19,7 +19,7 @@ BEGIN
     p_method         => 'DELETE',
     p_source_type    => 'plsql/block',
     p_mimes_allowed  => NULL,
-    p_comments       => 'Retired. Use /api/portal/events/:id',
+    p_comments       => 'Retired. Use /api/v1/events/:id',
     p_source         =>
 'BEGIN
   :status_code := 410;

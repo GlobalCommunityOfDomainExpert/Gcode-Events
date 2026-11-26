@@ -354,15 +354,21 @@ export function createEventsRepository(source: DbSource = standalone) {
       );
     },
 
-    async delete(id: number): Promise<void> {
+    // gcode_purge_event (docs/sql/event-delete) clears every child table and
+    // refuses live payments (ORA-20402) or, without force, more than 2
+    // registrations on a published event (ORA-20401).
+    async delete(id: number, force: boolean): Promise<void> {
       const db = await source();
-      // EVENT_SOCIAL_LINKS has no foreign key to EVENTS, so delete_event's
-      // cascade misses it; clear it first (same transaction) so no orphan
-      // rows are left behind. Every other child table cascades.
+      // EVENT_SOCIAL_LINKS has no foreign key to EVENTS, so the purge's
+      // foreign-key walk misses it; clear it first (same transaction) so no
+      // orphan rows are left behind.
       await db.execute("DELETE FROM event_social_links WHERE event_id = :id", {
         id,
       });
-      await db.call("BEGIN gcode_events_api.delete_event(:id); END;", { id });
+      await db.call("BEGIN gcode_purge_event(:id, :force); END;", {
+        id,
+        force: force ? "Y" : "N",
+      });
     },
 
     async exists(id: number): Promise<boolean> {

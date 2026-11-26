@@ -161,14 +161,6 @@ export const eventsWriteService = {
     });
   },
 
-  async remove(id: number): Promise<void> {
-    await transaction(async (tx) => {
-      const events = createEventsRepository(within(tx));
-      if (!(await events.exists(id))) throw AppError.notFound("Event");
-      await events.delete(id);
-    });
-  },
-
   async uploadCover(
     id: number,
     bytes: Buffer,

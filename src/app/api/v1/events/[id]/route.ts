@@ -5,6 +5,7 @@ import {
   patchEventSchema,
   saveEventBodySchema,
 } from "@/server/modules/events/events.schemas";
+import { eventsDeleteService } from "@/server/modules/events/events.delete.service";
 import { eventsService } from "@/server/modules/events/events.service";
 import { eventsWriteService } from "@/server/modules/events/events.write.service";
 
@@ -33,10 +34,12 @@ export const PATCH = route(
 );
 
 // DELETE /api/v1/events/:id → 204
+// A draft: its organizer, a co-organizer or an admin. Published: admins only
+// (an override above 2 registrations). See eventsDeleteService.
 export const DELETE = route(
-  { auth: "admin", params: eventIdParamsSchema },
-  async ({ params }) => {
-    await eventsWriteService.remove(params.id);
+  { params: eventIdParamsSchema },
+  async ({ params, user }) => {
+    await eventsDeleteService.remove(params.id, user);
     return noContent();
   },
 );

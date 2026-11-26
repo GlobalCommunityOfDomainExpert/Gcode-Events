@@ -394,7 +394,7 @@ describe("update", () => {
   });
 });
 
-describe("patch / remove / cover", () => {
+describe("patch / cover", () => {
   it("maps settings onto columns, leaving the rest untouched", async () => {
     await eventsWriteService.patch(
       5,
@@ -410,15 +410,11 @@ describe("patch / remove / cover", () => {
     expect(columns.attendee_registration_enabled).toBeUndefined();
   });
 
-  it("404s patch and delete for unknown events", async () => {
+  it("404s patch for unknown events", async () => {
     events.exists.mockResolvedValue(false);
     await expect(
       eventsWriteService.patch(5, { statusId: 7 }, admin),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(eventsWriteService.remove(5)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
-    expect(events.delete).not.toHaveBeenCalled();
   });
 
   it("only stores real raster images up to 10 MB", async () => {

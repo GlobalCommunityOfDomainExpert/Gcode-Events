@@ -1,8 +1,13 @@
-import { portalRequest } from "./portal";
+import { v1Request } from "./client";
+import type {
+  HostAction,
+  JoinInfoResult,
+  LiveAccessResult,
+  WebinarSettingsResult,
+} from "@/server/modules/portal/portal.schemas";
 import {
   DEFAULT_WEBINAR,
   type Speaker,
-  type WebinarCapabilities,
   type WebinarConfig,
   type WebinarRole,
   type WebinarSettings,
@@ -10,69 +15,31 @@ import {
   type WebinarStatus,
 } from "@/lib/webinar";
 
-// GCODE_EVENT_WEBINAR et al. (docs/sql/organizer-portal). The caller's
-// identity comes from the bearer token the ORDS handler decodes, exactly like
-// /participants/me, so none of these calls carry a user id. The provider name
-// and room id are never returned.
+// The live room's settings, door and host controls (/api/v1, see
+// src/server/modules/portal). The caller is the login cookie, so none of these
+// calls carry a user id. The provider name and room id are never returned.
 
-interface WebinarApi {
-  audience: WebinarConfig["audience"];
-  recording: boolean;
-  chat: boolean;
-  hand_raise: boolean;
-  captions: boolean;
-  notice?: string | null;
-  restream_url?: string | null;
-  slides_url?: string | null;
-  replay_published: boolean;
-  status: {
-    live: boolean;
-    recording: boolean;
-    ended: boolean;
-    recording_ready: boolean;
-  };
-  capabilities?: Partial<WebinarCapabilities>;
-  room_limit?: { interactive: number; webinar_viewers: number };
-  speakers?: {
-    id: number | string;
-    name: string;
-    title?: string | null;
-    role: "HOST" | "SPEAKER";
-    invite_status: "ACCEPTED" | "PENDING";
-  }[];
-}
-
-const adapt = (r: WebinarApi): WebinarSettings => ({
+const adapt = (r: WebinarSettingsResult): WebinarSettings => ({
   config: {
     audience: r.audience,
     recording: r.recording,
     chat: r.chat,
-    handRaise: r.hand_raise,
+    handRaise: r.handRaise,
     captions: r.captions,
     notice: r.notice ?? undefined,
-    restreamUrl: r.restream_url ?? undefined,
-    slidesUrl: r.slides_url ?? undefined,
-    replayPublished: r.replay_published,
+    restreamUrl: r.restreamUrl ?? undefined,
+    slidesUrl: r.slidesUrl ?? undefined,
+    replayPublished: r.replayPublished,
   },
-  status: {
-    live: r.status.live,
-    recording: r.status.recording,
-    ended: r.status.ended,
-    recordingReady: r.status.recording_ready,
-  } satisfies WebinarStatus,
+  status: r.status satisfies WebinarStatus,
   capabilities: { ...DEFAULT_WEBINAR.capabilities, ...r.capabilities },
-  roomLimit: r.room_limit
-    ? {
-        interactive: r.room_limit.interactive,
-        webinarViewers: r.room_limit.webinar_viewers,
-      }
-    : DEFAULT_WEBINAR.roomLimit,
-  speakers: (r.speakers ?? []).map((s): Speaker => ({
-    id: String(s.id),
+  roomLimit: r.roomLimit ?? DEFAULT_WEBINAR.roomLimit,
+  speakers: r.speakers.map((s): Speaker => ({
+    id: s.id,
     name: s.name,
-    title: s.title ?? (s.role === "HOST" ? "Host" : "Speaker"),
+    title: s.title,
     role: s.role === "HOST" ? "host" : "speaker",
-    inviteStatus: s.invite_status === "ACCEPTED" ? "accepted" : "pending",
+    inviteStatus: s.inviteStatus === "ACCEPTED" ? "accepted" : "pending",
   })),
 });
 
@@ -81,7 +48,9 @@ export async function getWebinar(
   eventId: string,
 ): Promise<{ settings: WebinarSettings; configured: boolean }> {
   try {
-    const r = await portalRequest<WebinarApi>(`/events/${eventId}/webinar`);
+    const r = await v1Request<WebinarSettingsResult>(
+      `/events/${eventId}/webinar`,
+    );
     return { settings: adapt(r), configured: true };
   } catch {
     return { settings: DEFAULT_WEBINAR, configured: false };
@@ -93,24 +62,23 @@ export function saveWebinar(
   eventId: string,
   patch: Partial<WebinarConfig>,
 ): Promise<unknown> {
-  return portalRequest(`/events/${eventId}/webinar`, {
+  return v1Request(`/events/${eventId}/webinar`, {
     method: "PUT",
     body: {
       audience: patch.audience,
       recording: patch.recording,
       chat: patch.chat,
-      hand_raise: patch.handRaise,
+      handRaise: patch.handRaise,
       captions: patch.captions,
       notice: patch.notice,
-      restream_url: patch.restreamUrl,
-      slides_url: patch.slidesUrl,
-      replay_published: patch.replayPublished,
+      restreamUrl: patch.restreamUrl,
+      slidesUrl: patch.slidesUrl,
+      replayPublished: patch.replayPublished,
     },
   });
 }
 
-export type HostAction =
-  "go-live" | "stop" | "record" | "captions" | "notice" | "end";
+export type { HostAction };
 
 /** Host or organizer only; the server runs it against the provider. */
 export function hostAction(
@@ -118,7 +86,7 @@ export function hostAction(
   action: HostAction,
   body: Record<string, unknown> = {},
 ): Promise<unknown> {
-  return portalRequest(`/events/${eventId}/live/${action}`, {
+  return v1Request(`/events/${eventId}/live/${action}`, {
     method: "POST",
     body,
   });
@@ -128,9 +96,9 @@ export function removeFromRoom(
   eventId: string,
   registrationId: string,
 ): Promise<unknown> {
-  return portalRequest(`/events/${eventId}/live/remove-person`, {
+  return v1Request(`/events/${eventId}/live/remove-person`, {
     method: "POST",
-    body: { registration_id: Number(registrationId) },
+    body: { registrationId: Number(registrationId) },
   });
 }
 
@@ -158,18 +126,10 @@ export async function getLiveAccess(
   eventId: string,
   token?: string | null,
 ): Promise<LiveAccess> {
-  const r = await portalRequest<{
-    registered: boolean;
-    role: "HOST" | "SPEAKER" | "ATTENDEE";
-    audience?: "interactive" | "livestream";
-    state: WebinarState;
-    live: boolean;
-    notice?: string | null;
-    slides_url?: string | null;
-    replay?: { url: string; slides_url?: string | null } | null;
-  }>(`/events/${eventId}/live-access`, {
-    query: { t: token ?? undefined },
-  });
+  const r = await v1Request<LiveAccessResult>(
+    `/events/${eventId}/live-access`,
+    { query: { t: token ?? undefined } },
+  );
   return {
     registered: r.registered,
     role:
@@ -178,13 +138,13 @@ export async function getLiveAccess(
         : r.role === "SPEAKER"
           ? "speaker"
           : "attendee",
-    audience: r.audience ?? "livestream",
+    audience: r.audience,
     state: r.state,
     live: r.live,
     notice: r.notice ?? undefined,
-    slidesUrl: r.slides_url ?? undefined,
+    slidesUrl: r.slidesUrl ?? undefined,
     replay: r.replay
-      ? { url: r.replay.url, slidesUrl: r.replay.slides_url ?? undefined }
+      ? { url: r.replay.url, slidesUrl: r.replay.slidesUrl ?? undefined }
       : undefined,
   };
 }
@@ -194,16 +154,13 @@ export async function getLiveAccess(
  * and speakers) or, for a Webinar attendee, the stream address. 403 when not
  * registered or outside the window.
  */
-export type JoinInfo =
-  | { mode: "room"; credential: string; viewer?: boolean }
-  | { mode: "watch"; watchUrl: string | null }
-  | { mode: "wait" };
+export type JoinInfo = JoinInfoResult;
 
 export function requestJoinCredential(
   eventId: string,
   token?: string | null,
 ): Promise<JoinInfo> {
-  return portalRequest<JoinInfo>(`/events/${eventId}/live/token`, {
+  return v1Request<JoinInfo>(`/events/${eventId}/live/token`, {
     method: "POST",
     body: token ? { t: token } : {},
   });
@@ -217,8 +174,8 @@ export function emailJoinLink(
   eventId: string,
   participantId: string | number,
 ): Promise<unknown> {
-  return portalRequest(`/events/${eventId}/join-link`, {
+  return v1Request(`/events/${eventId}/join-link`, {
     method: "POST",
-    body: { participant_id: Number(participantId) },
+    body: { participantId: Number(participantId) },
   });
 }

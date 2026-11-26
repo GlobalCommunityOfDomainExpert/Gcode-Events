@@ -1,5 +1,4 @@
 import { v1Request, v1RequestPage } from "./client";
-import { portalRequest } from "./portal";
 import type { EventDetailData } from "@/lib/zod/event";
 import type { EventQuestions } from "@/server/modules/questions/questions.schemas";
 import type {
@@ -125,11 +124,10 @@ export function patchEvent(
   return v1Request(`/events/${id}`, { method: "PATCH", body: patch });
 }
 
-// Goes through the portal route, which checks the signed-in role and the
-// draft / registration rules (admin override, live payments) before it runs
-// the purge in the database.
+// The server checks the signed-in role and the draft / registration rules
+// (admin override, live payments) before it runs the purge in the database.
 export async function deleteEvent(id: number | string): Promise<void> {
-  await portalRequest<unknown>(`/events/${id}`, { method: "DELETE" });
+  await v1Request(`/events/${id}`, { method: "DELETE" });
 }
 
 export function uploadCoverImage(

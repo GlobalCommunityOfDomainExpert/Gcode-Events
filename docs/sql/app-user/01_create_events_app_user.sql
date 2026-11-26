@@ -87,3 +87,24 @@ GRANT SELECT ON wksp_gcode2.gcode_upi_payment_claims TO gcode_events_app;
 -- Rate limiting (src/server/rate-limit): the app owns this table's rows.
 -- Table: docs/sql/rate-limits/00_run_on_prod.sql.
 GRANT SELECT, INSERT, UPDATE, DELETE ON wksp_gcode2.gcode_rate_limits TO gcode_events_app;
+
+-- Organizer portal + live room (src/server/modules/portal). Tables and views
+-- from docs/sql/organizer-portal/01_tables.sql; plain SQL, no package. The
+-- views read the existing tables as their owner, so no grants on those.
+GRANT SELECT, INSERT, UPDATE, DELETE ON wksp_gcode2.gcode_event_team            TO gcode_events_app;
+GRANT SELECT, INSERT, UPDATE         ON wksp_gcode2.gcode_event_share_links     TO gcode_events_app;
+GRANT SELECT, INSERT, DELETE         ON wksp_gcode2.gcode_event_checkins        TO gcode_events_app;
+GRANT SELECT, INSERT, UPDATE         ON wksp_gcode2.gcode_event_webinar         TO gcode_events_app;
+GRANT SELECT, INSERT, UPDATE         ON wksp_gcode2.gcode_event_live_attendance TO gcode_events_app;
+GRANT INSERT                         ON wksp_gcode2.gcode_event_live_events     TO gcode_events_app;
+GRANT SELECT, INSERT                 ON wksp_gcode2.gcode_event_live_blocks     TO gcode_events_app;
+GRANT SELECT ON wksp_gcode2.gcode_portal_v_events       TO gcode_events_app;
+GRANT SELECT ON wksp_gcode2.gcode_portal_v_participants TO gcode_events_app;
+GRANT SELECT ON wksp_gcode2.gcode_portal_v_panelists    TO gcode_events_app;
+GRANT SELECT ON wksp_gcode2.gcode_portal_v_money        TO gcode_events_app;
+-- The join-link email is GCODE_EMAIL_API.send_join_link_email (EXECUTE above).
+
+-- Event delete (src/server/modules/events/events.delete.service.ts): the
+-- purge procedure from docs/sql/event-delete/00_run_on_prod.sql replaces
+-- gcode_events_api.delete_event.
+GRANT EXECUTE ON wksp_gcode2.gcode_purge_event TO gcode_events_app;

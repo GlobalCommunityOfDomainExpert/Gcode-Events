@@ -1,10 +1,10 @@
 -- Handover 7: organizer portal + live room. APEX holds TABLES ONLY. All logic
 -- (tokens, hashing, who may do what, the video provider, webhooks) lives in the
--- Next.js server routes (src/app/api/portal, src/server/portal), which read and
--- write these tables through ORDS (see 02_rest.sql). Nothing here needs a
--- grant: no DBMS_CRYPTO, no packages.
+-- Next.js server (src/server/modules/portal, /api/v1), which reads and writes
+-- these tables directly as GCODE_EVENTS_APP (grants: docs/sql/app-user). No
+-- DBMS_CRYPTO, no packages.
 --
--- Script 1 of 2. Run in WKSP_GCODE2. It is re-runnable: the first block drops
+-- Run in WKSP_GCODE2. It is re-runnable: the first block drops
 -- the Handover 7 objects of any earlier attempt (they held no real data, and
 -- the old packages that failed to compile are removed too). Take a backup
 -- anyway.
@@ -35,11 +35,6 @@ BEGIN
   END LOOP;
 END;
 /
-
--- ----------------------------------------------------------------- access key
--- No table here: the key the Next.js server sends in the X-Portal-Key header
--- lives in your existing GCODE_APP_SECRETS (secret_name 'ORDS_PORTAL_KEY').
--- Insert it before running 02_rest.sql (see the top of that script).
 
 -- ------------------------------------------------------------- team & access
 -- Tokens are 256-bit random values made by the server; only their SHA-256 hash

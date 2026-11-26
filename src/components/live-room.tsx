@@ -11,7 +11,7 @@ import type { JoinInfo } from "@/lib/api/webinar";
 // code: they hand this component what our server issued. Switching VideoSDK for
 // another provider touches only this file and the server adapter.
 //
-// Two shapes, decided by the server (see joinCredential in server/portal/live):
+// Two shapes, decided by the server (see joinCredential in server/modules/portal/webinar.service):
 //  - "watch": a Webinar attendee. They never join the meeting (a meeting token
 //    lets its holder publish, proven in the spike), they play the HLS stream.
 //  - "room": the host, speakers and Interactive attendees, who join VideoSDK's

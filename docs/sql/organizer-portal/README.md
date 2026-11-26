@@ -1,46 +1,46 @@
 # Organizer portal and live room (Handover 7)
 
-APEX holds **tables only**. Everything else (tokens, who may do what, the video
-provider, webhooks, replay streaming) is Next.js server code in
-`src/server/portal` and `src/app/api/portal`, which reads and writes the tables
-through a small ORDS module. No packages, no `DBMS_CRYPTO` grant, no ORDS
-security privileges (AutoREST and OAuth clients were tried and blocked with ORA-01031).
+The database holds **tables only**. Everything else (tokens, who may do what,
+the video provider, webhooks, replay streaming) is Next.js server code in
+`src/server/modules/portal` behind `/api/v1`, which reads and writes the tables
+with plain SQL over the app's own connection (`GCODE_EVENTS_APP`). No packages,
+no `DBMS_CRYPTO` grant, no ORDS module.
 
 ## Run, in WKSP_GCODE2
 
 0. `99_revert.sql` (only if an earlier attempt left objects behind).
 1. `01_tables.sql`: the tables and read-only views. Re-runnable: it first drops
    the Handover 7 objects of an earlier attempt.
-2. Make a key and store it in your existing `GCODE_APP_SECRETS` (see the top of
-   `02_rest.sql`): generate 64 hex characters, then `DELETE FROM gcode_app_secrets
-   WHERE secret_name = 'ORDS_PORTAL_KEY'; INSERT INTO gcode_app_secrets
-   (secret_name, secret_value) VALUES ('ORDS_PORTAL_KEY', '<key>'); COMMIT;`
-3. `02_rest.sql`: creates the module `gcode.portal.v1` (base `/v1/portal/`) with
-   plain SELECT / INSERT / UPDATE / DELETE routes. Every route checks the key in
-   the `X-Portal-Key` header, so nothing answers without it. It lists every step
-   that failed in one error.
+2. As ADMIN: the "Organizer portal + live room" and "Event delete" grants at
+   the end of `docs/sql/app-user/01_create_events_app_user.sql`.
+
+If the old ORDS module from an earlier version is installed, drop it (and its
+key) once the app using `/api/v1` is live:
+
+```sql
+BEGIN ORDS.DELETE_MODULE(p_module_name => 'gcode.portal.v1'); COMMIT; END;
+/
+DELETE FROM gcode_app_secrets WHERE secret_name = 'ORDS_PORTAL_KEY'; COMMIT;
+```
 
 ## Vercel environment
 
-Required for the portal:
+Besides the usual `DB_*` and `AUTH_SECRET`:
 
 | Variable | What |
 |---|---|
-| `ORDS_PORTAL_KEY` | the key from step 2 (server only, never `NEXT_PUBLIC_`) |
-| `JWT_SECRET` | the secret that signs sign-in tokens (it lives in the database). Without it callers are only decoded, not verified |
 | `NEXT_PUBLIC_ORGANIZER_PORTAL=true` | shows Team & access |
-
-Required for the live room:
-
-| Variable | What |
-|---|---|
-| `VIDEOSDK_API_KEY`, `VIDEOSDK_SECRET` | provider credentials |
+| `VIDEOSDK_API_KEY`, `VIDEOSDK_API_SECRET` (or `VIDEOSDK_SECRET`) | provider credentials |
+| `JOIN_LINK_SECRET` | signs the emailed join links. Optional (defaults to `AUTH_SECRET`), but set it so rotating the login secret doesn't break links already sent |
+| `REPLAY_SECRET` | signs replay URLs. Optional (defaults to `AUTH_SECRET`) |
 | `OCI_RECORDINGS_BUCKET_NAME` | a **private** bucket for recordings (the other `OCI_*` vars already exist) |
-| `PUBLIC_BASE_URL` | optional; the site origin the provider calls back, default the request origin |
+| `PUBLIC_BASE_URL` | optional; the site origin the provider calls back and join links use, default the request origin |
 | `ROOM_LIMIT_INTERACTIVE`, `ROOM_LIMIT_VIEWERS` | optional plan limits, default 50 and 100 |
-| `ORDS_ROOT`, `REPLAY_SECRET` | optional overrides (`REPLAY_SECRET` defaults to the portal key) |
+| `LIVE_ATTENDEE_STREAM_ONLY=1` | optional; Webinar attendees get only the HLS address, never a room token |
 
-Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL.
+`ORDS_PORTAL_KEY` and `ORDS_ROOT` are no longer used.
+
+Register `https://<site>/api/v1/webhooks/live` as the provider's webhook URL.
 
 ## What is enforced where
 
@@ -59,8 +59,8 @@ Register `https://<site>/api/portal/webhooks/live` as the provider's webhook URL
 - **No provider call has been run against a real VideoSDK account.** The room, HLS, recording, end and remove
   calls, the join token claims, the webhook signature (RSA-SHA256 over the raw body) and the payload mapping
   all follow the public docs but need the spike (Handover 7, Part 0b). The adapter is `provider.ts`.
-- **Nothing here has run against your ORDS.** The module calls and the handler SQL (header parameter, POST
-  returning the new id, timestamp text parsing) are the first thing to test.
+- **The `/api/v1` port has not run against the database yet** (unit-tested only). Check the grants and one
+  pass through invite → open link → check-in → webinar settings → go live.
 - Recordings over 200 MB are not copied (held in memory); that needs a worker.
 - Communication (emailing attendees) and a mailer are removed for now. The tables were dropped from
   `01_tables.sql`; its clean-up block still drops any left from an earlier run.

@@ -1286,7 +1286,7 @@ BEGIN
     ');
 
   -- DELETE :id is deliberately not defined any more (retired). Events are
-  -- deleted through /api/portal/events/:id, see docs/sql/event-delete.
+  -- deleted through /api/v1/events/:id, see docs/sql/event-delete.
 
   COMMIT;
 EXCEPTION
