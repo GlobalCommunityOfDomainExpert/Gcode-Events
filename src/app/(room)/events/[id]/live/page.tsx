@@ -12,7 +12,6 @@ import {
   type JoinInfo,
   type LiveAccess,
 } from "@/lib/api/webinar";
-import { LIVE_ROOM_ENABLED } from "@/lib/feature-flags";
 import { formatTimeRange, formatWeekday } from "@/lib/event";
 import { RoomFrame, RoomPanel, btnLight } from "./_components/room-frame";
 import {
@@ -80,19 +79,6 @@ function WebinarLive() {
       clearInterval(id);
     };
   }, [identified, linkToken, params.id]);
-
-  if (!LIVE_ROOM_ENABLED) {
-    return (
-      <RoomFrame title="Live room">
-        <RoomPanel>
-          <h1 className="text-display leading-tight font-extrabold">
-            The live room isn&apos;t available yet
-          </h1>
-          <p className="text-white/70">It is switched off for now.</p>
-        </RoomPanel>
-      </RoomFrame>
-    );
-  }
 
   if (status === "loading" || !event) {
     return (

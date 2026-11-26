@@ -34,7 +34,6 @@ Required for the live room:
 
 | Variable | What |
 |---|---|
-| `NEXT_PUBLIC_LIVE_ROOM=true` | shows the live room |
 | `VIDEOSDK_API_KEY`, `VIDEOSDK_SECRET` | provider credentials |
 | `OCI_RECORDINGS_BUCKET_NAME` | a **private** bucket for recordings (the other `OCI_*` vars already exist) |
 | `PUBLIC_BASE_URL` | optional; the site origin the provider calls back, default the request origin |

@@ -17,7 +17,6 @@ import {
 } from "@/lib/api/panelists";
 import { adaptPanelistInvite, PanelistInvite } from "@/lib/api/adapters";
 import { ApiError } from "@/lib/api/client";
-import { LIVE_ROOM_ENABLED } from "@/lib/feature-flags";
 
 // Copy and next step differ per role. Judges go to scoring; speakers and
 // mentors go to the event (the live room door when it is switched on).
@@ -107,13 +106,13 @@ export default function PanelistInvitePage() {
   const nextHref =
     invite.role === "JUDGE"
       ? `/judge/${invite.eventId}`
-      : LIVE_ROOM_ENABLED && invite.role === "SPEAKER"
+      : invite.role === "SPEAKER"
         ? `/events/${invite.eventId}/live`
         : `/events/${invite.eventId}`;
   const nextLabel =
     invite.role === "JUDGE"
       ? "Go to Judging"
-      : LIVE_ROOM_ENABLED && invite.role === "SPEAKER"
+      : invite.role === "SPEAKER"
         ? "Go to live room"
         : "View event";
 

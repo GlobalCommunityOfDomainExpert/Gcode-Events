@@ -33,7 +33,6 @@ import {
   saveWebinar,
   type HostAction,
 } from "@/lib/api/webinar";
-import { LIVE_ROOM_ENABLED } from "@/lib/feature-flags";
 import {
   CLOSES_AFTER_MIN,
   DEFAULT_WEBINAR,
@@ -115,7 +114,7 @@ export default function WebinarPage() {
   }, [active, load]);
 
   const ownLink = event.mode === "Online" && !!event.participationLink?.trim();
-  if (!LIVE_ROOM_ENABLED || event.mode === "In-Person" || ownLink) {
+  if (event.mode === "In-Person" || ownLink) {
     return (
       <div className={card}>
         <p className="text-text-primary font-semibold">
