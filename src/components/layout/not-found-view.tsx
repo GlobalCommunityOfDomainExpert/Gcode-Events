@@ -38,7 +38,7 @@ export function NotFoundView() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <ButtonLink href="/events" variant="primary">
+          <ButtonLink href="/" variant="primary">
             Browse events
           </ButtonLink>
           {canSeeMyEvents ? (

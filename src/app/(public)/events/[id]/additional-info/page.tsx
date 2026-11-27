@@ -628,7 +628,7 @@ export default function AdditionalInfoPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <Breadcrumb
         items={[
-          { label: "Events", href: "/events" },
+          { label: "Events", href: "/" },
           { label: event.title, href: `/events/${event.id}` },
           { label: "Your entry" },
         ]}

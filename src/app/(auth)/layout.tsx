@@ -36,7 +36,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               aria-label="Leave sign-in"
               className="text-small ml-auto flex items-center gap-1 font-medium sm:gap-2"
             >
-              <NextLink href="/events" className={navLink}>
+              <NextLink href="/" className={navLink}>
                 <CalendarDays className="size-4" aria-hidden />
                 Browse events
               </NextLink>

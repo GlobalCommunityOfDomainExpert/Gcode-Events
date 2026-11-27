@@ -34,7 +34,7 @@ import { initials } from "@/lib/auth/format";
 function buildEventsNavLinks(session: Session | null): NavLink[] {
   const base: NavLink[] = [
     { label: "Home", href: "https://gcode.in" },
-    { label: "Events", href: "/events" },
+    { label: "Events", href: "/" },
   ];
   if (!session || !isAdmin(session)) return base;
   return [
@@ -84,7 +84,7 @@ function buildOrganizerLinks(
       icon: Ticket,
       groupLabel: "Account",
     },
-    { label: "Browse events", href: "/events", icon: CalendarCheck },
+    { label: "Browse events", href: "/", icon: CalendarCheck },
   ];
   // Only show an event's sections while its own page is open, so a stale
   // value from the previous event never leaks another event's links.
@@ -188,7 +188,7 @@ export function EventsShell({ session, children }: EventsShellProps) {
   const links = buildEventsNavLinks(session);
   const [sidebarOpen, toggleSidebar] = useSidebarOpen();
   const organizerNav = useOrganizerNav();
-  const transparent = pathname === "/events";
+  const transparent = pathname === "/";
 
   if (!session) {
     return (

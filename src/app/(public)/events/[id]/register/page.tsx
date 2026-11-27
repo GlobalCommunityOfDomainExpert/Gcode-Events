@@ -224,7 +224,7 @@ export default function EventRegisterPage() {
         icon={Compass}
         title="Event not found"
         description="This event may not exist, or it couldn't be loaded."
-        actionHref="/events"
+        actionHref="/"
         actionLabel="Browse Events"
       />
     );
@@ -249,8 +249,8 @@ export default function EventRegisterPage() {
     <div className="flex items-center justify-between gap-3">
       <Breadcrumb
         items={[
-          { label: "Events", href: "/events" },
-          { label: event.type, href: "/events" },
+          { label: "Events", href: "/" },
+          { label: event.type, href: "/" },
           { label: event.title, href: `/events/${event.id}` },
           { label: "Register" },
         ]}

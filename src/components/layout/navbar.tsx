@@ -42,7 +42,7 @@ export interface NavbarProps {
   transparent?: boolean;
 }
 
-const defaultLinks: NavLink[] = [{ label: "Events", href: "/events" }];
+const defaultLinks: NavLink[] = [{ label: "Events", href: "/" }];
 
 const defaultResourcesItems: DropdownItem[] = [];
 

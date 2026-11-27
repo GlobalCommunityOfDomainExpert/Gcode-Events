@@ -61,7 +61,7 @@ export default function EventDetailPage() {
           icon={Compass}
           title="Event not found"
           description="This event may not exist, or it couldn't be loaded."
-          actionHref="/events"
+          actionHref="/"
           actionLabel="Browse Events"
         />
       </div>

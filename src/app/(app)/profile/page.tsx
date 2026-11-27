@@ -22,7 +22,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (session && !isValidRole) {
-      router.replace("/events");
+      router.replace("/");
     }
   }, [session, isValidRole, router]);
 

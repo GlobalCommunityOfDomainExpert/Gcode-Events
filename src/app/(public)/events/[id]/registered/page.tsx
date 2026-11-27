@@ -139,7 +139,7 @@ export default function EventRegisteredPage() {
         icon={Compass}
         title="Event not found"
         description="This event may not exist, or it couldn't be loaded."
-        actionHref="/events"
+        actionHref="/"
         actionLabel="Browse Events"
       />
     );
@@ -282,7 +282,7 @@ export default function EventRegisteredPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <Breadcrumb
         items={[
-          { label: "Events", href: "/events" },
+          { label: "Events", href: "/" },
           { label: event.title, href: `/events/${event.id}` },
           { label: "Your ticket" },
         ]}
@@ -344,7 +344,7 @@ export default function EventRegisteredPage() {
           </h2>
           {session && (
             <div className="flex flex-wrap gap-2">
-              <ButtonLink href="/events" variant="secondary" size="sm">
+              <ButtonLink href="/" variant="secondary" size="sm">
                 Browse more events
               </ButtonLink>
               <ButtonLink href="/my-events" variant="primary" size="sm">

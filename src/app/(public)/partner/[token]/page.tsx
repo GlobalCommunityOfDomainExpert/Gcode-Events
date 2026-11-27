@@ -65,7 +65,7 @@ export default function PartnerPage() {
         icon={Eye}
         title="Opening shared view…"
         description="Checking the link."
-        actionHref="/events"
+        actionHref="/"
         actionLabel="Browse events"
       />
     );
@@ -85,7 +85,7 @@ export default function PartnerPage() {
               : error ||
                 "It may have been revoked. Ask the organizer for a new link."
           }
-          actionHref="/events"
+          actionHref="/"
           actionLabel="Browse events"
         />
       </div>
@@ -130,7 +130,7 @@ function PartnerDashboard({
         icon={Eye}
         title="Loading…"
         description="Fetching the event."
-        actionHref="/events"
+        actionHref="/"
         actionLabel="Browse events"
       />
     );

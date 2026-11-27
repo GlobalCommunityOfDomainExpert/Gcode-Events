@@ -18,7 +18,7 @@ export function RoomFrame({
   return (
     <div className="from-primary to-primary-hover flex min-h-screen flex-col bg-linear-to-br text-white">
       <header className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <Link href="/events" className="shrink-0" aria-label="GCODE Events">
+        <Link href="/" className="shrink-0" aria-label="GCODE Events">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/app-logo.png" alt="GCODE" className="h-8 w-auto" />
         </Link>

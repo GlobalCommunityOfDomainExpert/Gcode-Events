@@ -81,7 +81,7 @@ export function Footer() {
           <div className="flex flex-wrap gap-8 sm:gap-16">
             <FooterLinkGroup
               title="Explore"
-              links={[{ label: "Events", href: "/events" }]}
+              links={[{ label: "Events", href: "/" }]}
             />
             <FooterLinkGroup
               title="Company"
