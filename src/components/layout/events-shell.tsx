@@ -28,7 +28,6 @@ import { ProfileMenu, ProfileMenuUser } from "@/components/molecules";
 import { isAdmin, Session } from "@/lib/auth/session";
 import { signOut } from "@/lib/api/auth";
 import { initials } from "@/lib/auth/format";
-import { ORGANIZER_PORTAL_ENABLED } from "@/lib/feature-flags";
 
 // "My Events" only shown to admins (Attending/Organizing) — hidden for
 // everyone else for now, including signed-in non-admins.
@@ -154,21 +153,16 @@ function buildOrganizerLinks(
           { label: "Coupons", href: `${base}/coupons`, icon: Tag },
         ] as SidebarLink[])
       : []),
-    ...(ORGANIZER_PORTAL_ENABLED
-      ? ([
-          {
-            label: "Team & access",
-            href: `${base}/team`,
-            icon: ShieldCheck,
-            groupLabel: "Manage",
-          },
-        ] as SidebarLink[])
-      : []),
+    {
+      label: "Team & access",
+      href: `${base}/team`,
+      icon: ShieldCheck,
+      groupLabel: "Manage",
+    },
     {
       label: "Settings",
       href: `${base}/settings`,
       icon: Settings,
-      ...(ORGANIZER_PORTAL_ENABLED ? {} : { groupLabel: "Manage" }),
     },
   ];
   return [

@@ -29,7 +29,6 @@ Besides the usual `DB_*` and `AUTH_SECRET`:
 
 | Variable | What |
 |---|---|
-| `NEXT_PUBLIC_ORGANIZER_PORTAL=true` | shows Team & access |
 | `VIDEOSDK_API_KEY`, `VIDEOSDK_API_SECRET` (or `VIDEOSDK_SECRET`) | provider credentials |
 | `JOIN_LINK_SECRET` | signs the emailed join links. Optional (defaults to `AUTH_SECRET`), but set it so rotating the login secret doesn't break links already sent |
 | `REPLAY_SECRET` | signs replay URLs. Optional (defaults to `AUTH_SECRET`) |
