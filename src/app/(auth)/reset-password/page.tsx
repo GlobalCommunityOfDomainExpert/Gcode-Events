@@ -1,16 +1,20 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AuthCard } from "../_components/auth-card";
+import { AuthHeader } from "../_components/auth-header";
 import { ResetPasswordForm } from "../_components/reset-password-form";
+
+export const metadata: Metadata = { title: "Reset password · GCODE Events" };
 
 export default function ResetPasswordPage() {
   return (
-    <AuthCard
-      title="Reset Password"
-      subtitle="Please choose a new, secure password."
-    >
+    <>
+      <AuthHeader
+        title="Set a new password"
+        subtitle="Choose a strong password you haven't used before."
+      />
       <Suspense fallback={null}>
         <ResetPasswordForm />
       </Suspense>
-    </AuthCard>
+    </>
   );
 }

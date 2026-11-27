@@ -2,10 +2,11 @@
 
 import { FormEvent, useState } from "react";
 import NextLink from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button, Divider, Input, PasswordInput } from "@/components/atoms";
 import { FormField } from "@/components/molecules";
 import { GoogleButton } from "./google-button";
+import { useRedirectTo, withRedirect } from "./use-redirect-to";
 import { signIn, signInWithGoogle } from "@/lib/api/auth";
 import {
   decodeGoogleEmail,
@@ -19,21 +20,10 @@ const linkClasses =
 
 export function SignInForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const redirectTo = useRedirectTo();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { hiddenButton, requestGoogleIdToken } = useGoogleIdToken();
-
-  // Where to land after a successful sign-in — e.g. a panelist invite link
-  // sends people here with ?redirect=/panelist-invites/24 so they come back
-  // to accept instead of landing on Home. Only ever a same-app relative
-  // path (starts with a single "/") — never trust this into an absolute or
-  // protocol-relative ("//host/...") URL, that's an open-redirect vector.
-  const redirectParam = searchParams.get("redirect");
-  const redirectTo =
-    redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
-      ? redirectParam
-      : "/";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,32 +64,50 @@ export function SignInForm() {
   return (
     <>
       {hiddenButton}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <GoogleButton onClick={handleGoogleClick} />
+
+      <div className="my-6 flex items-center gap-3">
+        <Divider />
+        <span className="text-small text-text-secondary shrink-0">
+          or sign in with email
+        </span>
+        <Divider />
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <FormField label="Email" htmlFor="email">
           <Input
             id="email"
             name="email"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
             required
           />
         </FormField>
-        <FormField label="Password" htmlFor="password">
-          <PasswordInput
-            id="password"
-            name="password"
-            placeholder="••••••••"
-            required
-          />
-        </FormField>
-
-        <div className="text-right">
-          <NextLink href="/forgot-password" className={linkClasses}>
+        <div className="flex flex-col gap-2">
+          <FormField label="Password" htmlFor="password">
+            <PasswordInput
+              id="password"
+              name="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              required
+            />
+          </FormField>
+          <NextLink
+            href="/forgot-password"
+            className={`${linkClasses} self-end`}
+          >
             Forgot password?
           </NextLink>
         </div>
 
-        {error && <p className="text-danger text-small">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-small">
+            {error}
+          </p>
+        )}
 
         <Button
           type="submit"
@@ -107,22 +115,17 @@ export function SignInForm() {
           className="w-full"
           loading={submitting}
         >
-          Sign In
+          Sign in
         </Button>
-
-        <div className="flex items-center gap-3">
-          <Divider />
-          <span className="text-small text-text-secondary">or</span>
-          <Divider />
-        </div>
-
-        <GoogleButton onClick={handleGoogleClick} />
       </form>
 
-      <p className="text-text-secondary mt-6 text-center text-sm">
-        Don&apos;t have an account?{" "}
-        <NextLink href="/sign-up" className={linkClasses}>
-          Create one
+      <p className="text-text-secondary mt-8 text-center text-sm">
+        New to GCODE?{" "}
+        <NextLink
+          href={withRedirect("/sign-up", redirectTo)}
+          className={linkClasses}
+        >
+          Create an account
         </NextLink>
       </p>
     </>

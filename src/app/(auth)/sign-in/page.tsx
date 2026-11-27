@@ -1,22 +1,20 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { Modal } from "@/components/molecules";
-import { AuthCard } from "../_components/auth-card";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { AuthHeader } from "../_components/auth-header";
 import { SignInForm } from "../_components/sign-in-form";
 
-export default function SignInPage() {
-  const router = useRouter();
+export const metadata: Metadata = { title: "Sign in · GCODE Events" };
 
+export default function SignInPage() {
   return (
-    <Modal open onClose={() => router.back()} size="lg" bodyClassName="p-0">
-      <AuthCard
-        variant="modal"
-        title="Welcome Back"
-        subtitle="Sign in to your GCODE account"
-      >
+    <>
+      <AuthHeader
+        title="Welcome back"
+        subtitle="Sign in to book events, see your tickets and join live rooms."
+      />
+      <Suspense fallback={null}>
         <SignInForm />
-      </AuthCard>
-    </Modal>
+      </Suspense>
+    </>
   );
 }

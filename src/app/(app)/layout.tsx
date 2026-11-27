@@ -29,12 +29,9 @@ function AppLayoutGate({ children }: { children: ReactNode }) {
     // double-effect pass (React Strict Mode) can observe a stale/transient
     // null from the store hook even though the real session is fine, and a
     // false redirect here is far more disruptive than a redundant read.
-    // /sign-in and /sign-up are intercepted routes (@modal) — a soft
-    // router.replace to either from here doesn't unmount this layout, it
-    // just overlays the modal while this one stays mounted underneath.
-    // Without this guard the effect re-fires once `pathname` reflects the
-    // new URL, sees "still not signed in," and wraps another ?redirect=
-    // around the one it just built — recursing forever.
+    // Never bounce the auth pages themselves: if this effect ever runs while
+    // pathname is already /sign-in or /sign-up, it would wrap another
+    // ?redirect= around the one it just built, recursing forever.
     if (pathname.startsWith("/sign-in") || pathname.startsWith("/sign-up")) {
       return;
     }

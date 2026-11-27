@@ -321,7 +321,7 @@ export default function EventRegisteredPage() {
         <div className="border-border-light bg-surface-light rounded-lg border p-5">
           {isBsssPartnerEvent && (
             <a
-              href="https://gcode.in/ords/r/gcode2/gcode/sign-up"
+              href="/sign-up"
               className="bg-primary hover:bg-primary-hover text-small inline-flex min-h-10 items-center justify-center rounded-sm px-4 py-2 font-semibold text-white"
             >
               Join Gcode partner ecosystem

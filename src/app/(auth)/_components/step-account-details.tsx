@@ -12,6 +12,7 @@ import {
 } from "@/components/atoms";
 import { FormField, PasswordStrengthMeter } from "@/components/molecules";
 import { GoogleButton } from "./google-button";
+import { withRedirect } from "./use-redirect-to";
 import { signInWithGoogle } from "@/lib/api/auth";
 import {
   decodeGoogleEmail,
@@ -33,9 +34,14 @@ export interface AccountDetails {
 
 export interface StepAccountDetailsProps {
   onSubmit: (details: AccountDetails) => Promise<void>;
+  /** Where to land afterwards (from ?redirect=), carried through Google sign-in and the sign-in link. */
+  redirectTo?: string;
 }
 
-export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
+export function StepAccountDetails({
+  onSubmit,
+  redirectTo = "/",
+}: StepAccountDetailsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -86,9 +92,11 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
       const { user, needsRole } = await signInWithGoogle(idToken);
       if (needsRole) {
         const email = encodeURIComponent(decodeGoogleEmail(idToken));
-        router.push(`/sign-up?oauth=1&userId=${user.userId}&email=${email}`);
+        router.push(
+          `/sign-up?oauth=1&userId=${user.userId}&email=${email}&redirect=${encodeURIComponent(redirectTo)}`,
+        );
       } else {
-        router.push("/");
+        router.push(redirectTo);
       }
     } catch {
       setError("Could not sign in with Google");
@@ -98,12 +106,23 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
   return (
     <>
       {hiddenButton}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <FormField label="Full Name" required={true} htmlFor="name">
+      <GoogleButton onClick={handleGoogleClick} />
+
+      <div className="my-6 flex items-center gap-3">
+        <Divider />
+        <span className="text-small text-text-secondary shrink-0">
+          or sign up with email
+        </span>
+        <Divider />
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <FormField label="Full name" required={true} htmlFor="name">
           <Input
             id="name"
             name="fullName"
-            placeholder="John Doe"
+            autoComplete="name"
+            placeholder="Your full name"
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
             required
@@ -114,6 +133,7 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
             id="email"
             name="email"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -125,6 +145,7 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
             id="phone"
             name="phone"
             type="tel"
+            autoComplete="tel"
             placeholder="9876543210"
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
@@ -135,6 +156,7 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
           <PasswordInput
             id="password"
             name="password"
+            autoComplete="new-password"
             placeholder="Create a strong password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -151,7 +173,11 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
           onChange={(event) => setTermsAccepted(event.target.checked)}
         />
 
-        {error && <p className="text-danger text-small">{error}</p>}
+        {error && (
+          <p role="alert" className="text-danger text-small">
+            {error}
+          </p>
+        )}
 
         <Button
           type="submit"
@@ -160,21 +186,16 @@ export function StepAccountDetails({ onSubmit }: StepAccountDetailsProps) {
           loading={submitting}
           disabled={!canSubmit}
         >
-          Continue to Verify Email
+          Continue
         </Button>
-
-        <div className="flex items-center gap-3">
-          <Divider />
-          <span className="text-small text-text-secondary">or</span>
-          <Divider />
-        </div>
-
-        <GoogleButton onClick={handleGoogleClick} />
       </form>
 
-      <p className="text-text-secondary mt-6 text-center text-sm">
+      <p className="text-text-secondary mt-8 text-center text-sm">
         Already have an account?{" "}
-        <NextLink href="/sign-in" className={linkClasses}>
+        <NextLink
+          href={withRedirect("/sign-in", redirectTo)}
+          className={linkClasses}
+        >
           Sign in
         </NextLink>
       </p>

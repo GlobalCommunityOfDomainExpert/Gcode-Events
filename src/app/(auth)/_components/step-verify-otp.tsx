@@ -33,10 +33,6 @@ export function StepVerifyOtp({ email, onVerified }: StepVerifyOtpProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-body text-text-secondary text-center">
-        Enter the 6-digit code sent to your email
-      </p>
-
       <OtpInput
         length={OTP_LENGTH}
         error={!!error}
@@ -54,7 +50,7 @@ export function StepVerifyOtp({ email, onVerified }: StepVerifyOtpProps) {
         disabled={code.length !== OTP_LENGTH}
         onClick={handleVerify}
       >
-        Verify OTP
+        Verify email
       </Button>
     </div>
   );

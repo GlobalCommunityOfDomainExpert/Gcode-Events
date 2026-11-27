@@ -63,10 +63,11 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <FormField label="New Password" htmlFor="password">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <FormField label="New password" htmlFor="password">
         <PasswordInput
           id="password"
+          autoComplete="new-password"
           placeholder="••••••••"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -76,9 +77,10 @@ export function ResetPasswordForm() {
 
       <PasswordStrengthMeter password={password} />
 
-      <FormField label="Confirm New Password" htmlFor="confirm-password">
+      <FormField label="Confirm new password" htmlFor="confirm-password">
         <PasswordInput
           id="confirm-password"
+          autoComplete="new-password"
           placeholder="••••••••"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
@@ -86,7 +88,11 @@ export function ResetPasswordForm() {
         />
       </FormField>
 
-      {error && <p className="text-danger text-small">{error}</p>}
+      {error && (
+        <p role="alert" className="text-danger text-small">
+          {error}
+        </p>
+      )}
 
       <Button
         type="submit"
@@ -94,7 +100,7 @@ export function ResetPasswordForm() {
         className="w-full"
         loading={submitting}
       >
-        Reset Password
+        Save new password
       </Button>
     </form>
   );
