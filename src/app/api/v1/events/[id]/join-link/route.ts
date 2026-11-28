@@ -6,6 +6,7 @@ import {
   portalEventParamsSchema,
 } from "@/server/modules/portal/portal.schemas";
 import { webinarService } from "@/server/modules/portal/webinar.service";
+import { BASE_PATH } from "@/lib/base-path";
 
 // POST /api/v1/events/:id/join-link { participantId? } → 204
 // "Email me my join link". Works without an account (a guest just
@@ -33,7 +34,7 @@ export const POST = route(
       params.id,
       user?.userId ?? null,
       body.participantId ?? 0,
-      process.env.PUBLIC_BASE_URL ?? req.nextUrl.origin,
+      process.env.PUBLIC_BASE_URL ?? `${req.nextUrl.origin}${BASE_PATH}`,
     );
     return noContent();
   },

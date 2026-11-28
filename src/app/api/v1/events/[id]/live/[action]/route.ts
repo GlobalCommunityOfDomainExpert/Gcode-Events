@@ -5,6 +5,7 @@ import {
   hostActionParamsSchema,
 } from "@/server/modules/portal/portal.schemas";
 import { webinarService } from "@/server/modules/portal/webinar.service";
+import { BASE_PATH } from "@/lib/base-path";
 
 // POST /api/v1/events/:id/live/:action  (go-live | stop | record | captions |
 // notice | end) { enabled?, text? } → 204. Host only; runs against the
@@ -17,7 +18,7 @@ export const POST = route(
       user.userId,
       params.action,
       body,
-      process.env.PUBLIC_BASE_URL ?? req.nextUrl.origin,
+      process.env.PUBLIC_BASE_URL ?? `${req.nextUrl.origin}${BASE_PATH}`,
     );
     return noContent();
   },

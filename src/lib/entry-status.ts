@@ -77,7 +77,7 @@ export function computeEntryTodo(
     required: asked.length,
     needsClip,
     deadline,
-    href: `/events/${ticket.eventId}/additional-info?pid=${ticket.participantId}`,
+    href: `/${ticket.eventId}/additional-info?pid=${ticket.participantId}`,
   };
 }
 

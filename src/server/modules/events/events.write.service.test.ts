@@ -335,7 +335,7 @@ describe("update", () => {
     });
     await eventsWriteService.update(
       5,
-      { draft: draft({ cardImageUrl: "/api/v1/events/5/card-image" }) },
+      { draft: draft({ cardImageUrl: "/events/api/v1/events/5/card-image" }) },
       admin,
     );
     expect(events.setCardImageUrl).not.toHaveBeenCalled();

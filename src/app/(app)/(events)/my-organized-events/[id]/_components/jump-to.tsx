@@ -25,6 +25,7 @@ import {
 import { Icon } from "@/components/atoms";
 import type { Event } from "@/lib/event";
 import { eventTools } from "@/lib/organizer";
+import { appUrl } from "@/lib/base-path";
 
 // "Jump to…" for one event's dashboard (Ctrl/⌘ K): every section and the
 // actions organizers look for most, filtered to what this event type uses.
@@ -192,7 +193,7 @@ export function JumpTo({
         label: "View public page",
         group: "Actions",
         icon: ExternalLink,
-        run: () => window.open(`/events/${event.id}`, "_blank"),
+        run: () => window.open(`/${event.id}`, "_blank"),
       },
       {
         id: "copy",
@@ -202,7 +203,7 @@ export function JumpTo({
         keywords: "share url",
         run: () => {
           void navigator.clipboard?.writeText(
-            `${window.location.origin}/events/${event.id}`,
+            appUrl(`/${event.id}`),
           );
           onNotify("Event link copied");
         },

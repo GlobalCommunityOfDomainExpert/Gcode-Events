@@ -6,6 +6,7 @@ import { ArrowLeft, Loader } from "lucide-react";
 import { Icon } from "@/components/atoms";
 import type { WebinarRole } from "@/lib/webinar";
 import type { JoinInfo } from "@/lib/api/webinar";
+import { withBasePath } from "@/lib/base-path";
 
 // The one place the video provider's room lives. Pages never import vendor
 // code: they hand this component what our server issued. Switching VideoSDK for
@@ -106,7 +107,7 @@ export function LiveRoom({
           <Icon icon={ArrowLeft} size="sm" /> Leave
         </button>
         <Link
-          href={`/events/${eventId}`}
+          href={`/${eventId}`}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-sm border border-white/25 px-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
         >
           Back to event
@@ -285,7 +286,7 @@ function roomOptions(
     brandName: "GCODE Events",
     // The square GCODE mark: Prebuilt shows the logo in a small round slot, so
     // the wide wordmark (app-logo.png) would be squeezed.
-    brandLogoURL: `${origin}/apple-icon.png`,
+    brandLogoURL: `${origin}${withBasePath("/apple-icon.png")}`,
     poweredBy: "false",
     topbarEnabled: "true",
     layoutType: "SIDEBAR",

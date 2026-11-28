@@ -19,6 +19,7 @@ import { patchEvent } from "@/lib/api/events";
 import { useServerNow } from "@/hooks/use-server-now";
 import { useOrganizedEvent } from "../_components/event-context";
 import { NextSteps } from "../_components/next-steps";
+import { appUrl } from "@/lib/base-path";
 
 const DAY_MS = 86_400_000;
 
@@ -153,7 +154,7 @@ export default function OverviewPage() {
   async function copyPublicLink() {
     try {
       await navigator.clipboard.writeText(
-        `${window.location.origin}/events/${event.id}`,
+        appUrl(`/${event.id}`),
       );
       notify("Public event link copied");
     } catch {

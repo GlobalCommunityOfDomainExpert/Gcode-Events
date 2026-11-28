@@ -1,9 +1,10 @@
+import { withBasePath } from "@/lib/base-path";
 let offsetMs = 0;
 let syncPromise: Promise<void> | null = null;
 
 async function syncServerTime(): Promise<void> {
   try {
-    const res = await fetch("/api/server-time");
+    const res = await fetch(withBasePath("/api/server-time"));
     const { now } = await res.json();
     offsetMs = new Date(now).getTime() - Date.now();
   } catch {

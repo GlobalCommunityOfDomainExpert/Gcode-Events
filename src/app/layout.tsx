@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { withBasePath } from "@/lib/base-path";
 import "./globals.css";
 
 const inter = Inter({
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
       "Discover hackathons, ideathons, AMAs, and webinars hosted by the GCODE developer community.",
     url: "https://events.gcode.in",
     siteName: "GCODE Events",
-    images: [{ url: "/banner-hero.png", width: 1735, height: 566 }],
+    images: [{ url: withBasePath("/banner-hero.png"), width: 1735, height: 566 }],
     locale: "en_US",
     type: "website",
   },
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
     title: "GCODE Events – Community Tech Events Platform",
     description:
       "Discover hackathons, ideathons, AMAs, and webinars hosted by the GCODE developer community.",
-    images: ["/banner-hero.png"],
+    images: [withBasePath("/banner-hero.png")],
   },
 };
 

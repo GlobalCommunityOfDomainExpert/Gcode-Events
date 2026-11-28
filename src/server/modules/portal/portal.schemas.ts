@@ -168,7 +168,7 @@ export const removePersonBodySchema = z.object({
 });
 
 // `t` is the signed join link from the registration email (the `t` in
-// /events/<id>/live?t=...). It lets a guest with no account prove their
+// /<id>/live?t=...). It lets a guest with no account prove their
 // ticket; a signed-in account needs none.
 export const liveAccessQuerySchema = z.object({
   t: z.string().max(200).optional(),

@@ -71,7 +71,7 @@ describe("computeEntryTodo", () => {
       NOW,
     );
     expect(r).toMatchObject({ required: 2, answered: 0, needsClip: false });
-    expect(r?.href).toBe("/events/5/additional-info?pid=9");
+    expect(r?.href).toBe("/5/additional-info?pid=9");
   });
   it("treats a blank text answer as unanswered, an option answer as answered", () => {
     const r = computeEntryTodo(

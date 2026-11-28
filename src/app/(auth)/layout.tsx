@@ -4,6 +4,7 @@ import NextLink from "next/link";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthAside } from "./_components/auth-aside";
+import { withBasePath } from "@/lib/base-path";
 
 /** GCODE marketing site (the main landing page). */
 const LANDING_URL = "https://gcode.in";
@@ -24,7 +25,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <header className="flex items-center justify-between gap-4 px-6 py-5 sm:px-10">
             <NextLink href="/" className="lg:hidden" aria-label="GCODE Events home">
               <Image
-                src="/gcode-logo-black.png"
+                src={withBasePath("/gcode-logo-black.png")}
                 width={120}
                 height={52}
                 alt="GCODE"

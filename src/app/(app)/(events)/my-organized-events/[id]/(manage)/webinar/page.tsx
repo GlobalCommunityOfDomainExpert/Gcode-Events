@@ -47,6 +47,7 @@ import {
   type WebinarSettings,
 } from "@/lib/webinar";
 import { useOrganizedEvent } from "../../_components/event-context";
+import { appUrl } from "@/lib/base-path";
 
 // Organizer's live room (see lib/webinar.ts for the provider-neutral contract).
 // Organised by *when* things can be done:
@@ -149,7 +150,7 @@ export default function WebinarPage() {
   const endIso = event.endDateIso;
   const phase = webinarPhase(startIso, endIso, status, now);
   const base = `/my-organized-events/${event.id}`;
-  const door = `/events/${event.id}/live`;
+  const door = `/${event.id}/live`;
 
   async function persist(patch: Partial<WebinarConfig>, message?: string) {
     try {
@@ -229,7 +230,7 @@ export default function WebinarPage() {
               size="sm"
               onClick={() => {
                 void navigator.clipboard?.writeText(
-                  `${window.location.origin}${door}`,
+                  appUrl(door),
                 );
                 notify(
                   "Attendee link copied — it only works for ticket holders",

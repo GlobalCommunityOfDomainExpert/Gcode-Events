@@ -1,4 +1,5 @@
 import type { ApiErrorBody, PageInfo } from "@/server/http/contract";
+import { withBasePath } from "@/lib/base-path";
 
 // TODO: Define Defferent Error Class
 export class ApiError extends Error {
@@ -41,7 +42,7 @@ async function v1Fetch<TBody>(
   }
   const qs = params.size ? `?${params}` : "";
 
-  const res = await fetch(`/api/v1${path}${qs}`, {
+  const res = await fetch(withBasePath(`/api/v1${path}${qs}`), {
     method,
     headers: raw
       ? { "Content-Type": raw.body.type || "application/octet-stream", ...raw.headers }

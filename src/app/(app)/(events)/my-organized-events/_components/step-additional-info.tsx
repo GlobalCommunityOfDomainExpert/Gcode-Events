@@ -829,7 +829,7 @@ function IconBtn({
   );
 }
 
-// What a pass holder sees on /events/:id/additional-info, built from the
+// What a pass holder sees on /:id/additional-info, built from the
 // draft — for the editor's preview panel.
 export function RegistrationFormPreview({
   data,

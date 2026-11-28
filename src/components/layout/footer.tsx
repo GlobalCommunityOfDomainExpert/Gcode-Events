@@ -6,6 +6,7 @@ import {
   LinkedInIcon,
   XIcon as TwitterIcon,
 } from "@/components/molecules/social-icon";
+import { withBasePath } from "@/lib/base-path";
 
 const socialLinks = [
   { label: "Twitter / X", href: "#", icon: TwitterIcon },
@@ -54,7 +55,7 @@ export function Footer() {
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div className="max-w-xs space-y-3">
             <Image
-              src="/gcode-logo-black.png"
+              src={withBasePath("/gcode-logo-black.png")}
               width={120}
               height={24}
               alt="GCODE"

@@ -28,6 +28,7 @@ import {
   startRatingWindow,
 } from "@/lib/api/ratings";
 import { ApiError } from "@/lib/api/client";
+import { appUrl } from "@/lib/base-path";
 
 const LIVE_JUDGING_POLL_MS = 3000;
 
@@ -370,7 +371,7 @@ export function LiveRoundPanel({
   // every viewer, so there's nothing to personalize/email per attendee like
   // sendRatingLinks does for Competitive mode. Just copy the one link.
   async function handleCopyReactionLink() {
-    const url = `${window.location.origin}/events/${event.id}/rate`;
+    const url = appUrl(`/${event.id}/rate`);
     setError("");
     setNotice("");
     try {
@@ -437,7 +438,7 @@ export function LiveRoundPanel({
             )}
           </div>
           <ButtonLink
-            href={`/events/${event.id}/scoreboard`}
+            href={`/${event.id}/scoreboard`}
             target="_blank"
             rel="noopener noreferrer"
             variant="secondary"

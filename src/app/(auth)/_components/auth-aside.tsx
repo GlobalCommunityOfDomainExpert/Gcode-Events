@@ -1,6 +1,7 @@
 import Image from "next/image";
 import NextLink from "next/link";
 import { Building2, CalendarCheck, GraduationCap, Handshake, QrCode, Rocket, User, Users } from "lucide-react";
+import { withBasePath } from "@/lib/base-path";
 
 const points = [
   {
@@ -44,7 +45,7 @@ export function AuthAside() {
       <div className="relative flex flex-1 flex-col justify-between gap-12 p-12 xl:p-16">
         <NextLink href="/" className="w-fit" aria-label="GCODE Events home">
           <Image
-            src="/app-logo.png"
+            src={withBasePath("/app-logo.png")}
             width={132}
             height={57}
             alt="GCODE"

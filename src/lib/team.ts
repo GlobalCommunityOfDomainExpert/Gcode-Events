@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/base-path";
 // Sharing an event's dashboard with the people who help run it — a
 // co-organizer, the venue, sponsors, door staff, the accountant. Two ways in:
 //
@@ -126,4 +127,4 @@ export interface SharedData {
 }
 
 export const partnerUrl = (token: string) =>
-  `${typeof window === "undefined" ? "" : window.location.origin}/partner/${token}`;
+  appUrl(`/partner/${token}`);

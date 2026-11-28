@@ -28,6 +28,7 @@ import type {
   SaveEventBody,
   SaveEventResult,
 } from "./events.schemas";
+import { BASE_PATH } from "@/lib/base-path";
 
 // Organizer writes. Saving an event used to be ~10 separate browser calls
 // (row, links, media, timeline, rounds, questions, re-read questions,
@@ -301,7 +302,7 @@ async function saveChildren(
   }
 
   // A linked card image (or clearing it). Uploaded images keep the URL the
-  // upload set, which the editor sends back as /api/v1/events/:id/card-image.
+  // upload set, which the editor sends back as <base>/api/v1/events/:id/card-image.
   const card = draft.cardImageUrl.trim();
   if (!isLocalPreview(card) && !isServedCard(card, id)) {
     const next = card || null;
@@ -321,7 +322,7 @@ async function saveChildren(
 
 // The uploaded card image, as the editor got it back from the mapper.
 function isServedCard(url: string, id: number): boolean {
-  return url === `/api/v1/events/${id}/card-image`;
+  return url === `${BASE_PATH}/api/v1/events/${id}/card-image`;
 }
 
 // The saved questions in the same shape toQuestionsPayload produces, so the

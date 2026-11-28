@@ -56,8 +56,8 @@ import {
   TicketsCard,
   WhoSection,
   getEventState,
-} from "@/app/(public)/events/[id]/_components/event-sections";
-import { EventLinksCard } from "@/app/(public)/events/[id]/_components/event-links-card";
+} from "@/app/(public)/(events)/[id]/_components/event-sections";
+import { EventLinksCard } from "@/app/(public)/(events)/[id]/_components/event-links-card";
 
 import { StepDetails } from "./step-details";
 import { StepRegistration } from "./step-registration";
@@ -78,6 +78,7 @@ import {
   updateEventFromDraft,
   type SaveResult,
 } from "./save-event";
+import { withBasePath } from "@/lib/base-path";
 
 // Create + edit. Tabs pick a section; its form sits beside a preview of just
 // the part of the event page that section controls, rendered at real size
@@ -785,7 +786,7 @@ export function EventEditor(props: EventEditorProps) {
               <div className="flex shrink-0 items-center gap-1">
                 {isEdit && (
                   <a
-                    href={`/events/${eventId}`}
+                    href={withBasePath(`/${eventId}`)}
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Opens the live (saved) page"

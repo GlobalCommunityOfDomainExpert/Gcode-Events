@@ -14,6 +14,7 @@ import {
 import { Button, Icon } from "@/components/atoms";
 import { Dropdown, DropdownItem } from "@/components/molecules";
 import Image from "next/image";
+import { withBasePath } from "@/lib/base-path";
 
 export interface NavLink {
   label: string;
@@ -270,7 +271,7 @@ function MobileMenuPanel({
 export function Navbar({
   logo = (
     <Image
-      src={"/app-logo.png"}
+      src={withBasePath("/app-logo.png")}
       width={100}
       height={20}
       alt="logo"

@@ -107,8 +107,8 @@ export default function PanelistInvitePage() {
     invite.role === "JUDGE"
       ? `/judge/${invite.eventId}`
       : invite.role === "SPEAKER"
-        ? `/events/${invite.eventId}/live`
-        : `/events/${invite.eventId}`;
+        ? `/${invite.eventId}/live`
+        : `/${invite.eventId}`;
   const nextLabel =
     invite.role === "JUDGE"
       ? "Go to Judging"

@@ -7,7 +7,7 @@
 // person (role, whether they are registered, whether the room is open) comes
 // from the server (lib/api/webinar.ts), never from the browser.
 //
-//  - One door: /events/<id>/live. Vendor links are never emailed.
+//  - One door: /<id>/live. Vendor links are never emailed.
 //  - The server decides the viewer's role and the room state. Going live and
 //    ending the session are server flags set by the host's actions.
 //  - "Join" asks our server for a short-lived credential tied to the viewer's

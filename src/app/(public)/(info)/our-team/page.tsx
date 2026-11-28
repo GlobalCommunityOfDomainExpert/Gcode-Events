@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ButtonLink } from "@/components/atoms";
+import { withBasePath } from "@/lib/base-path";
 
 export const metadata: Metadata = {
   title: "Our Team – GCODE Events",
@@ -107,7 +108,7 @@ function MemberSection({
               {member.photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={member.photo}
+                  src={withBasePath(member.photo)}
                   alt={member.name}
                   className="size-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
                 />

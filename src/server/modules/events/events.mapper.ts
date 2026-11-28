@@ -9,6 +9,7 @@ import type {
   EventSummary,
   EventTimelineEntry,
 } from "./events.schemas";
+import { BASE_PATH } from "@/lib/base-path";
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
@@ -25,12 +26,15 @@ function jsonArray<T>(value: string | T[] | null | undefined): T[] {
 
 // Cover and card images stored in the database are saved as the old ORDS
 // paths "/events/:id/cover-image-file" and "/events/:id/card-image-file";
-// serve them from our own routes instead. Absolute URLs (and anything else)
+// serve them from our own routes instead (with the base path: these go
+// straight into <img src>). Absolute URLs (and anything else)
 // pass through untouched.
 export function publicImageUrl(url: string | null): string | null {
   if (!url) return null;
   const dbHosted = url.match(/^\/events\/(\d+)\/(cover|card)-image-file$/);
-  return dbHosted ? `/api/v1/events/${dbHosted[1]}/${dbHosted[2]}-image` : url;
+  return dbHosted
+    ? `${BASE_PATH}/api/v1/events/${dbHosted[1]}/${dbHosted[2]}-image`
+    : url;
 }
 
 export function toEventSummary(r: EventSummaryRow): EventSummary {

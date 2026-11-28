@@ -134,14 +134,14 @@ export default function MyEventsPage() {
                       </div>
                       <div className="flex shrink-0 flex-col gap-2">
                         <ButtonLink
-                          href={`/events/${ticket.eventId}/registered?pid=${ticket.participantId}`}
+                          href={`/${ticket.eventId}/registered?pid=${ticket.participantId}`}
                           variant="primary"
                           size="sm"
                         >
                           View Ticket
                         </ButtonLink>
                         <ButtonLink
-                          href={`/events/${ticket.eventId}`}
+                          href={`/${ticket.eventId}`}
                           variant="secondary"
                           size="sm"
                         >
@@ -193,7 +193,7 @@ export default function MyEventsPage() {
                     </p>
                   </div>
                   <ButtonLink
-                    href={`/events/${ticket.eventId}/registered?pid=${ticket.participantId}`}
+                    href={`/${ticket.eventId}/registered?pid=${ticket.participantId}`}
                     variant="secondary"
                     size="sm"
                     className="shrink-0"

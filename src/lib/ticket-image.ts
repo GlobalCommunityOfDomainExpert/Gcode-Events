@@ -1,3 +1,4 @@
+import { withBasePath } from "@/lib/base-path";
 const WIDTH = 1950;
 const HEIGHT = 810;
 const RED = "#A30D1B";
@@ -91,7 +92,7 @@ function wrapText(
 
 export async function renderTicketPng(input: TicketImageInput): Promise<Blob> {
   const [logo, qr] = await Promise.all([
-    loadImage("/ticket-logos.png"),
+    loadImage(withBasePath("/ticket-logos.png")),
     loadImage(input.qrDataUrl),
   ]);
   if (document.fonts?.ready) await document.fonts.ready;

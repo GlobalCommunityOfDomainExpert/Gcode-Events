@@ -45,6 +45,7 @@ import {
   submissionStatusTone,
   ticketTypeTone,
 } from "./status-maps";
+import { withBasePath } from "@/lib/base-path";
 
 const AGE_CATEGORY_LABELS: Record<"YOUNGSTER" | "ADULT" | "SENIOR", string> = {
   YOUNGSTER: "Youngster (below 18)",
@@ -651,7 +652,7 @@ export function AttendeesTab({
                 {isUploadedAudioUrl(viewing.audioSubmissionUrl) ? (
                   <audio
                     controls
-                    src={`/api/audio-proxy?url=${encodeURIComponent(viewing.audioSubmissionUrl)}`}
+                    src={withBasePath(`/api/audio-proxy?url=${encodeURIComponent(viewing.audioSubmissionUrl)}`)}
                     className="w-full"
                   />
                 ) : (

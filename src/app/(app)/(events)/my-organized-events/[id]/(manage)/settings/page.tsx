@@ -17,6 +17,7 @@ import { deleteRule } from "@/lib/event-delete";
 import { useSession } from "@/hooks/use-session";
 import { useOrganizedEvent } from "../../_components/event-context";
 import { CancelEventModal } from "../../_components/cancel-event-modal";
+import { appUrl } from "@/lib/base-path";
 
 type Pending = "cancel" | "delete" | null;
 
@@ -45,7 +46,7 @@ function EventSettings() {
   const [error, setError] = useState("");
 
   const isDraft = event.status === "DRAFT";
-  const publicPath = `/events/${event.id}`;
+  const publicPath = `/${event.id}`;
   const registrations = Math.max(attendees.length, event.registeredCount);
   const rule = deleteRule({
     status: event.status ?? "",
@@ -56,7 +57,7 @@ function EventSettings() {
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(
-        `${window.location.origin}${publicPath}`,
+        appUrl(publicPath),
       );
       notify("Public event link copied");
     } catch {

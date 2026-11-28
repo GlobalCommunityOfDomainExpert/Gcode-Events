@@ -46,6 +46,7 @@ import {
   totalRegistered,
   type Bucket,
 } from "@/lib/organizer";
+import { appUrl } from "@/lib/base-path";
 
 type Filter = Bucket | "all";
 type Sort = "date" | "registrations" | "revenue";
@@ -649,7 +650,7 @@ function RowMenu({
       </button>
       {open && (
         <div className="border-border-light bg-surface-light absolute top-10 right-0 z-30 w-52 overflow-hidden rounded-md border py-1 shadow-lg">
-          <Link href={`/events/${event.id}`} target="_blank" className={item}>
+          <Link href={`/${event.id}`} target="_blank" className={item}>
             <Icon icon={ExternalLink} size="sm" className="size-4" /> View
             public page
           </Link>
@@ -664,7 +665,7 @@ function RowMenu({
             className={item}
             onClick={() => {
               void navigator.clipboard?.writeText(
-                `${window.location.origin}/events/${event.id}`,
+                appUrl(`/${event.id}`),
               );
               setCopied(true);
               setTimeout(() => {

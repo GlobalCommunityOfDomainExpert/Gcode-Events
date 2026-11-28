@@ -193,7 +193,7 @@ export default function OrganizedEventLayout({
             <div className="flex flex-wrap items-center gap-2">
               <JumpTo event={event} onNotify={(m) => notify(m, "info")} />
               <ButtonLink
-                href={`/events/${event.id}`}
+                href={`/${event.id}`}
                 variant="secondary"
                 size="sm"
               >

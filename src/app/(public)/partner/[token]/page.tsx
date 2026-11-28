@@ -27,9 +27,9 @@ import {
 } from "@/lib/api/team";
 import { ROLE_INFO, can, type SharedAccess, type SharedData } from "@/lib/team";
 import { eventTypeTone } from "@/lib/event";
-import { AgendaTimeline } from "../../events/[id]/_components/agenda-timeline";
-import { groupByDay } from "../../events/[id]/_components/format";
-import { directionsUrl } from "../../events/[id]/_components/venue-map";
+import { AgendaTimeline } from "../../(events)/[id]/_components/agenda-timeline";
+import { groupByDay } from "../../(events)/[id]/_components/format";
+import { directionsUrl } from "../../(events)/[id]/_components/venue-map";
 
 // The dashboard a venue partner, sponsor, door volunteer or accountant gets
 // from the organizer's share link — read-only, and only the parts their role
@@ -189,7 +189,7 @@ function PartnerDashboard({
             </ButtonLink>
           ) : (
             <ButtonLink
-              href={`/events/${event.id}`}
+              href={`/${event.id}`}
               variant="secondary"
               size="sm"
             >

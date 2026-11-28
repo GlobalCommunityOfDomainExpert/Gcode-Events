@@ -47,6 +47,7 @@ import { useSession } from "@/hooks/use-session";
 import { roundDecisionLabel, roundDecisionTone } from "./status-maps";
 import { LiveRoundPanel } from "./live-round-panel";
 import { AddParticipantsPanel } from "./add-participants-panel";
+import { withBasePath } from "@/lib/base-path";
 
 export interface RoundsTabProps {
   event: Event;
@@ -639,7 +640,7 @@ export function RoundsTab({
               return (
                 <audio
                   controls
-                  src={`/api/audio-proxy?url=${encodeURIComponent(row.audioSubmissionUrl)}`}
+                  src={withBasePath(`/api/audio-proxy?url=${encodeURIComponent(row.audioSubmissionUrl)}`)}
                   className="h-8 max-w-56"
                 />
               );

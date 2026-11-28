@@ -77,7 +77,7 @@ export function AttentionIsland({ className = "" }: { className?: string }) {
               Complete entry <Icon icon={ArrowRight} size="sm" />
             </ButtonLink>
             <ButtonLink
-              href={`/events/${top.ticket.eventId}/registered?pid=${top.ticket.participantId}&info=complete`}
+              href={`/${top.ticket.eventId}/registered?pid=${top.ticket.participantId}&info=complete`}
               variant="secondary"
             >
               View ticket

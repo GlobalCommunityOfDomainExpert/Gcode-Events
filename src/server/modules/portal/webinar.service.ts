@@ -493,7 +493,7 @@ export const webinarService = {
     // Valid until the room closes plus a day, so a late open still works.
     const end =
       (utcMs(ev.end_ist) ?? Date.now()) + (CLOSES_AFTER_MIN + 24 * 60) * 60_000;
-    const url = `${origin.replace(/\/$/, "")}/events/${eventId}/live?t=${signJoinToken(eventId, pid, end)}`;
+    const url = `${origin.replace(/\/$/, "")}/${eventId}/live?t=${signJoinToken(eventId, pid, end)}`;
     await repo.sendJoinLinkEmail(eventId, pid, url);
   },
 };
